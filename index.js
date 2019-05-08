@@ -54,9 +54,15 @@ module.exports = function (storage, opts) {
   }
 
   function replicateCore (core, mainStream, opts) {
-    core.replicate({
-      ...opts,
-      stream: mainStream
+    core.ready(function (err) {
+      if (err) return
+      for (const feed of mainStream.feeds) { // TODO: expose mainStream.has(key) instead
+        if (feed.peer.feed === core) return
+      }
+      core.replicate({
+        ...opts,
+        stream: mainStream
+      })
     })
   }
 }
