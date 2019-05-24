@@ -18,16 +18,12 @@ module.exports = function (storage, opts = {}) {
   }
 
   function get (coreOpts = {}) {
-    console.log('getting with opts:', coreOpts)
     if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
     const idx = coreOpts.key || coreOpts.discoveryKey || coreOpts.name || (coreOpts.main && 'main')
 
-    console.log('idx:', idx)
     const idxString = (idx instanceof Buffer) ? datEncoding.encode(idx) : idx
     const existing = cores.get(idxString)
     if (existing) return existing
-
-    console.log('CREATING A CORE WITH OPTS:', opts, 'IDXSTRING:', idxString)
 
     const core = hypercore(filename => storage(idxString + '/' + filename), coreOpts.key, {
       ...coreOpts,
@@ -45,8 +41,6 @@ module.exports = function (storage, opts = {}) {
       replicateCore(core, stream, opts)
     }
 
-    console.log('CREATED CORE WITH KEY:', core.key, 'AND OPTS:', coreOpts)
-
     return core
   }
 
@@ -60,10 +54,8 @@ module.exports = function (storage, opts = {}) {
     }
 
     mainStream.on('feed', dkey => {
-      console.log('GOT A REQUEST FOR DKEY:', dkey, 'ON REPLICATION STREAM')
       let core = cores.get(datEncoding.encode(dkey))
       if (core) {
-        console.log('NOW REPLICATING CORE:', core)
         replicateCore(core, mainStream, opts)
       }
     })
