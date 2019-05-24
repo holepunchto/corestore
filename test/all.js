@@ -7,8 +7,8 @@ const test = require('tape')
 const corestore = require('..')
 
 test('ram-based corestore, simple replication', async t => {
-  const store1 = corestore(path => ram(path))
-  const store2 = corestore(path => ram(path))
+  const store1 = corestore(ram)
+  const store2 = corestore(ram)
   const core1 = store1.get({ main: true })
   const core2 = store1.get({ name: 'second' })
   var core3 = null
@@ -78,8 +78,8 @@ test('raf-based corestore, simple replication', async t => {
 })
 
 test('live replication with an additional core', async t => {
-  const store1 = corestore(path => ram(path))
-  const store2 = corestore(path => ram(path))
+  const store1 = corestore(ram)
+  const store2 = corestore(ram)
   const core1 = store1.get({ main: true })
   var core2 = null
   var core3 = null
