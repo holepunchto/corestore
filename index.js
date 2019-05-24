@@ -19,7 +19,7 @@ module.exports = function (storage, opts = {}) {
 
   function get (coreOpts = {}) {
     if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
-    const idx = coreOpts.key || coreOpts.discoveryKey || coreOpts.name || (coreOpts.main && 'main')
+    const idx = coreOpts.key || coreOpts.discoveryKey || coreOpts.name || (!mainCore && 'main')
 
     const idxString = (idx instanceof Buffer) ? datEncoding.encode(idx) : idx
     const existing = cores.get(idxString)
@@ -35,7 +35,7 @@ module.exports = function (storage, opts = {}) {
     })
 
     if (coreOpts.name) cores.set(coreOpts.name, core)
-    if (coreOpts.main && !mainCore) mainCore = core
+    if (!mainCore) mainCore = core
 
     for (let { stream, opts }  of replicationStreams) {
       replicateCore(core, stream, opts)

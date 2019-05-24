@@ -9,7 +9,7 @@ const corestore = require('..')
 test('ram-based corestore, simple replication', async t => {
   const store1 = corestore(ram)
   const store2 = corestore(ram)
-  const core1 = store1.get({ main: true })
+  const core1 = store1.get()
   const core2 = store1.get({ name: 'second' })
   var core3 = null
   var core4 = null
@@ -18,7 +18,7 @@ test('ram-based corestore, simple replication', async t => {
     cb => core1.ready(cb),
     cb => core2.ready(cb),
     cb => {
-      core3 = store2.get({ key: core1.key, main: true })
+      core3 = store2.get({ key: core1.key })
       return core3.ready(cb)
     },
     cb => {
@@ -44,7 +44,7 @@ test('ram-based corestore, simple replication', async t => {
 test('raf-based corestore, simple replication', async t => {
   const store1 = corestore(path => raf(p.join('store1', path)))
   const store2 = corestore(path => raf(p.join('store2', path)))
-  const core1 = store1.get({ main: true })
+  const core1 = store1.get()
   const core2 = store1.get({ name: 'second' })
   var core3 = null
   var core4 = null
@@ -53,7 +53,7 @@ test('raf-based corestore, simple replication', async t => {
     cb => core1.ready(cb),
     cb => core2.ready(cb),
     cb => {
-      core3 = store2.get({ key: core1.key, main: true })
+      core3 = store2.get({ key: core1.key })
       return core3.ready(cb)
     },
     cb => {
@@ -80,7 +80,7 @@ test('raf-based corestore, simple replication', async t => {
 test('live replication with an additional core', async t => {
   const store1 = corestore(ram)
   const store2 = corestore(ram)
-  const core1 = store1.get({ main: true })
+  const core1 = store1.get()
   var core2 = null
   var core3 = null
   var core4 = null
@@ -88,7 +88,7 @@ test('live replication with an additional core', async t => {
   await runAll([
     cb => core1.ready(cb),
     cb => {
-      core3 = store2.get({ key: core1.key, main: true })
+      core3 = store2.get({ key: core1.key })
       return core3.ready(cb)
     },
     cb => {
