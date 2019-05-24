@@ -1,6 +1,6 @@
 {
   "name": "random-access-corestore",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "description": "A simple corestore that wraps a random-access-storage module ",
   "main": "index.js",
   "scripts": {
