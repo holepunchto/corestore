@@ -1,10 +1,48 @@
 const p = require('path')
 const ram = require('random-access-memory')
 const raf = require('random-access-file')
+const datEncoding = require('dat-encoding')
 const rimraf = require('rimraf')
 const test = require('tape')
 
 const corestore = require('..')
+
+test('ram-based corestore, different get options', async t => {
+  const store1 = corestore(ram)
+  const core1 = store1.get()
+  var core2, core3, core4, core5
+
+  await runAll([
+    cb => core1.ready(cb),
+    cb => core1.append('hello', cb),
+    cb => {
+      // Buffer arg
+      core2 = store1.get(core1.key)
+      return core2.ready(cb)
+    },
+    cb => {
+      // Object arg
+      core3 = store1.get({ key: core1.key })
+      return core3.ready(cb)
+    },
+    cb => {
+      // Discovery key option
+      core4 = store1.get({ discoveryKey: core1.discoveryKey })
+      return core4.ready(cb)
+    },
+    cb => {
+      // String option
+      core5 = store1.get({ key: datEncoding.encode(core1.key) })
+      return core5.ready(cb)
+    }
+  ])
+
+  t.same(core1, core2)
+  t.same(core1, core3)
+  t.same(core1, core4)
+  t.same(core1, core5)
+  t.end()
+})
 
 test('ram-based corestore, simple replication', async t => {
   const store1 = corestore(ram)
