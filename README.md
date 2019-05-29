@@ -23,7 +23,7 @@ Hypercores can be generated with `get`. The first core that's generated will be 
 const core1 = store1.get()
 ```
 
-Additional hypercores can be created either by key or by name. If a hypercore is created by name, it will be stored as such in the storage layer (i.e. in the `second` directory). Named hypercores are useful when instantiating a new hypercore-based data structure and the hypercore keys have not yet been generated:
+Additional hypercores can be created either by key or by name. If a hypercore is created by name, it will be stored as such in the storage layer (e.g. in the `second` directory). Named hypercores are useful when instantiating a new hypercore-based data structure and the hypercore keys have not yet been generated:
 ```js
 const core2 = store1.get({ name: 'second' })
 ```
