@@ -9,17 +9,35 @@ module.exports = function (storage, opts = {}) {
 
   var cores = new Map()
   var replicationStreams = []
-  var mainCore = null
+  var defaultCore = null
 
   return {
+    default: getDefault,
     get,
     replicate,
     close
   }
 
+  function getDefault (coreOpts = {}) {
+    if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
+    if (defaultCore) return defaultCore
+
+    if (opts.secretKey) coreOpts.secretKey = opts.secretKey
+    else coreOpts.default = true
+
+    defaultCore = get(coreOpts)
+    return defaultCore
+  }
+
   function get (coreOpts = {}) {
     if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
-    const idx = coreOpts.key || coreOpts.discoveryKey || coreOpts.name || (!mainCore && 'main')
+    var idx = coreOpts.key || coreOpts.discoveryKey || (coreOpts.default && 'default')
+
+    if (!idx) {
+      // If no key was specified, then we generate a new keypair.
+      var { publicKey, secretKey } = crypto.keyPair()
+      idx = publicKey
+    }
 
     const idxString = (idx instanceof Buffer) ? datEncoding.encode(idx) : idx
     const existing = cores.get(idxString)
@@ -27,15 +45,12 @@ module.exports = function (storage, opts = {}) {
 
     const core = hypercore(filename => storage(idxString + '/' + filename), coreOpts.key, {
       ...coreOpts,
-      secretKey: coreOpts.secretKey
+      secretKey: coreOpts.secretKey || secretKey
     })
     core.ready(() => {
       cores.set(datEncoding.encode(core.key), core)
       cores.set(datEncoding.encode(core.discoveryKey), core)
     })
-
-    if (coreOpts.name) cores.set(coreOpts.name, core)
-    if (!mainCore) mainCore = core
 
     for (let { stream, opts }  of replicationStreams) {
       replicateCore(core, stream, opts)
@@ -45,8 +60,8 @@ module.exports = function (storage, opts = {}) {
   }
 
   function replicate (opts) {
-    if (!mainCore) throw new Error('A main core must be specified before replication.')
-    const mainStream = mainCore.replicate(opts)
+    if (!defaultCore) throw new Error('A main core must be specified before replication.')
+    const mainStream = defaultCore.replicate(opts)
     var closed = false
 
     for (let [_, core] of cores) {
@@ -90,20 +105,25 @@ module.exports = function (storage, opts = {}) {
     })
   }
 
-  async function close (cb) {
-    try {
-      for (let [, core] of cores) {
-        if (!core.closed) await promisify(core.close.bind(core))()
-      }
-      for (let { stream } of replicationStreams) {
-        stream.destroy()
-      }
+  function close (cb) {
+    var remaining = cores.size
+
+    for (let { stream } of replicationStreams) {
+      stream.destroy()
+    }
+    for (let [, core] of cores) {
+      if (!core.closed) core.close(onclose)
+    }
+
+    function onclose (err) {
+      if (err) return reset(err)
+      if (!--remaining) return reset(null)
+    }
+
+    function reset (err) {
       cores = new Map()
       replicationStreams = []
-    } catch (err) {
-      if (cb) return process.nextTick(cb, err)
-      else throw err
+      return cb(err)
     }
-    if (cb) return process.nextTick(cb, null)
   }
 }

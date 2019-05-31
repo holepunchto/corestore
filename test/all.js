@@ -9,7 +9,7 @@ const corestore = require('..')
 
 test('ram-based corestore, different get options', async t => {
   const store1 = corestore(ram)
-  const core1 = store1.get()
+  const core1 = store1.default()
   var core2, core3, core4, core5
 
   await runAll([
@@ -47,8 +47,8 @@ test('ram-based corestore, different get options', async t => {
 test('ram-based corestore, simple replication', async t => {
   const store1 = corestore(ram)
   const store2 = corestore(ram)
-  const core1 = store1.get()
-  const core2 = store1.get({ name: 'second' })
+  const core1 = store1.default()
+  const core2 = store1.get()
   var core3 = null
   var core4 = null
 
@@ -56,7 +56,7 @@ test('ram-based corestore, simple replication', async t => {
     cb => core1.ready(cb),
     cb => core2.ready(cb),
     cb => {
-      core3 = store2.get({ key: core1.key })
+      core3 = store2.default(core1.key)
       return core3.ready(cb)
     },
     cb => {
@@ -82,8 +82,8 @@ test('ram-based corestore, simple replication', async t => {
 test('raf-based corestore, simple replication', async t => {
   const store1 = corestore(path => raf(p.join('store1', path)))
   const store2 = corestore(path => raf(p.join('store2', path)))
-  const core1 = store1.get()
-  const core2 = store1.get({ name: 'second' })
+  const core1 = store1.default()
+  const core2 = store1.get()
   var core3 = null
   var core4 = null
 
@@ -91,7 +91,7 @@ test('raf-based corestore, simple replication', async t => {
     cb => core1.ready(cb),
     cb => core2.ready(cb),
     cb => {
-      core3 = store2.get({ key: core1.key })
+      core3 = store2.default({ key: core1.key })
       return core3.ready(cb)
     },
     cb => {
@@ -115,10 +115,34 @@ test('raf-based corestore, simple replication', async t => {
   t.end()
 })
 
+test('raf-based corestore, close and reopen', async t => {
+  var store = corestore(path => raf(p.join('store', path)))
+  var core = store.default()
+
+  await runAll([
+    cb => core.ready(cb),
+    cb => core.append('hello', cb),
+    cb => store.close(cb),
+    cb => {
+      t.true(core.closed)
+      return process.nextTick(cb, null)
+    },
+    cb => {
+      store =  corestore(path => raf(p.join('store', path)))
+      core = store.default()
+      return core.ready(cb)
+    }
+  ])
+
+  await validateCore(t, core, [Buffer.from('hello')])
+  await cleanup(['store1'])
+  t.end()
+})
+
 test('live replication with an additional core', async t => {
   const store1 = corestore(ram)
   const store2 = corestore(ram)
-  const core1 = store1.get()
+  const core1 = store1.default()
   var core2 = null
   var core3 = null
   var core4 = null
@@ -126,7 +150,7 @@ test('live replication with an additional core', async t => {
   await runAll([
     cb => core1.ready(cb),
     cb => {
-      core3 = store2.get({ key: core1.key })
+      core3 = store2.default({ key: core1.key })
       return core3.ready(cb)
     },
     cb => {
