@@ -15,6 +15,7 @@ module.exports = function (storage, opts = {}) {
     default: getDefault,
     get,
     replicate,
+    list,
     close
   }
 
@@ -22,8 +23,10 @@ module.exports = function (storage, opts = {}) {
     if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
     if (defaultCore) return defaultCore
 
-    if (opts.secretKey) coreOpts.secretKey = opts.secretKey
-    else coreOpts.default = true
+    if (opts.keyPair) {
+      coreOpts.secretKey = opts.keyPair.secretKey
+      coreOpts.key = opts.keyPair.publicKey
+    } else coreOpts.default = true
 
     defaultCore = get(coreOpts)
     return defaultCore
@@ -125,5 +128,9 @@ module.exports = function (storage, opts = {}) {
       replicationStreams = []
       return cb(err)
     }
+  }
+
+  function list () {
+    return new Map([...cores])
   }
 }
