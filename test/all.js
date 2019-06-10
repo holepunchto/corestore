@@ -159,7 +159,7 @@ test('live replication with an additional core', async t => {
       return cb(null)
     },
     cb => {
-      core2 = store1.get({ name: 'second' })
+      core2 = store1.get()
       return core2.ready(cb)
     },
     cb => {

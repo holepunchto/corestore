@@ -1,8 +1,6 @@
-const p = require('path')
 const hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
 const datEncoding = require('dat-encoding')
-const { promisify } = require('util')
 
 module.exports = function (storage, opts = {}) {
   if (typeof storage !== 'function') storage = path => storage(path)
@@ -23,41 +21,62 @@ module.exports = function (storage, opts = {}) {
     if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
     if (defaultCore) return defaultCore
 
-    if (opts.keyPair) {
-      coreOpts.secretKey = opts.keyPair.secretKey
-      coreOpts.key = opts.keyPair.publicKey
-    } else coreOpts.default = true
+    if (!coreOpts.keyPair && !coreOpts.key) coreOpts.default = true
 
     defaultCore = get(coreOpts)
     return defaultCore
   }
 
+  function optsToIndex (coreOpts) {
+    if (coreOpts.default && !coreOpts.key && !coreOpts.secretKey) {
+      var idx = 'default'
+    } else {
+      idx = coreOpts.key || coreOpts.discoveryKey
+      if (!idx) {
+        // If no key was specified, then we generate a new keypair or use the one that was passed in.
+        var { publicKey, secretKey } = coreOpts.keyPair || crypto.keyPair()
+        idx = crypto.discoveryKey(publicKey)
+      } else {
+        if (!(idx instanceof Buffer)) idx = datEncoding.decode(idx)
+        if (coreOpts.key) {
+          idx = crypto.discoveryKey(idx)
+        }
+      }
+    }
+    return { idx, key: coreOpts.key || publicKey, secretKey }
+  }
+
   function get (coreOpts = {}) {
     if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
-    var idx = coreOpts.key || coreOpts.discoveryKey || (coreOpts.default && 'default')
-
-    if (!idx) {
-      // If no key was specified, then we generate a new keypair.
-      var { publicKey, secretKey } = crypto.keyPair()
-      idx = publicKey
-    }
+    const { idx, key, secretKey } = optsToIndex(coreOpts)
 
     const idxString = (idx instanceof Buffer) ? datEncoding.encode(idx) : idx
     const existing = cores.get(idxString)
     if (existing) return existing
 
-    const core = hypercore(filename => storage(idxString + '/' + filename), coreOpts.key, {
+    var core = hypercore(filename => storage(idxString + '/' + filename), key, {
       ...coreOpts,
+      createIfMissing: !coreOpts.discoveryKey,
       secretKey: coreOpts.secretKey || secretKey
     })
-    core.ready(() => {
+
+    var errored = false
+    core.once('error', err => {
+      if (coreOpts.discoveryKey) {
+        // If an error occurs during creation by discovery key, then that core does not exist on disk.
+        errored = true
+        return
+      }
+      throw err
+    })
+    core.once('ready', () => {
+      if (errored) return
       cores.set(datEncoding.encode(core.key), core)
       cores.set(datEncoding.encode(core.discoveryKey), core)
+      for (let { stream, opts }  of replicationStreams) {
+        replicateCore(core, stream, opts)
+      }
     })
-
-    for (let { stream, opts }  of replicationStreams) {
-      replicateCore(core, stream, opts)
-    }
 
     return core
   }
@@ -72,16 +91,15 @@ module.exports = function (storage, opts = {}) {
     }
 
     mainStream.on('feed', dkey => {
-      let core = cores.get(datEncoding.encode(dkey))
-      if (core) {
-        replicateCore(core, mainStream, opts)
-      }
+      // Get will automatically add the core to all replication streams.
+      get({ discoveryKey: dkey })
     })
+
     mainStream.on('finish', onclose)
     mainStream.on('end', onclose)
     mainStream.on('close', onclose)
 
-    let streamState = { stream: mainStream, opts } 
+    let streamState = { stream: mainStream, opts }
     replicationStreams.push(streamState)
 
     return mainStream
