@@ -156,9 +156,9 @@ test('ram-based corestore, sparse replication', async t => {
   t.end()
 })
 
-test.only('ram-based corestore, sparse replication with different default keys', async t => {
-  const store1 = corestore(ram, { sparse: false })
-  const store2 = corestore(ram, { sparse: false })
+test('ram-based corestore, sparse replication with different default keys', async t => {
+  const store1 = corestore(ram, { sparse: true })
+  const store2 = corestore(ram, { sparse: true })
   const core1 = store1.default()
   var core3 = null
   var core4 = null
@@ -182,14 +182,11 @@ test.only('ram-based corestore, sparse replication with different default keys',
       return core4.ready(cb)
     },
     cb => {
-      //t.same(core4.length, 0)
+      t.same(core4.length, 0)
       t.same(core1.length, 2)
       return process.nextTick(cb, null)
     }
   ])
-
-  console.log('STORE 1 INFO', store1.getInfo())
-  console.log('STORE 2 INFO', store2.getInfo())
 
   await validateCore(t, core4, [Buffer.from('cat'), Buffer.from('dog')])
   t.end()

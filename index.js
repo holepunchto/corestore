@@ -64,9 +64,7 @@ module.exports = function (storage, opts = {}) {
     const { idx, key, secretKey } = optsToIndex(coreOpts)
 
     const idxString = (idx instanceof Buffer) ? datEncoding.encode(idx) : idx
-    console.log(storeId, 'IDX STRING:', idxString)
     const existing = cores.get(idxString)
-    console.log('EXISTING CORE:', existing)
     if (existing) {
       injectIntoReplicationStreams(existing)
       return existing
@@ -100,7 +98,6 @@ module.exports = function (storage, opts = {}) {
 
     function injectIntoReplicationStreams (core) {
       for (let { stream, opts }  of replicationStreams) {
-        console.log('ATTEMPTING TO INJECT INTO REPLICATION STREAMS, opts:', opts)
         replicateCore(core, stream, opts)
       }
     }
@@ -113,12 +110,11 @@ module.exports = function (storage, opts = {}) {
     var closed = false
 
     for (let [_, core] of cores) {
-      replicateCore(core, mainStream, opts)
+      replicateCore(core, mainStream, finalOpts)
     }
 
     mainStream.on('feed', dkey => {
       // Get will automatically add the core to all replication streams.
-      console.log(storeId,'CORESTORE GETTING KEY ON FEED:', dkey)
       get({ discoveryKey: dkey })
     })
 
@@ -126,10 +122,9 @@ module.exports = function (storage, opts = {}) {
     mainStream.on('end', onclose)
     mainStream.on('close', onclose)
 
-    let streamState = { stream: mainStream, opts }
+    let streamState = { stream: mainStream, opts: finalOpts }
     replicationStreams.push(streamState)
 
-    console.log('CREATING REPLICATION STREAM:', mainStream.id, getInfo())
     return mainStream
 
     function onclose () {
@@ -145,10 +140,8 @@ module.exports = function (storage, opts = {}) {
       if (err) return
       // if (mainStream.has(core.key)) return
       for (const feed of mainStream.feeds) { // TODO: expose mainStream.has(key) instead
-        console.log('NOT REPLICATING DUE TO SHORT CIRCUIT')
         if (feed.peer.feed === core) return
       }
-      console.log(storeId, 'REPLICATING', core, 'INTO', mainStream.id)
       core.replicate({
         ...opts,
         stream: mainStream
