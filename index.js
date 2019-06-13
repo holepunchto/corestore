@@ -9,12 +9,23 @@ module.exports = function (storage, opts = {}) {
   var replicationStreams = []
   var defaultCore = null
 
+  const storeId = crypto.randomBytes(5)
+
   return {
     default: getDefault,
     get,
     replicate,
     list,
-    close
+    close,
+    getInfo
+  }
+
+  function getInfo () {
+    return {
+      id: storeId,
+      defaultKey: defaultCore && defaultCore.key,
+      discoveryKey: defaultCore && defaultCore.discoveryKey
+    }
   }
 
   function getDefault (coreOpts = {}) {
@@ -51,26 +62,29 @@ module.exports = function (storage, opts = {}) {
     const { idx, key, secretKey } = optsToIndex(coreOpts)
 
     const idxString = (idx instanceof Buffer) ? datEncoding.encode(idx) : idx
+    console.log('IDX STRING:', idxString)
     const existing = cores.get(idxString)
     if (existing) return existing
 
     var core = hypercore(filename => storage(idxString + '/' + filename), key, {
+      ...opts,
       ...coreOpts,
       createIfMissing: !coreOpts.discoveryKey,
       secretKey: coreOpts.secretKey || secretKey
     })
 
     var errored = false
-    core.once('error', err => {
+    const errorListener = err => {
       if (coreOpts.discoveryKey) {
         // If an error occurs during creation by discovery key, then that core does not exist on disk.
         errored = true
         return
       }
-      throw err
-    })
+    }
+    core.once('error', errorListener)
     core.once('ready', () => {
       if (errored) return
+      core.removeListener('error', errorListener)
       cores.set(datEncoding.encode(core.key), core)
       cores.set(datEncoding.encode(core.discoveryKey), core)
       for (let { stream, opts }  of replicationStreams) {
@@ -92,6 +106,7 @@ module.exports = function (storage, opts = {}) {
 
     mainStream.on('feed', dkey => {
       // Get will automatically add the core to all replication streams.
+      console.log(storeId,'CORESTORE GETTING KEY ON FEED:', dkey)
       get({ discoveryKey: dkey })
     })
 
@@ -119,6 +134,7 @@ module.exports = function (storage, opts = {}) {
       for (const feed of mainStream.feeds) { // TODO: expose mainStream.has(key) instead
         if (feed.peer.feed === core) return
       }
+      console.log(storeId, 'REPLICATING', core, 'INTO', mainStream)
       core.replicate({
         ...opts,
         stream: mainStream

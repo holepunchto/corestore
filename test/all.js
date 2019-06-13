@@ -79,6 +79,120 @@ test('ram-based corestore, simple replication', async t => {
   t.end()
 })
 
+test('ram-based corestore, replicating with different default keys', async t => {
+  const store1 = corestore(ram)
+  const store2 = corestore(ram)
+  const core1 = store1.default()
+  const core2 = store1.get()
+  var core3 = null
+  var core4 = null
+
+  await runAll([
+    cb => core1.ready(cb),
+    cb => core2.ready(cb),
+    cb => {
+      core3 = store2.default()
+      return core3.ready(cb)
+    },
+    cb => {
+      core4 = store2.get({ key: core1.key })
+      return core4.ready(cb)
+    },
+    cb => core1.append('cat', cb),
+    cb => core1.append('dog', cb),
+    cb => {
+      const stream = store1.replicate({ encrypt: false })
+      stream.pipe(store2.replicate({ encrypt: false })).pipe(stream)
+      stream.on('end', cb)
+    }
+  ])
+
+  await validateCore(t, core4, [Buffer.from('cat'), Buffer.from('dog')])
+  t.end()
+})
+
+test('ram-based corestore, sparse replication', async t => {
+  const store1 = corestore(ram, { sparse: true })
+  const store2 = corestore(ram, { sparse: true })
+  const core1 = store1.default()
+  const core2 = store1.get()
+  var core3 = null
+  var core4 = null
+
+  await runAll([
+    cb => core1.ready(cb),
+    cb => core2.ready(cb),
+    cb => {
+      t.same(core2.sparse, true)
+      t.same(core1.sparse, true)
+      return process.nextTick(cb, null)
+    },
+    cb => {
+      core3 = store2.default(core1.key)
+      return core3.ready(cb)
+    },
+    cb => {
+      core4 = store2.get({ key: core2.key })
+      return core4.ready(cb)
+    },
+    cb => {
+      const stream = store1.replicate({ live: true, encrypt: false})
+      stream.pipe(store2.replicate({ live: true, encrypt: false})).pipe(stream)
+      return process.nextTick(cb, null)
+    },
+    cb => core1.append('hello', cb),
+    cb => core1.append('world', cb),
+    cb => core2.append('cat', cb),
+    cb => core2.append('dog', cb),
+    cb => {
+      t.same(core3.length, 0)
+      t.same(core4.length, 0)
+      return process.nextTick(cb, null)
+    }
+  ])
+
+  await validateCore(t, core3, [Buffer.from('hello'), Buffer.from('world')])
+  await validateCore(t, core4, [Buffer.from('cat'), Buffer.from('dog')])
+  t.end()
+})
+
+test.only('ram-based corestore, sparse replication with different default keys', async t => {
+  const store1 = corestore(ram, { sparse: true })
+  const store2 = corestore(ram, { sparse: true })
+  const core1 = store1.default()
+  const core2 = store1.get()
+  var core3 = null
+  var core4 = null
+
+  await runAll([
+    cb => core1.ready(cb),
+    cb => core2.ready(cb),
+    cb => {
+      core3 = store2.default()
+      return core3.ready(cb)
+    },
+    cb => {
+      const stream = store1.replicate({ live: true, encrypt: false })
+      stream.pipe(store2.replicate({ live: true, encrypt: false })).pipe(stream)
+      return process.nextTick(cb, null)
+    },
+    cb => {
+      core4 = store2.get({ key: core2.key })
+      return core4.ready(cb)
+    },
+    cb => core2.append('cat', cb),
+    cb => core2.append('dog', cb),
+    cb => {
+      t.same(core4.length, 0)
+      t.same(core2.length, 2)
+      return process.nextTick(cb, null)
+    }
+  ])
+
+  await validateCore(t, core4, [Buffer.from('cat'), Buffer.from('dog')])
+  t.end()
+})
+
 test('raf-based corestore, simple replication', async t => {
   const store1 = corestore(path => raf(p.join('store1', path)))
   const store2 = corestore(path => raf(p.join('store2', path)))
