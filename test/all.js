@@ -157,37 +157,39 @@ test('ram-based corestore, sparse replication', async t => {
 })
 
 test.only('ram-based corestore, sparse replication with different default keys', async t => {
-  const store1 = corestore(ram, { sparse: true })
-  const store2 = corestore(ram, { sparse: true })
+  const store1 = corestore(ram, { sparse: false })
+  const store2 = corestore(ram, { sparse: false })
   const core1 = store1.default()
-  const core2 = store1.get()
   var core3 = null
   var core4 = null
 
   await runAll([
     cb => core1.ready(cb),
-    cb => core2.ready(cb),
     cb => {
       core3 = store2.default()
       return core3.ready(cb)
     },
     cb => {
-      const stream = store1.replicate({ live: true, encrypt: false })
-      stream.pipe(store2.replicate({ live: true, encrypt: false })).pipe(stream)
+      const s1 = store1.replicate({ live: true, encrypt: false })
+      const s2 = store2.replicate({ live: true, encrypt: false })
+      s1.pipe(s2).pipe(s1)
       return process.nextTick(cb, null)
     },
+    cb => core1.append('cat', cb),
+    cb => core1.append('dog', cb),
     cb => {
-      core4 = store2.get({ key: core2.key })
+      core4 = store2.get({ key: core1.key })
       return core4.ready(cb)
     },
-    cb => core2.append('cat', cb),
-    cb => core2.append('dog', cb),
     cb => {
-      t.same(core4.length, 0)
-      t.same(core2.length, 2)
+      //t.same(core4.length, 0)
+      t.same(core1.length, 2)
       return process.nextTick(cb, null)
     }
   ])
+
+  console.log('STORE 1 INFO', store1.getInfo())
+  console.log('STORE 2 INFO', store2.getInfo())
 
   await validateCore(t, core4, [Buffer.from('cat'), Buffer.from('dog')])
   t.end()
