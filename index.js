@@ -98,7 +98,7 @@ module.exports = function (storage, opts = {}) {
 
     function injectIntoReplicationStreams (core) {
       for (let { stream, opts }  of replicationStreams) {
-        replicateCore(core, stream, opts)
+        replicateCore(core, stream, { ...opts })
       }
     }
   }
@@ -106,11 +106,11 @@ module.exports = function (storage, opts = {}) {
   function replicate (replicationOpts) {
     if (!defaultCore) throw new Error('A main core must be specified before replication.')
     const finalOpts = { ...opts, ...replicationOpts }
-    const mainStream = defaultCore.replicate(finalOpts)
+    const mainStream = defaultCore.replicate({ ...finalOpts })
     var closed = false
 
     for (let [_, core] of cores) {
-      replicateCore(core, mainStream, finalOpts)
+      replicateCore(core, mainStream, { ...finalOpts })
     }
 
     mainStream.on('feed', dkey => {
