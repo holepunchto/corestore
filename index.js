@@ -70,7 +70,11 @@ module.exports = function (storage, opts = {}) {
       return existing
     }
 
-    var core = hypercore(filename => storage(idxString + '/' + filename), key, {
+    var storageRoot = idxString
+    if (idxString !== 'default') {
+      storageRoot = [storageRoot.slice(0, 2), storageRoot.slice(2, 4), storageRoot].join('/')
+    }
+    var core = hypercore(filename => storage(storageRoot + '/' + filename), key, {
       ...opts,
       ...coreOpts,
       createIfMissing: !coreOpts.discoveryKey,

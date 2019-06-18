@@ -248,7 +248,7 @@ test('raf-based corestore, close and reopen', async t => {
   ])
 
   await validateCore(t, core, [Buffer.from('hello')])
-  await cleanup(['store1'])
+  await cleanup(['store'])
   t.end()
 })
 
