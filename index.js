@@ -1,6 +1,7 @@
 const hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
 const datEncoding = require('dat-encoding')
+const { EventEmitter } = require('events')
 
 module.exports = function (storage, opts = {}) {
   if (typeof storage !== 'function') storage = path => storage(path)
@@ -10,15 +11,18 @@ module.exports = function (storage, opts = {}) {
   var defaultCore = null
 
   const storeId = crypto.randomBytes(5)
+  const cs = new EventEmitter()
 
-  return {
+  Object.assign(cs, {
     default: getDefault,
     get,
     replicate,
     list,
     close,
     getInfo
-  }
+  })
+
+  return cs
 
   function getInfo () {
     return {
@@ -92,6 +96,7 @@ module.exports = function (storage, opts = {}) {
     core.once('error', errorListener)
     core.once('ready', () => {
       if (errored) return
+      cs.emit('feed', core, coreOpts)
       core.removeListener('error', errorListener)
       cores.set(datEncoding.encode(core.key), core)
       cores.set(datEncoding.encode(core.discoveryKey), core)
