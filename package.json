@@ -28,6 +28,7 @@
   "dependencies": {
     "dat-encoding": "^5.0.1",
     "hypercore": "^7.2.2",
-    "hypercore-crypto": "^1.0.0"
+    "hypercore-crypto": "^1.0.0",
+    "hypercore-protocol": "^6.11.0"
   }
 }

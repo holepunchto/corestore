@@ -54,6 +54,11 @@ Create a new hypercore. Options can be one of the following:
 
 If `opts` is a Buffer, it will be interpreted as a hypercore key.
 
+#### `store.on('feed', feed, options)`
+
+Emitted everytime a feed is loaded internally (ie, the first time get(key) is called).
+Options will be the full options map passed to .get.
+
 #### `store.replicate(opts)`
 Create a replication stream for all generated hypercores. The stream's handshake parameters (i.e. its discovery key) will be defined by the first hypercore created by the corestore.
 
