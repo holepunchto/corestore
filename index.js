@@ -1,5 +1,6 @@
 const hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
+const protocol = require('hypercore-protocol')
 const datEncoding = require('dat-encoding')
 
 module.exports = function (storage, opts = {}) {
@@ -108,9 +109,12 @@ module.exports = function (storage, opts = {}) {
   }
 
   function replicate (replicationOpts) {
-    if (!defaultCore) throw new Error('A main core must be specified before replication.')
+    if (!defaultCore && replicationOpts.encrypt) throw new Error('A main core must be specified before replication.')
     const finalOpts = { ...opts, ...replicationOpts }
-    const mainStream = defaultCore.replicate({ ...finalOpts })
+    const mainStream = defaultCore
+      ? defaultCore.replicate({ ...finalOpts })
+      : protocol({ ...finalOpts })
+
     var closed = false
 
     for (let [_, core] of cores) {
