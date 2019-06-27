@@ -81,6 +81,7 @@ class Corestore extends EventEmitter {
     const self = this
 
     const { idx, key, secretKey } = this._optsToIndex(coreOpts)
+    console.log('IDX HERE:', idx, 'CREATE?', !coreOpts.discoveryKey, 'KEY:', key)
 
     const idxString = (idx instanceof Buffer) ? datEncoding.encode(idx) : idx
     const existing = this.cores.get(idxString)
@@ -94,13 +95,14 @@ class Corestore extends EventEmitter {
       storageRoot = [storageRoot.slice(0, 2), storageRoot.slice(2, 4), storageRoot].join('/')
     }
 
-    console.error('SECRET KEY HERE IN GET:', secretKey, 'COREOPTS:', coreOpts)
+    console.error('SECRET KEY HERE IN GET:', secretKey, 'FINAL HYPERCORE OPTS:', { ...this.opts, ...coreOpts, createifMissing: !coreOpts.discoveryKey, secretKey: coreOpts.secretKey || secretKey })
     var core = hypercore(filename => this.storage(storageRoot + '/' + filename), key, {
       ...this.opts,
       ...coreOpts,
       createIfMissing: !coreOpts.discoveryKey,
       secretKey: coreOpts.secretKey || secretKey
     })
+    console.log('*** CREATED CORE HERE:', core)
 
     var errored = false
     const errorListener = err => {
@@ -114,6 +116,7 @@ class Corestore extends EventEmitter {
     core.once('error', errorListener)
     core.once('ready', () => {
       if (errored) return
+      console.error('*** CORE IS READY HERE:', core)
       this.emit('feed', core, coreOpts)
       core.removeListener('error', errorListener)
       this.cores.set(datEncoding.encode(core.key), core)
