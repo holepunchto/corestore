@@ -4,48 +4,22 @@ const protocol = require('hypercore-protocol')
 const datEncoding = require('dat-encoding')
 const { EventEmitter } = require('events')
 
-module.exports = function (storage, opts = {}) {
-  if (typeof storage !== 'function') storage = path => storage(path)
+module.exports = (storage, opts) => new Corestore(storage, opts)
 
-  var cores = new Map()
-  var replicationStreams = []
-  var defaultCore = null
+class Corestore extends EventEmitter {
+  constructor (storage, opts = {}) {
+    super()
+    this.storage = storage
+    this.opts = opts
 
-  const storeId = crypto.randomBytes(5)
-  const cs = new EventEmitter()
+    this.cores = new Map()
+    this.replicationStreams = []
+    this.defaultCore = null
 
-  Object.assign(cs, {
-    default: getDefault,
-    get,
-    replicate,
-    list,
-    close,
-    getInfo
-  })
-
-  return cs
-
-  function getInfo () {
-    return {
-      id: storeId,
-      defaultKey: defaultCore && defaultCore.key,
-      discoveryKey: defaultCore && defaultCore.discoveryKey,
-      replicationId: defaultCore.id,
-      cores
-    }
+    this.storeId = crypto.randomBytes(5)
   }
 
-  function getDefault (coreOpts = {}) {
-    if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
-    if (defaultCore) return defaultCore
-
-    if (!coreOpts.keyPair && !coreOpts.key) coreOpts.default = true
-
-    defaultCore = get(coreOpts)
-    return defaultCore
-  }
-
-  function optsToIndex (coreOpts) {
+  _optsToIndex (coreOpts) {
     if (coreOpts.default && !coreOpts.key && !coreOpts.secretKey) {
       var idx = 'default'
     } else {
@@ -55,6 +29,7 @@ module.exports = function (storage, opts = {}) {
         var { publicKey, secretKey } = coreOpts.keyPair || crypto.keyPair()
         idx = crypto.discoveryKey(publicKey)
       } else {
+        //console.log('IDX HERE:', idx)
         if (!(idx instanceof Buffer)) idx = datEncoding.decode(idx)
         if (coreOpts.key) {
           idx = crypto.discoveryKey(idx)
@@ -64,12 +39,51 @@ module.exports = function (storage, opts = {}) {
     return { idx, key: coreOpts.key || publicKey, secretKey }
   }
 
-  function get (coreOpts = {}) {
+  _replicateCore (core, mainStream, opts) {
+    //console.log(storeId, '*** CORESTORE REPLICATING CORE:', core)
+    core.ready(function (err) {
+      if (err) return
+      //console.log('CORE IS READY')
+      // if (mainStream.has(core.key)) return
+      for (const feed of mainStream.feeds) { // TODO: expose mainStream.has(key) instead
+        if (feed.peer.feed === core) return
+      }
+      //console.log(storeId, '    ** ACTUALLY REPLICATING')
+      core.replicate({
+        ...opts,
+        stream: mainStream
+      })
+    })
+  }
+
+  getInfo () {
+    return {
+      id: this.storeId,
+      defaultKey: this.defaultCore && this.defaultCore.key,
+      discoveryKey: this.defaultCore && this.defaultCore.discoveryKey,
+      replicationId: this.defaultCore.id,
+      cores: this.cores
+    }
+  }
+
+  default (coreOpts = {}) {
     if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
-    const { idx, key, secretKey } = optsToIndex(coreOpts)
+    if (this.defaultCore) return this.defaultCore
+
+    if (!coreOpts.keyPair && !coreOpts.key) coreOpts.default = true
+
+    this.defaultCore = this.get(coreOpts)
+    return this.defaultCore
+  }
+
+  get (coreOpts = {}) {
+    if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
+    const self = this
+
+    const { idx, key, secretKey } = this._optsToIndex(coreOpts)
 
     const idxString = (idx instanceof Buffer) ? datEncoding.encode(idx) : idx
-    const existing = cores.get(idxString)
+    const existing = this.cores.get(idxString)
     if (existing) {
       injectIntoReplicationStreams(existing)
       return existing
@@ -79,8 +93,10 @@ module.exports = function (storage, opts = {}) {
     if (idxString !== 'default') {
       storageRoot = [storageRoot.slice(0, 2), storageRoot.slice(2, 4), storageRoot].join('/')
     }
-    var core = hypercore(filename => storage(storageRoot + '/' + filename), key, {
-      ...opts,
+
+    console.error('SECRET KEY HERE IN GET:', secretKey, 'COREOPTS:', coreOpts)
+    var core = hypercore(filename => this.storage(storageRoot + '/' + filename), key, {
+      ...this.opts,
       ...coreOpts,
       createIfMissing: !coreOpts.discoveryKey,
       secretKey: coreOpts.secretKey || secretKey
@@ -88,6 +104,7 @@ module.exports = function (storage, opts = {}) {
 
     var errored = false
     const errorListener = err => {
+      console.error('CORE ERROR:', err)
       if (coreOpts.discoveryKey) {
         // If an error occurs during creation by discovery key, then that core does not exist on disk.
         errored = true
@@ -97,38 +114,43 @@ module.exports = function (storage, opts = {}) {
     core.once('error', errorListener)
     core.once('ready', () => {
       if (errored) return
-      cs.emit('feed', core, coreOpts)
+      this.emit('feed', core, coreOpts)
       core.removeListener('error', errorListener)
-      cores.set(datEncoding.encode(core.key), core)
-      cores.set(datEncoding.encode(core.discoveryKey), core)
+      this.cores.set(datEncoding.encode(core.key), core)
+      this.cores.set(datEncoding.encode(core.discoveryKey), core)
       injectIntoReplicationStreams(core)
     })
 
     return core
 
     function injectIntoReplicationStreams (core) {
-      for (let { stream, opts }  of replicationStreams) {
-        replicateCore(core, stream, { ...opts })
+      //console.error(storeId, 'INJECTING', core, 'S LENGTH:', replicationStreams.length)
+      for (let { stream, opts }  of self.replicationStreams) {
+        self._replicateCore(core, stream, { ...opts })
       }
     }
   }
 
-  function replicate (replicationOpts) {
-    if (!defaultCore && replicationOpts.encrypt) throw new Error('A main core must be specified before replication.')
-    const finalOpts = { ...opts, ...replicationOpts }
-    const mainStream = defaultCore
-      ? defaultCore.replicate({ ...finalOpts })
+  replicate (replicationOpts) {
+    if (!this.defaultCore && replicationOpts.encrypt) throw new Error('A main core must be specified before replication.')
+    const self = this
+
+    const finalOpts = { ...this.opts, ...replicationOpts }
+    //console.log('*** CORESTORE REPLICATE, default:', defaultCore)
+    const mainStream = this.defaultCore
+      ? this.defaultCore.replicate({ ...finalOpts })
       : protocol({ ...finalOpts })
 
     var closed = false
 
-    for (let [_, core] of cores) {
-      replicateCore(core, mainStream, { ...finalOpts })
+    for (let [_, core] of this.cores) {
+      this._replicateCore(core, mainStream, { ...finalOpts })
     }
 
     mainStream.on('feed', dkey => {
       // Get will automatically add the core to all replication streams.
-      get({ discoveryKey: dkey, ...opts })
+      //console.log(storeId, '*** CORESTORE GOT FEED REQUEST:', dkey)
+      this.get({ discoveryKey: dkey })
     })
 
     mainStream.on('finish', onclose)
@@ -136,39 +158,26 @@ module.exports = function (storage, opts = {}) {
     mainStream.on('close', onclose)
 
     let streamState = { stream: mainStream, opts: finalOpts }
-    replicationStreams.push(streamState)
+    this.replicationStreams.push(streamState)
 
     return mainStream
 
     function onclose () {
       if (!closed) {
-        replicationStreams.splice(replicationStreams.indexOf(streamState), 1)
+        self.replicationStreams.splice(self.replicationStreams.indexOf(streamState), 1)
         closed = true
       }
     }
   }
 
-  function replicateCore (core, mainStream, opts) {
-    core.ready(function (err) {
-      if (err) return
-      // if (mainStream.has(core.key)) return
-      for (const feed of mainStream.feeds) { // TODO: expose mainStream.has(key) instead
-        if (feed.peer.feed === core) return
-      }
-      core.replicate({
-        ...opts,
-        stream: mainStream
-      })
-    })
-  }
+  close (cb) {
+    const self = this
+    var remaining = this.cores.size
 
-  function close (cb) {
-    var remaining = cores.size
-
-    for (let { stream } of replicationStreams) {
+    for (let { stream } of this.replicationStreams) {
       stream.destroy()
     }
-    for (let [, core] of cores) {
+    for (let [, core] of this.cores) {
       if (!core.closed) core.close(onclose)
     }
 
@@ -178,13 +187,13 @@ module.exports = function (storage, opts = {}) {
     }
 
     function reset (err) {
-      cores = new Map()
-      replicationStreams = []
+      self.cores = new Map()
+      self.replicationStreams = []
       return cb(err)
     }
   }
 
-  function list () {
-    return new Map([...cores])
+  list () {
+    return new Map([...this.cores])
   }
 }
