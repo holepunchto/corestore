@@ -1,14 +1,14 @@
 {
-  "name": "random-access-corestore",
-  "version": "0.9.3",
-  "description": "A simple corestore that wraps a random-access-storage module ",
+  "name": "corestore",
+  "version": "2.0.0",
+  "description": "A Hypercore factory that stores and replicates linked cores.",
   "main": "index.js",
   "scripts": {
     "test": "tape test/*.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrewosh/random-access-corestore.git"
+    "url": "git+https://github.com/andrewosh/corestore.git"
   },
   "keywords": [
     "corestore"
@@ -16,9 +16,9 @@
   "author": "Andrew Osheroff <andrewosh@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/andrewosh/random-access-corestore/issues"
+    "url": "https://github.com/andrewosh/corestore/issues"
   },
-  "homepage": "https://github.com/andrewosh/random-access-corestore#readme",
+  "homepage": "https://github.com/andrewosh/corestore#readme",
   "devDependencies": {
     "random-access-file": "^2.1.1",
     "random-access-memory": "^3.1.1",
