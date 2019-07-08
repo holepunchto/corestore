@@ -1,17 +1,17 @@
-# random-access-corestore
-[![Build Status](https://travis-ci.com/andrewosh/random-access-corestore.svg?token=WgJmQm3Kc6qzq1pzYrkx&branch=master)](https://travis-ci.com/andrewosh/random-access-corestore)
+# corestore
+[![Build Status](https://travis-ci.com/andrewosh/corestore.svg?token=WgJmQm3Kc6qzq1pzYrkx&branch=master)](https://travis-ci.com/andrewosh/corestore)
 
-A simple corestore that wraps a random-access-storage module. This module is the canonical implementation of the "corestore" interface, which exposes a hypercore factory and a set of associated functions for managing generated hypercores.
+This module is the canonical implementation of the "corestore" interface, which exposes a hypercore factory and a set of associated functions for managing generated hypercores.
 
 Corestore imposes the convention that the first requested hypercore defines the discovery key (and encryption parameters) for its replication stream.
 
 ### Installation
-`npm i random-access-corestore --save`
+`npm i corestore --save`
 
 ### Usage
-A random-access-corestore instance can be constructed with either a random-access-storage module, or a function that returns a random-access-storage module given a path:
+A corestore instance can be constructed with either a random-access-storage module, or a function that returns a random-access-storage module given a path:
 ```js
-const corestore = require('random-access-corestore')
+const corestore = require('corestore')
 const ram = require('random-access-memory')
 const raf = require('random-access-file')
 const store1 = corestore(ram)
