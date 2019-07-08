@@ -29,7 +29,6 @@ class Corestore extends EventEmitter {
         var { publicKey, secretKey } = coreOpts.keyPair || crypto.keyPair()
         idx = crypto.discoveryKey(publicKey)
       } else {
-        //console.log('IDX HERE:', idx)
         if (!(idx instanceof Buffer)) idx = datEncoding.decode(idx)
         if (coreOpts.key) {
           idx = crypto.discoveryKey(idx)
@@ -40,20 +39,23 @@ class Corestore extends EventEmitter {
   }
 
   _replicateCore (core, mainStream, opts) {
-    //console.log(storeId, '*** CORESTORE REPLICATING CORE:', core)
+    const self = this
+
     core.ready(function (err) {
       if (err) return
-      //console.log('CORE IS READY')
       // if (mainStream.has(core.key)) return
       for (const feed of mainStream.feeds) { // TODO: expose mainStream.has(key) instead
         if (feed.peer.feed === core) return
       }
-      //console.log(storeId, '    ** ACTUALLY REPLICATING')
       core.replicate({
         ...opts,
         stream: mainStream
       })
     })
+  }
+
+  isDefaultSet () {
+    return !!this.defaultCore
   }
 
   getInfo () {
@@ -81,7 +83,6 @@ class Corestore extends EventEmitter {
     const self = this
 
     const { idx, key, secretKey } = this._optsToIndex(coreOpts)
-    console.log('IDX HERE:', idx, 'CREATE?', !coreOpts.discoveryKey, 'KEY:', key)
 
     const idxString = (idx instanceof Buffer) ? datEncoding.encode(idx) : idx
     const existing = this.cores.get(idxString)
@@ -95,18 +96,15 @@ class Corestore extends EventEmitter {
       storageRoot = [storageRoot.slice(0, 2), storageRoot.slice(2, 4), storageRoot].join('/')
     }
 
-    console.error('SECRET KEY HERE IN GET:', secretKey, 'FINAL HYPERCORE OPTS:', { ...this.opts, ...coreOpts, createifMissing: !coreOpts.discoveryKey, secretKey: coreOpts.secretKey || secretKey })
     var core = hypercore(filename => this.storage(storageRoot + '/' + filename), key, {
       ...this.opts,
       ...coreOpts,
       createIfMissing: !coreOpts.discoveryKey,
       secretKey: coreOpts.secretKey || secretKey
     })
-    console.log('*** CREATED CORE HERE:', core)
 
     var errored = false
     const errorListener = err => {
-      console.error('CORE ERROR:', err)
       if (coreOpts.discoveryKey) {
         // If an error occurs during creation by discovery key, then that core does not exist on disk.
         errored = true
@@ -116,7 +114,6 @@ class Corestore extends EventEmitter {
     core.once('error', errorListener)
     core.once('ready', () => {
       if (errored) return
-      console.error('*** CORE IS READY HERE:', core)
       this.emit('feed', core, coreOpts)
       core.removeListener('error', errorListener)
       this.cores.set(datEncoding.encode(core.key), core)
@@ -127,19 +124,19 @@ class Corestore extends EventEmitter {
     return core
 
     function injectIntoReplicationStreams (core) {
-      //console.error(storeId, 'INJECTING', core, 'S LENGTH:', replicationStreams.length)
       for (let { stream, opts }  of self.replicationStreams) {
         self._replicateCore(core, stream, { ...opts })
       }
     }
   }
 
-  replicate (replicationOpts) {
-    if (!this.defaultCore && replicationOpts.encrypt) throw new Error('A main core must be specified before replication.')
+  replicate (discoveryKey, replicationOpts) {
+    if (discoveryKey && (!(discoveryKey instanceof Buffer) && (typeof discoveryKey !== 'string'))) return this.replicate(null, discoveryKey)
     const self = this
 
+    if (!this.defaultCore && replicationOpts.encrypt) throw new Error('A main core must be specified before replication.')
+
     const finalOpts = { ...this.opts, ...replicationOpts }
-    //console.log('*** CORESTORE REPLICATE, default:', defaultCore)
     const mainStream = this.defaultCore
       ? this.defaultCore.replicate({ ...finalOpts })
       : protocol({ ...finalOpts })
@@ -152,7 +149,6 @@ class Corestore extends EventEmitter {
 
     mainStream.on('feed', dkey => {
       // Get will automatically add the core to all replication streams.
-      //console.log(storeId, '*** CORESTORE GOT FEED REQUEST:', dkey)
       this.get({ discoveryKey: dkey })
     })
 
@@ -200,3 +196,5 @@ class Corestore extends EventEmitter {
     return new Map([...this.cores])
   }
 }
+
+module.exports.Corestore = Corestore
