@@ -22,6 +22,8 @@ class Corestore extends EventEmitter {
   _optsToIndex (coreOpts) {
     if (coreOpts.default && !coreOpts.key && !coreOpts.secretKey) {
       var idx = 'default'
+    } else if (coreOpts.name && !coreOpts.key && !coreOpts.secretKey) {
+      var idx = coreOpts.name
     } else {
       idx = coreOpts.key || coreOpts.discoveryKey
       if (!idx) {
@@ -92,7 +94,7 @@ class Corestore extends EventEmitter {
     }
 
     var storageRoot = idxString
-    if (idxString !== 'default') {
+    if (idxString !== 'default' && !coreOpts.name) {
       storageRoot = [storageRoot.slice(0, 2), storageRoot.slice(2, 4), storageRoot].join('/')
     }
 
