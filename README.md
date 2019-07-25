@@ -20,16 +20,17 @@ const store1 = corestore(ram)
 const store2 = corestore(path => raf('store2/' + path))
 ```
 
-Hypercores can be generated with `get`. The first core that's generated will be considered the "main" core, and will define the corestore's replication parameters:
+Hypercores can be generated with both the `get` and `default` methods. The first writable core should be created with the `default` method, and will be stored under the `default/` directory in store. Assigning this one core a name simplifies bootstrapping, as we can always reload this core off disk without remembering names/keys. Keys for other hypercores should either be stored externally, or referenced from within the default core:
 ```js
-const core1 = store1.get()
+const core1 = store1.default()
 ```
+_Note: You do not have to create a default feed before creating additional ones unless you'd like to bootstrap your corestore from disk the next time it's instantiated._
 
-Additional hypercores can be created either by key or by name. If a hypercore is created by name, it will be stored as such in the storage layer (e.g. in the `second` directory). Named hypercores are useful when instantiating a new hypercore-based data structure and the hypercore keys have not yet been generated:
+Additional hypercores can be created by key, using the `get` method. In most scenarios, these additional keys can be extracted from the default (bootstrapping) core. If that's not the case, keys will have to be stored externally:
 ```js
-const core2 = store1.get({ name: 'second' })
+const core2 = store1.get({ key: Buffer(...) })
 ```
-Once a named hypercore has been instantiated, it's indexed by both its key and its discovery key in memory, so that it can be injected into replication streams.
+All hypercores are indexed by both their primary key and their discovery key, so that it can be dynamically injected into replication streams when requested.
 
 Two corestores can be replicated with the `replicate` function, which accepts hypercore's `replicate` options:
 ```js
@@ -43,18 +44,23 @@ stream.pipe(store2.replicate()).pipe(stream)
 #### `const store = corestore(storage)`
 Create a new corestore instance. `storage` can be either a random-access-storage module, or a function that takes a path and returns a random-access-storage instance.
 
+#### `store.default(opts)`
+Create a new default hypercore, which is used for bootstrapping the creation of subsequent hypercores. Options match those in `get`.
+
 #### `store.get(opts)`
 Create a new hypercore. Options can be one of the following:
 ```js
 {
   key: 0x1232..., // A Buffer representing a hypercore key
   discoveryKey: 0x1232... // A Buffer representing a hypercore discovery key (must have been previously created by key)
-  name: 'core-name', // A name for the new hypercore, if the key has not yet been generated
   ...opts // All other options accepted by the hypercore constructor
 }
 ```
 
 If `opts` is a Buffer, it will be interpreted as a hypercore key.
+
+#### `store.isDefaultSet()`
+Returns a boolean indicating if a default feed has been created. This can be useful if you're reusing a single corestore instances across multiple data structures, but only one structure should reinstantiate the corestore from disk.
 
 #### `store.on('feed', feed, options)`
 
@@ -63,6 +69,16 @@ Options will be the full options map passed to .get.
 
 #### `store.replicate(opts)`
 Create a replication stream for all generated hypercores. The stream's handshake parameters (i.e. its discovery key) will be defined by the first hypercore created by the corestore.
+
+#### `store.list()`
+Returns a Map of all cores currently cached in memory. For each core in memory, the map will contain the following entries:
+```
+{
+  key => core,
+  discoveryKey => core,
+  ...
+}
+```
 
 `opts` can be any hypercore replication options.
 
