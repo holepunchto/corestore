@@ -1,6 +1,8 @@
 # corestore
 [![Build Status](https://travis-ci.com/andrewosh/corestore.svg?token=WgJmQm3Kc6qzq1pzYrkx&branch=master)](https://travis-ci.com/andrewosh/corestore)
 
+__Note: These APIs are still in progress and are subject to change prior to the Hyperdrive v10 release.__
+
 This module is the canonical implementation of the "corestore" interface, which exposes a hypercore factory and a set of associated functions for managing generated hypercores.
 
 Corestore imposes the convention that the first requested hypercore defines the discovery key (and encryption parameters) for its replication stream.
