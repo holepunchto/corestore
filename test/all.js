@@ -294,7 +294,7 @@ test('live replication with an additional core', async t => {
   t.end()
 })
 
-test('graph-based replication excluded cores that aren\'t dependencies', async t => {
+test('graph-based replication excludes cores that aren\'t dependencies', async t => {
   const store1 = corestore(ram)
   const store2 = corestore(ram)
 
