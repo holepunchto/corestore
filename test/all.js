@@ -2,10 +2,15 @@ const p = require('path')
 const ram = require('random-access-memory')
 const raf = require('random-access-file')
 const datEncoding = require('dat-encoding')
-const rimraf = require('rimraf')
 const test = require('tape')
 
 const corestore = require('..')
+const {
+  runAll,
+  validateCore,
+  delay,
+  cleanup
+} = require('./helpers')
 
 test('ram-based corestore, different get options', async t => {
   const store1 = corestore(ram)
@@ -76,6 +81,7 @@ test('ram-based corestore, simple replication', async t => {
 
   await validateCore(t, core3, [Buffer.from('hello'), Buffer.from('world')])
   await validateCore(t, core4, [Buffer.from('cat'), Buffer.from('dog')])
+
   t.end()
 })
 
@@ -288,45 +294,56 @@ test('live replication with an additional core', async t => {
   t.end()
 })
 
-function runAll (ops) {
-  return new Promise((resolve, reject) => {
-    runNext(ops.shift())
-    function runNext (op) {
-      op(err => {
-        if (err) return reject(err)
-        let next = ops.shift()
-        if (!next) return resolve()
-        return runNext(next)
-      })
+test('graph-based replication excluded cores that aren\'t dependencies', async t => {
+  const store1 = corestore(ram)
+  const store2 = corestore(ram)
+
+  const graphCores1 = await getGraphCores(store1)
+  const coreKeys = graphCores1.map(core => core.key)
+  const discoveryKeys = graphCores1.map(core => core.discoveryKey)
+  const graphCores2 = await getGraphCores(store2, coreKeys)
+
+  await delay(50)
+
+  const s1 = store1.replicate(discoveryKeys[1], { live: true, encrypt: false })
+  const s2 = store2.replicate(discoveryKeys[1], { live: true, encrypt: false })
+  s1.pipe(s2).pipe(s1)
+
+  await runAll([
+    cb => graphCores1[0].append('hello', cb),
+    cb => graphCores1[2].append('cat', cb),
+    cb => graphCores1[4].append('dog', cb),
+    cb => setTimeout(cb, 50),
+    cb => {
+      t.same(graphCores2[0].length, 0)
+      t.same(graphCores2[2].length, 1)
+      t.same(graphCores2[4].length, 1)
+      return process.nextTick(cb, null)
     }
-  })
-}
+  ])
 
-function validateCore(t, core, values) {
-  const ops = values.map((v, idx) => cb => {
-    core.get(idx, (err, value) => {
-      t.error(err, 'no error')
-      t.same(value, values[idx])
-      return cb(null)
-    })
-  })
-  return runAll(ops)
-}
+  t.end()
 
-async function cleanup (dirs) {
-  return Promise.all(dirs.map(dir => new Promise((resolve, reject) => {
-    rimraf(dir, err => {
+  async function getGraphCores (store, keys) {
+    const defaultCore = store.default({ key: keys && keys[0] })
+    await ready(defaultCore)
+    const core1 = store.get({ key: keys && keys[1] })
+    await ready(core1)
+    const core2 = store.get({ key: keys && keys[2], parents: [core1.discoveryKey] })
+    await ready(core2)
+    const core3 = store.get({ key: keys && keys[3], parents: [core1.discoveryKey]})
+    await ready(core3)
+    const core4 = store.get({ key: keys && keys[4], parents: [core3.discoveryKey]})
+    await ready(core4)
+    return [defaultCore, core1, core2, core3, core4]
+  }
+})
+
+function ready (core) {
+  return new Promise((resolve, reject) => {
+    core.ready(err => {
       if (err) return reject(err)
       return resolve()
     })
-  })))
-}
-
-function delay (ms, cb) {
-  return new Promise(resolve => {
-    setTimeout(() => {
-      if (cb) cb()
-      resolve()
-    }, ms)
   })
 }
