@@ -35,7 +35,7 @@
     "hypercore-crypto": "^1.0.0",
     "hypercore-protocol": "^6.11.0",
     "hypertrie": "^3.7.1",
-    "hypertrie-multigraph": "^1.1.0",
+    "hypertrie-multigraph": "^2.0.0",
     "lru": "^3.1.0",
     "protocol-buffers-encodings": "^1.1.0"
   }
