@@ -5,25 +5,34 @@ const crypto = require('hypercore-crypto')
 const protocol = require('hypercore-protocol')
 const datEncoding = require('dat-encoding')
 const hypertrie = require('hypertrie')
+const thunky = require('thunky')
 const LRU = require('lru')
 const Multigraph = require('hypertrie-multigraph')
-
-module.exports = (storage, opts) => new Corestore(storage, opts)
+const deriveSeed = require('derive-key')
+const derivedStorage = require('derived-key-storage')
+const maybe = require('call-me-maybe')
+const raf = require('random-access-file')
 
 const PARENT_LABEL = 'parent'
 const CHILD_LABEL = 'child'
+const MASTER_KEY_FILENAME = 'master_key'
 
 class Corestore extends EventEmitter {
   constructor (storage, opts = {}) {
     super()
+
+    if (typeof storage === 'string') storage = defaultStorage(storage)
+    if (typeof storage !== 'function') throw new Error('Storage should be a function or string')
     this.storage = storage
+
     this.opts = opts
     this.id = crypto.randomBytes(5)
     this.defaultCore = null
+    this.namespace = opts.namespace || 'corestore'
 
     this._replicationStreams = new Map()
     this._externalCores = new Map()
-    this._internalCores = new LRU(opts.cacheSize || 2000)
+    this._internalCores = new LRU(opts.cacheSize || 1000)
     this._internalCores.on('evict', ({ key, value: core }) => {
       if (this._externalCores.get(key)) return
       core.close(err => {
@@ -31,31 +40,41 @@ class Corestore extends EventEmitter {
       })
     })
 
-    this._graphTrie = hypertrie(p => this.storage('./graph' + p))
-    this._graph = new Multigraph(this._graphTrie)
+    this._graph = new Multigraph(p => this.storage('.graph/' + p))
+
+    // Generated in _ready
+    this._masterKey = null
+    this._isReady = false
+    this._readyCallback = thunky(this._ready.bind(this))
   }
 
+  ready (cb) {
+    return maybe(cb, new Promise((resolve, reject) => {
+      this._readyCallback(err => {
+        if (err) return reject(err)
+        this._isReady = true
+        return resolve()
+      })
+    }))
+  }
 
-  _optsToIndex (coreOpts) {
-    var publicKey, secretKey
-    if (coreOpts.default && !coreOpts.key && !coreOpts.secretKey) {
-      var idx = 'default'
-    } else {
-      idx = coreOpts.key || coreOpts.discoveryKey
-      if (!idx) {
-        // If no key was specified, then we generate a new keypair or use the one that was passed in.
-        const keyPair = coreOpts.keyPair || crypto.keyPair()
-        publicKey = keyPair.publicKey
-        secretKey = keyPair.secretKey
-        idx = crypto.discoveryKey(publicKey)
-      } else {
-        if (!(idx instanceof Buffer)) idx = datEncoding.decode(idx)
-        if (coreOpts.key) {
-          idx = crypto.discoveryKey(idx)
+  _ready(cb) {
+    const self = this
+    const keyStorage = this.storage(MASTER_KEY_FILENAME)
+    this._graph.ready(err => {
+      if (err) return cb(err)
+      keyStorage.read(0, 32, (err, key) => {
+        if (err) {
+          this._masterKey = crypto.randomBytes(32)
+          return keyStorage.write(0, this._masterKey, err => {
+            if (err) return cb(err)
+            keyStorage.close(cb)
+          })
         }
-      }
-    }
-    return { idx, key: coreOpts.key || publicKey, secretKey }
+        this._masterKey = key
+        keyStorage.close(cb)
+      })
+    })
   }
 
   _replicateCore (core, mainStream, opts) {
@@ -74,32 +93,31 @@ class Corestore extends EventEmitter {
     })
   }
 
-  _getCachedCore (idx) {
+  _getCacheIndex (coreOpts) {
+    if (coreOpts.default) return 'default'
+    else if (coreOpts.discoveryKey) return encodeKey(coreOpts.discoveryKey)
+    else if (coreOpts.key) {
+      const key = decodeKey(coreOpts.key)
+      return crypto.discoveryKey(key)
+    }
+    return null
+  }
+
+  _getCachedCore (discoveryKey) {
+    const idx = encodeKey(discoveryKey)
     return this._externalCores.get(idx) || this._internalCores.get(idx)
   }
 
   _cacheCore (core, opts) {
-    const self = this
-
-    cache(encodeKey(core.discoveryKey))
-    cache(encodeKey(core.key))
-
-    function cache (idx) {
-      if (opts && opts.external) self._externalCores.set(idx, core)
-      self._internalCores.set(idx, core)
-    }
+    const idx = encodeKey(core.discoveryKey)
+    if (opts && opts.external) this._externalCores.set(idx, core)
+    this._internalCores.set(idx, core)
   }
 
   _uncacheCore (core) {
-    const self = this
-
-    uncache(encodeKey(core.discoveryKey))
-    uncache(encodeKey(core.key))
-
-    function uncache (idx) {
-      self._externalCores.delete(idx)
-      self._internalCores.remove(idx)
-    }
+    const idx = encodeKey(core.discoveryKey)
+    this._externalCores.delete(idx)
+    this._internalCores.remove(idx)
   }
 
   _recordDependencies (idx, core, coreOpts, cb) {
@@ -124,6 +142,42 @@ class Corestore extends EventEmitter {
     })
   }
 
+  _generateKeyPair (name) {
+    if (!name) name = crypto.randomBytes(32)
+    const seed = deriveSeed(this.namespace, this._masterKey, name)
+    const keyPair = crypto.keyPair(seed)
+    const discoveryKey = crypto.discoveryKey(keyPair.publicKey)
+    return { name, publicKey: keyPair.publicKey, secretKey: keyPair.secretKey, discoveryKey }
+  }
+
+  _generateKeys (coreOpts) {
+    if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
+
+    if (coreOpts.key) {
+      const publicKey = decodeKey(coreOpts.key)
+      return {
+        publicKey,
+        secretKey: null,
+        discoveryKey: crypto.discoveryKey(publicKey),
+        name: null,
+      }
+    }
+    if (coreOpts.default) {
+      const name = Buffer.from('default')
+      return this._generateKeyPair(name)
+    }
+    if (coreOpts.discoveryKey) {
+      const discoveryKey = decodeKey(coreOpts.discoveryKey)
+      return {
+        publicKey: null,
+        secretKey: null,
+        discoveryKey,
+        name: null
+      }
+    }
+    return this._generateKeyPair(null)
+  }
+
   isDefaultSet () {
     return !!this.defaultCore
   }
@@ -139,45 +193,61 @@ class Corestore extends EventEmitter {
   }
 
   default (coreOpts = {}) {
-    if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
+    if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
     if (this.defaultCore) return this.defaultCore
-
-    if (!coreOpts.keyPair && !coreOpts.key) coreOpts.default = true
-
-    this.defaultCore = this.get(coreOpts)
+    this.defaultCore = this.get({
+      ...coreOpts,
+      default: true
+    })
     return this.defaultCore
   }
 
   get (coreOpts = {}) {
-    if (coreOpts instanceof Buffer) coreOpts = { key: coreOpts }
+    if (!this._isReady) throw new Error('Corestore.ready must be called before get.')
     const self = this
 
-    const { idx, key, secretKey } = this._optsToIndex(coreOpts)
+    const generatedKeys = this._generateKeys(coreOpts)
+    const { publicKey, discoveryKey, name, secretKey } = generatedKeys
+    const id = encodeKey(discoveryKey)
 
-    const idxString = encodeKey(idx)
-    const cached = this._getCachedCore(idxString)
+    const cached = this._getCachedCore(discoveryKey)
     if (cached) {
       injectIntoReplicationStreams(cached)
       return cached
     }
 
-    var storageRoot = idxString
-    if (idxString !== 'default') {
-      storageRoot = [storageRoot.slice(0, 2), storageRoot.slice(2, 4), storageRoot].join('/')
-    }
+    const storageRoot = [id.slice(0, 2), id.slice(2, 4), id].join('/')
 
-    const core = hypercore(filename => this.storage(storageRoot + '/' + filename), key, {
+    const keyStorage = derivedStorage(createStorage, (name, cb) => {
+      if (name) {
+        const res = this._generateKeyPair(name)
+        if (discoveryKey && (!discoveryKey.equals((res.discoveryKey)))) {
+          return cb(new Error('Stored an incorrect name.'))
+        }
+        return cb(null, res)
+      }
+      if (secretKey) return cb(null, generatedKeys)
+      if (publicKey) return cb(null, { name: null, publicKey, secretKey: null })
+      const err = new Error('Unknown key pair.')
+      err.unknownKeyPair = true
+      return cb(err)
+    })
+
+    const core = hypercore(name => {
+      if (name === 'key')  return keyStorage.key
+      if (name === 'secret_key') return keyStorage.secretKey
+      return createStorage(name)
+    }, publicKey, {
       ...this.opts,
       ...coreOpts,
-      createIfMissing: !coreOpts.discoveryKey,
-      secretKey: coreOpts.secretKey || secretKey
+      createIfMissing: !publicKey
     })
+    this._cacheCore(core, { external: !!publicKey })
 
     var errored = false
     const errorListener = err => {
-      if (coreOpts.discoveryKey) {
+      if (err.unknownKeyPair) {
         // If an error occurs during creation by discovery key, then that core does not exist on disk.
-        errored = true
         return
       }
     }
@@ -186,8 +256,7 @@ class Corestore extends EventEmitter {
       if (errored) return
       this.emit('feed', core, coreOpts)
       core.removeListener('error', errorListener)
-      this._cacheCore(core, { external: !coreOpts.discoveryKey })
-      this._recordDependencies(idxString, core, coreOpts, err => {
+      this._recordDependencies(id, core, coreOpts, err => {
         if (err) this.emit('error', err)
         injectIntoReplicationStreams(core)
       })
@@ -196,12 +265,12 @@ class Corestore extends EventEmitter {
     return core
 
     function injectIntoReplicationStreams (core) {
-      self._getAllDependencies(idxString, PARENT_LABEL, (err, parents) => {
+      self._getAllDependencies(id, PARENT_LABEL, (err, parents) => {
         if (err) {
           self.emit('replication-error', err)
           return
         }
-        // Add null to the list of parents, as that encapsulates all replication streams without starting cores..
+        // Add null to the list of parents, as that encapsulates all complete-store replication streams.
         for (const parent of [ ...parents, null ]) {
           const streams = self._replicationStreams.get(parent)
           if (!streams || !streams.length) continue
@@ -211,10 +280,16 @@ class Corestore extends EventEmitter {
         }
       })
     }
+
+    function createStorage (name) {
+      return self.storage(storageRoot + '/' + name)
+    }
   }
 
   replicate (discoveryKey, replicationOpts) {
-    if (discoveryKey && (!(discoveryKey instanceof Buffer) && (typeof discoveryKey !== 'string'))) return this.replicate(null, discoveryKey)
+    if (discoveryKey && (!Buffer.isBuffer(discoveryKey) && (typeof discoveryKey !== 'string'))) {
+      return this.replicate(null, discoveryKey)
+    }
     const self = this
 
     var keyString = null
@@ -222,7 +297,9 @@ class Corestore extends EventEmitter {
       keyString = encodeKey(discoveryKey)
     }
 
-    if (!discoveryKey && !this.defaultCore && replicationOpts.encrypt) throw new Error('A main core must be specified before replication.')
+    if (!discoveryKey && !this.defaultCore && replicationOpts.encrypt) {
+      throw new Error('A main core must be specified before replication.')
+    }
 
     const finalOpts = { ...this.opts, ...replicationOpts }
     const mainStream = (this.defaultCore && !discoveryKey)
@@ -234,7 +311,7 @@ class Corestore extends EventEmitter {
     if (discoveryKey) {
       // If a starting key is specified, only inject all active child cores.
       this._getAllDependencies(keyString, CHILD_LABEL, (err, children) => {
-        if (err) this.emit('replication-error', err)
+        if (err) return this.emit('replication-error', err)
         for (const child of children) {
           const activeCore = this._externalCores.get(child)
           if (!activeCore) continue
@@ -275,13 +352,14 @@ class Corestore extends EventEmitter {
     }
   }
 
-  replicateGraph (opts) {
+  replicateMetadata (opts) {
     return this._graphTrie.replicate(opts)
   }
 
   close (cb) {
     const self = this
-    var remaining = this._externalCores.size + this._internalCores.size
+    var remaining = this._externalCores.size + this._internalCores.length
+    var closing = false
 
     for (const [ rootKey, streams ] of this._replicationStreams) {
       for (const stream of streams) {
@@ -302,10 +380,15 @@ class Corestore extends EventEmitter {
     }
 
     function reset (err) {
-      self._externalCores = new Map()
-      self._internalCores.clear()
-      self._replicationStreams = new Map()
-      return cb(err)
+      if (closing) return
+      closing = true
+      self._graph.close(err => {
+        if (err) return cb(err)
+        self._externalCores = new Map()
+        self._internalCores.clear()
+        self._replicationStreams = new Map()
+        return cb(err)
+      })
     }
   }
 
@@ -316,7 +399,20 @@ class Corestore extends EventEmitter {
 }
 
 function encodeKey (key) {
-  return (key instanceof Buffer) ? datEncoding.encode(key) : key
+  return Buffer.isBuffer(key) ? datEncoding.encode(key) : key
 }
 
-module.exports.Corestore = Corestore
+function decodeKey (key) {
+  return (typeof key === 'string') ? datEncoding.decode(key) : key
+}
+
+function defaultStorage (dir) {
+  return function (name) {
+    try {
+      var lock = name.endsWith('/bitfield') ? require('fd-lock') : null
+    } catch (err) {}
+    return raf(name, {directory: dir, lock: lock})
+  }
+}
+
+module.exports = Corestore

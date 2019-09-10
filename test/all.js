@@ -4,7 +4,7 @@ const raf = require('random-access-file')
 const datEncoding = require('dat-encoding')
 const test = require('tape')
 
-const corestore = require('..')
+const Corestore = require('..')
 const {
   runAll,
   validateCore,
@@ -13,7 +13,7 @@ const {
 } = require('./helpers')
 
 test('ram-based corestore, different get options', async t => {
-  const store1 = corestore(ram)
+  const store1 = await create(ram)
   const core1 = store1.default()
   var core2, core3, core4, core5
 
@@ -50,8 +50,8 @@ test('ram-based corestore, different get options', async t => {
 })
 
 test('ram-based corestore, simple replication', async t => {
-  const store1 = corestore(ram)
-  const store2 = corestore(ram)
+  const store1 = await create(ram)
+  const store2 = await create(ram)
   const core1 = store1.default()
   const core2 = store1.get()
   var core3 = null
@@ -86,8 +86,8 @@ test('ram-based corestore, simple replication', async t => {
 })
 
 test('ram-based corestore, replicating with different default keys', async t => {
-  const store1 = corestore(ram)
-  const store2 = corestore(ram)
+  const store1 = await create(ram)
+  const store2 = await create(ram)
   const core1 = store1.default()
   const core2 = store1.get()
   var core3 = null
@@ -118,8 +118,8 @@ test('ram-based corestore, replicating with different default keys', async t => 
 })
 
 test('ram-based corestore, sparse replication', async t => {
-  const store1 = corestore(ram, { sparse: true })
-  const store2 = corestore(ram, { sparse: true })
+  const store1 = await create(ram, { sparse: true })
+  const store2 = await create(ram, { sparse: true })
   const core1 = store1.default()
   const core2 = store1.get()
   var core3 = null
@@ -163,8 +163,8 @@ test('ram-based corestore, sparse replication', async t => {
 })
 
 test('ram-based corestore, sparse replication with different default keys', async t => {
-  const store1 = corestore(ram, { sparse: true })
-  const store2 = corestore(ram, { sparse: true })
+  const store1 = await create(ram, { sparse: true })
+  const store2 = await create(ram, { sparse: true })
   const core1 = store1.default()
   var core3 = null
   var core4 = null
@@ -199,8 +199,8 @@ test('ram-based corestore, sparse replication with different default keys', asyn
 })
 
 test('raf-based corestore, simple replication', async t => {
-  const store1 = corestore(path => raf(p.join('store1', path)))
-  const store2 = corestore(path => raf(p.join('store2', path)))
+  const store1 = await create(path => raf(p.join('store1', path)))
+  const store2 = await create(path => raf(p.join('store2', path)))
   const core1 = store1.default()
   const core2 = store1.get()
   var core3 = null
@@ -235,32 +235,34 @@ test('raf-based corestore, simple replication', async t => {
 })
 
 test('raf-based corestore, close and reopen', async t => {
-  var store = corestore(path => raf(p.join('store', path)))
-  var core = store.default()
+  var store = await create('test-store')
+  var firstCore = store.default()
+  var reopenedCore = null
 
   await runAll([
-    cb => core.ready(cb),
-    cb => core.append('hello', cb),
+    cb => firstCore.ready(cb),
+    cb => firstCore.append('hello', cb),
     cb => store.close(cb),
     cb => {
-      t.true(core.closed)
+      t.true(firstCore.closed)
       return process.nextTick(cb, null)
     },
     cb => {
-      store =  corestore(path => raf(p.join('store', path)))
-      core = store.default()
-      return core.ready(cb)
+      create('test-store').then(store => {
+        reopenedCore = store.default()
+        return reopenedCore.ready(cb)
+      })
     }
   ])
 
-  await validateCore(t, core, [Buffer.from('hello')])
-  await cleanup(['store'])
+  await validateCore(t, reopenedCore, [Buffer.from('hello')])
+  await cleanup(['test-store'])
   t.end()
 })
 
 test('live replication with an additional core', async t => {
-  const store1 = corestore(ram)
-  const store2 = corestore(ram)
+  const store1 = await create(ram)
+  const store2 = await create(ram)
   const core1 = store1.default()
   var core2 = null
   var core3 = null
@@ -295,8 +297,8 @@ test('live replication with an additional core', async t => {
 })
 
 test('graph-based replication excludes cores that aren\'t dependencies', async t => {
-  const store1 = corestore(ram)
-  const store2 = corestore(ram)
+  const store1 = await create(ram)
+  const store2 = await create(ram)
 
   const graphCores1 = await getGraphCores(store1)
   const coreKeys = graphCores1.map(core => core.key)
@@ -346,4 +348,10 @@ function ready (core) {
       return resolve()
     })
   })
+}
+
+async function create (storage, opts) {
+  const store = new Corestore(storage, opts)
+  await store.ready()
+  return store
 }
