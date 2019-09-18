@@ -158,11 +158,7 @@ class Corestore extends EventEmitter {
 
     core.ready(function (err) {
       if (err) return
-      // if (mainStream.has(core.key)) return
-      for (const feed of mainStream.feeds) { // TODO: expose mainStream.has(key) instead
-        if (feed.peer.feed === core) return
-      }
-      core.replicate({
+      core.replicate(isInitiator, {
         ...opts,
         stream: mainStream
       })
@@ -284,6 +280,7 @@ class Corestore extends EventEmitter {
     const generatedKeys = this._generateKeys(coreOpts)
     const { publicKey, discoveryKey, name, secretKey } = generatedKeys
     const id = encodeKey(discoveryKey)
+    const isInitiator = !!publicKey
 
     const cached = this._getCachedCore(discoveryKey)
     if (cached) {
@@ -377,9 +374,9 @@ class Corestore extends EventEmitter {
     }
   }
 
-  replicate (discoveryKey, replicationOpts) {
+  replicate (isInitiator, discoveryKey, replicationOpts = {}) {
     if (discoveryKey && (!Buffer.isBuffer(discoveryKey) && (typeof discoveryKey !== 'string'))) {
-      return this.replicate(null, discoveryKey)
+      return this.replicate(isInitiator, null, discoveryKey)
     }
     const self = this
 
@@ -394,6 +391,8 @@ class Corestore extends EventEmitter {
 
     var closed = false
 
+    console.log('isInitiator:', isInitiator, 'discoveryKey:', discoveryKey, 'finalOpts:', finalOpts)
+
     if (discoveryKey) {
       // If a starting key is specified, only inject all active child cores.
       this._getAllDependencies(keyString, CHILD_LABEL, (err, children) => {
@@ -405,7 +404,7 @@ class Corestore extends EventEmitter {
         for (const child of children) {
           const activeCore = this._externalCores.get(child)
           if (!activeCore) continue
-          this._replicateCore(activeCore, mainStream, { ...finalOpts })
+          this._replicateCore(isInitiator, activeCore, mainStream, { ...finalOpts })
         }
       })
     } else {
