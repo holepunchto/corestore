@@ -107,8 +107,8 @@ test('ram-based corestore, replicating with different default keys', async t => 
     cb => core1.append('cat', cb),
     cb => core1.append('dog', cb),
     cb => {
-      const stream = store1.replicate({ encrypt: false })
-      stream.pipe(store2.replicate({ encrypt: false })).pipe(stream)
+      const stream = store1.replicate()
+      stream.pipe(store2.replicate()).pipe(stream)
       stream.on('end', cb)
     }
   ])
@@ -142,8 +142,8 @@ test('ram-based corestore, sparse replication', async t => {
       return core4.ready(cb)
     },
     cb => {
-      const stream = store1.replicate({ live: true, encrypt: false})
-      stream.pipe(store2.replicate({ live: true, encrypt: false})).pipe(stream)
+      const stream = store1.replicate({ live: true })
+      stream.pipe(store2.replicate({ live: true })).pipe(stream)
       return process.nextTick(cb, null)
     },
     cb => core1.append('hello', cb),
@@ -176,8 +176,8 @@ test('ram-based corestore, sparse replication with different default keys', asyn
       return core3.ready(cb)
     },
     cb => {
-      const s1 = store1.replicate({ live: true, encrypt: false })
-      const s2 = store2.replicate({ live: true, encrypt: false })
+      const s1 = store1.replicate({ live: true })
+      const s2 = store2.replicate({ live: true })
       s1.pipe(s2).pipe(s1)
       return process.nextTick(cb, null)
     },
@@ -307,8 +307,8 @@ test('graph-based replication excludes cores that aren\'t dependencies', async t
 
   await delay(50)
 
-  const s1 = store1.replicate(discoveryKeys[1], { live: true, encrypt: false })
-  const s2 = store2.replicate(discoveryKeys[1], { live: true, encrypt: false })
+  const s1 = store1.replicate(discoveryKeys[1], { live: true })
+  const s2 = store2.replicate(discoveryKeys[1], { live: true })
   s1.pipe(s2).pipe(s1)
 
   await runAll([
@@ -331,11 +331,11 @@ test('graph-based replication excludes cores that aren\'t dependencies', async t
     await ready(defaultCore)
     const core1 = store.get({ key: keys && keys[1] })
     await ready(core1)
-    const core2 = store.get({ key: keys && keys[2], parents: [core1.discoveryKey] })
+    const core2 = store.get({ key: keys && keys[2], parents: [core1.key] })
     await ready(core2)
-    const core3 = store.get({ key: keys && keys[3], parents: [core1.discoveryKey]})
+    const core3 = store.get({ key: keys && keys[3], parents: [core1.key]})
     await ready(core3)
-    const core4 = store.get({ key: keys && keys[4], parents: [core3.discoveryKey]})
+    const core4 = store.get({ key: keys && keys[4], parents: [core3.key]})
     await ready(core4)
     return [defaultCore, core1, core2, core3, core4]
   }
