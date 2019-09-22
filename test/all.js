@@ -49,7 +49,7 @@ test('ram-based corestore, different get options', async t => {
   t.end()
 })
 
-test.only('ram-based corestore, simple replication', async t => {
+test('ram-based corestore, simple replication', async t => {
   const store1 = await create(ram)
   const store2 = await create(ram)
   const core1 = store1.default()
@@ -85,7 +85,7 @@ test.only('ram-based corestore, simple replication', async t => {
   t.end()
 })
 
-test('ram-based corestore, replicating with different default keys', async t => {
+test.only('ram-based corestore, replicating with different default keys', async t => {
   const store1 = await create(ram)
   const store2 = await create(ram)
   const core1 = store1.default()
@@ -107,11 +107,13 @@ test('ram-based corestore, replicating with different default keys', async t => 
     cb => core1.append('cat', cb),
     cb => core1.append('dog', cb),
     cb => {
-      const stream = store1.replicate()
-      stream.pipe(store2.replicate()).pipe(stream)
+      const stream = store1.replicate(true)
+      stream.pipe(store2.replicate(false)).pipe(stream)
       stream.on('end', cb)
     }
   ])
+
+  console.log('core4 here:', core4)
 
   await validateCore(t, core4, [Buffer.from('cat'), Buffer.from('dog')])
   t.end()

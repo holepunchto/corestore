@@ -154,10 +154,12 @@ class Corestore extends EventEmitter {
   }
 
   _replicateCore (isInitiator, core, mainStream, opts) {
+    if (!core) return
     const self = this
 
     core.ready(function (err) {
       if (err) return
+      console.log(isInitiator, 'REPLICATING:', core)
       core.replicate(isInitiator, {
         ...opts,
         stream: mainStream
@@ -319,11 +321,25 @@ class Corestore extends EventEmitter {
     })
     this._cacheCore(core, { external: !!publicKey })
     if (!coreOpts.namespaced) this._incrementReference(core)
-
     core.ifAvailable.wait()
 
     var errored = false
-    const errorListener = err => {
+    core.once('error', onerror)
+    core.once('ready', onready)
+    core.once('close', onclose)
+
+    return core
+
+    function onready () {
+      if (errored) return
+      self.emit('feed', core, coreOpts)
+      core.removeListener('error', onerror)
+      injectIntoReplicationStreams(core, () => {
+        core.ifAvailable.continue()
+      })
+    }
+
+    function onerror (err) {
       errored = true
       core.ifAvailable.continue()
       if (err.unknownKeyPair) {
@@ -331,20 +347,14 @@ class Corestore extends EventEmitter {
         return
       }
     }
-    core.once('error', errorListener)
-    core.once('ready', () => {
-      if (errored) return
-      this.emit('feed', core, coreOpts)
-      core.removeListener('error', errorListener)
-      injectIntoReplicationStreams(core, () => {
-        core.ifAvailable.continue()
-      })
-    })
-    core.once('close', () => {
-      this._uncacheCore(core)
-    })
 
-    return core
+    function onclose () {
+      self._uncacheCore(core)
+    }
+
+    function createStorage (name) {
+      return self.storage(storageRoot + '/' + name)
+    }
 
     function injectIntoReplicationStreams (core, cb) {
       self._recordDependencies(id, core, coreOpts, err => {
@@ -368,10 +378,6 @@ class Corestore extends EventEmitter {
         if (cb) cb(err)
       }
     }
-
-    function createStorage (name) {
-      return self.storage(storageRoot + '/' + name)
-    }
   }
 
   replicate (isInitiator, discoveryKey, replicationOpts = {}) {
@@ -386,12 +392,10 @@ class Corestore extends EventEmitter {
     }
 
     const finalOpts = { ...this.opts, ...replicationOpts, ack: true }
-    const mainStream = replicationOpts.stream || new HypercoreProtocol(true, { ...finalOpts })
+    const mainStream = replicationOpts.stream || new HypercoreProtocol(isInitiator, { ...finalOpts })
     const cores = replicationOpts.cores || this._externalCores.values()
 
     var closed = false
-
-    console.log('isInitiator:', isInitiator, 'discoveryKey:', discoveryKey, 'finalOpts:', finalOpts)
 
     if (discoveryKey) {
       // If a starting key is specified, only inject all active child cores.
@@ -414,11 +418,7 @@ class Corestore extends EventEmitter {
       }
     }
 
-    mainStream.on('feed', dkey => {
-      // Get will automatically add the core to all replication streams.
-      this.get({ discoveryKey: dkey })
-    })
-
+    mainStream.on('discovery-key', ondiscoverykey)
     mainStream.on('finish', onclose)
     mainStream.on('end', onclose)
     mainStream.on('close', onclose)
@@ -431,7 +431,28 @@ class Corestore extends EventEmitter {
     }
     streams.push(streamState)
 
+    mainStream.on('duplex-channel', ch => {
+      console.log('DUPLEX CHANNEL FOR DKEY:', ch.discoveryKey)
+    })
+
     return mainStream
+
+    function ondiscoverykey (dkey) {
+      // Get will automatically add the core to all replication streams.
+      const passiveCore = self.get({ discoveryKey: dkey })
+      passiveCore.once('error', oncoreerror)
+      passiveCore.once('ready', oncoreready)
+
+      function oncoreerror () {
+        console.log(isInitiator, 'CLOSING DKEY:', dkey, 'ON MAIN STREAM')
+        passiveCore.removeListener('ready', oncoreready)
+        mainStream.close(dkey)
+      }
+
+      function oncoreready () {
+        passiveCore.removeListener('error', oncoreerror)
+      }
+    }
 
     function onclose () {
       if (!closed) {
