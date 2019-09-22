@@ -159,7 +159,6 @@ class Corestore extends EventEmitter {
 
     core.ready(function (err) {
       if (err) return
-      console.log(isInitiator, 'REPLICATING:', core)
       core.replicate(isInitiator, {
         ...opts,
         stream: mainStream
@@ -431,10 +430,6 @@ class Corestore extends EventEmitter {
     }
     streams.push(streamState)
 
-    mainStream.on('duplex-channel', ch => {
-      console.log('DUPLEX CHANNEL FOR DKEY:', ch.discoveryKey)
-    })
-
     return mainStream
 
     function ondiscoverykey (dkey) {
@@ -444,7 +439,6 @@ class Corestore extends EventEmitter {
       passiveCore.once('ready', oncoreready)
 
       function oncoreerror () {
-        console.log(isInitiator, 'CLOSING DKEY:', dkey, 'ON MAIN STREAM')
         passiveCore.removeListener('ready', oncoreready)
         mainStream.close(dkey)
       }

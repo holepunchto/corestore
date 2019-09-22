@@ -85,7 +85,7 @@ test('ram-based corestore, simple replication', async t => {
   t.end()
 })
 
-test.only('ram-based corestore, replicating with different default keys', async t => {
+test('ram-based corestore, replicating with different default keys', async t => {
   const store1 = await create(ram)
   const store2 = await create(ram)
   const core1 = store1.default()
@@ -112,8 +112,6 @@ test.only('ram-based corestore, replicating with different default keys', async 
       stream.on('end', cb)
     }
   ])
-
-  console.log('core4 here:', core4)
 
   await validateCore(t, core4, [Buffer.from('cat'), Buffer.from('dog')])
   t.end()
@@ -144,8 +142,8 @@ test('ram-based corestore, sparse replication', async t => {
       return core4.ready(cb)
     },
     cb => {
-      const stream = store1.replicate({ live: true })
-      stream.pipe(store2.replicate({ live: true })).pipe(stream)
+      const stream = store1.replicate(true, { live: true })
+      stream.pipe(store2.replicate(false, { live: true })).pipe(stream)
       return process.nextTick(cb, null)
     },
     cb => core1.append('hello', cb),
@@ -178,8 +176,8 @@ test('ram-based corestore, sparse replication with different default keys', asyn
       return core3.ready(cb)
     },
     cb => {
-      const s1 = store1.replicate({ live: true })
-      const s2 = store2.replicate({ live: true })
+      const s1 = store1.replicate(true, { live: true })
+      const s2 = store2.replicate(false, { live: true })
       s1.pipe(s2).pipe(s1)
       return process.nextTick(cb, null)
     },
@@ -224,8 +222,8 @@ test('raf-based corestore, simple replication', async t => {
     cb => core2.append('cat', cb),
     cb => core2.append('dog', cb),
     cb => {
-      const stream = store1.replicate()
-      stream.pipe(store2.replicate()).pipe(stream)
+      const stream = store1.replicate(true)
+      stream.pipe(store2.replicate(false)).pipe(stream)
       stream.on('end', cb)
     }
   ])
@@ -277,8 +275,8 @@ test('live replication with an additional core', async t => {
       return core3.ready(cb)
     },
     cb => {
-      const stream = store1.replicate({ live: true })
-      stream.pipe(store2.replicate({ live: true })).pipe(stream)
+      const stream = store1.replicate(true, { live: true })
+      stream.pipe(store2.replicate(false, { live: true })).pipe(stream)
       return cb(null)
     },
     cb => {
@@ -291,7 +289,6 @@ test('live replication with an additional core', async t => {
     },
     cb => core2.append('hello', cb),
     cb => core2.append('world', cb),
-    cb => delay(500, cb)
   ])
 
   await validateCore(t, core4, [Buffer.from('hello'), Buffer.from('world')])
@@ -309,15 +306,15 @@ test('graph-based replication excludes cores that aren\'t dependencies', async t
 
   await delay(50)
 
-  const s1 = store1.replicate(discoveryKeys[1], { live: true })
-  const s2 = store2.replicate(discoveryKeys[1], { live: true })
+  const s1 = store1.replicate(true, discoveryKeys[1], { live: true })
+  const s2 = store2.replicate(false, discoveryKeys[1], { live: true })
   s1.pipe(s2).pipe(s1)
 
   await runAll([
     cb => graphCores1[0].append('hello', cb),
     cb => graphCores1[2].append('cat', cb),
     cb => graphCores1[4].append('dog', cb),
-    cb => setTimeout(cb, 50),
+    cb => setImmediate(cb),
     cb => {
       t.same(graphCores2[0].length, 0)
       t.same(graphCores2[2].length, 1)
