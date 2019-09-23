@@ -456,8 +456,8 @@ class Corestore extends EventEmitter {
     }
   }
 
-  replicateMetadata (opts) {
-    return this._graphTrie.replicate(opts)
+  replicateMetadata (isInitiator, opts) {
+    return this._graphTrie.replicate(isInitiator, opts)
   }
 
   close (cb) {
