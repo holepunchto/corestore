@@ -502,7 +502,7 @@ class Corestore extends EventEmitter {
   }
 
   list () {
-    return new Map([...this.cores])
+    return new Map([...this._externalCores])
   }
 
 }
