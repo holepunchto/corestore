@@ -360,9 +360,9 @@ class Corestore extends EventEmitter {
         if (err) return replicationError(err)
         self._getAllDependencies(id, PARENT_LABEL, (err, parents) => {
           if (err) return replicationError(err)
-          // Add null to the list of parents, as that encapsulates all complete-store replication streams.
-          for (const parent of [ ...parents, null ]) {
-            const streams = self._replicationStreams.get(parent)
+          // Add null to the list of stream keys, as that encapsulates all complete-store replication streams.
+          for (const streamKey of [ ...parents, id, null ]) {
+            const streams = self._replicationStreams.get(streamKey)
             if (!streams || !streams.length) continue
             for (const { stream, opts } of streams) {
               self._replicateCore(isInitiator, core, stream, { ...opts })
