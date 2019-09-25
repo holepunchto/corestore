@@ -351,8 +351,6 @@ test('namespaced corestores use separate default keys', async t => {
   const feed1 = store2.default()
   const feed2 = store3.default()
 
-  console.log('feed1 key:', feed1.key)
-  console.log('feed2 key:', feed2.key)
   t.true(!feed1.key.equals(feed2.key))
 
   t.end()
