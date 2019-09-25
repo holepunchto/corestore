@@ -38,7 +38,7 @@ class NamespacedCorestore {
 
   default (coreOpts = {}) {
     if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
-    const core = this.store.default({ ...coreOpts, name: this.name, namespaced: true })
+    const core = this.store.default({ ...coreOpts, _name: this.name, namespaced: true })
     return this._processCore(core)
   }
 
@@ -216,6 +216,7 @@ class Corestore extends EventEmitter {
   }
 
   _generateKeyPair (name) {
+    if (typeof name === 'string') name = Buffer.from(name)
     if (!name) name = hypercoreCrypto.randomBytes(32)
     const seed = deriveSeed(NAMESPACE, this._masterKey, name)
     const keyPair = hypercoreCrypto.keyPair(seed)

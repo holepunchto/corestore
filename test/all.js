@@ -340,6 +340,24 @@ test('graph-based replication excludes cores that aren\'t dependencies', async t
   }
 })
 
+test('namespaced corestores use separate default keys', async t => {
+  const store1 = await create(ram)
+  const store2 = store1.namespace('store2')
+  const store3 = store1.namespace('store3')
+
+  await store2.ready()
+  await store3.ready()
+
+  const feed1 = store2.default()
+  const feed2 = store3.default()
+
+  console.log('feed1 key:', feed1.key)
+  console.log('feed2 key:', feed2.key)
+  t.true(!feed1.key.equals(feed2.key))
+
+  t.end()
+})
+
 function ready (core) {
   return new Promise((resolve, reject) => {
     core.ready(err => {
