@@ -288,7 +288,7 @@ test('live replication with an additional core', async t => {
       return core4.ready(cb)
     },
     cb => core2.append('hello', cb),
-    cb => core2.append('world', cb),
+    cb => core2.append('world', cb)
   ])
 
   await validateCore(t, core4, [Buffer.from('hello'), Buffer.from('world')])
@@ -332,9 +332,9 @@ test('graph-based replication excludes cores that aren\'t dependencies', async t
     await ready(core1)
     const core2 = store.get({ key: keys && keys[2], parents: [core1.key] })
     await ready(core2)
-    const core3 = store.get({ key: keys && keys[3], parents: [core1.key]})
+    const core3 = store.get({ key: keys && keys[3], parents: [core1.key] })
     await ready(core3)
-    const core4 = store.get({ key: keys && keys[4], parents: [core3.key]})
+    const core4 = store.get({ key: keys && keys[4], parents: [core3.key] })
     await ready(core4)
     return [defaultCore, core1, core2, core3, core4]
   }

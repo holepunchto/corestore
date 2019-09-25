@@ -14,7 +14,7 @@ function runAll (ops) {
   })
 }
 
-function validateCore(t, core, values) {
+function validateCore (t, core, values) {
   const ops = values.map((v, idx) => cb => {
     core.get(idx, (err, value) => {
       t.error(err, 'no error')

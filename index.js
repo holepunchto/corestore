@@ -1,7 +1,6 @@
 const { EventEmitter } = require('events')
 
 const HypercoreProtocol = require('hypercore-protocol')
-const hypertrie = require('hypertrie')
 const hypercore = require('hypercore')
 const hypercoreCrypto = require('hypercore-crypto')
 const datEncoding = require('dat-encoding')
@@ -119,8 +118,7 @@ class Corestore extends EventEmitter {
     }))
   }
 
-  _ready(cb) {
-    const self = this
+  _ready (cb) {
     const keyStorage = this.storage(MASTER_KEY_FILENAME)
     this._graph.ready(err => {
       if (err) return cb(err)
@@ -155,8 +153,6 @@ class Corestore extends EventEmitter {
 
   _replicateCore (isInitiator, core, mainStream, opts) {
     if (!core) return
-    const self = this
-
     core.ready(function (err) {
       if (err) return
       core.replicate(isInitiator, {
@@ -243,7 +239,7 @@ class Corestore extends EventEmitter {
         publicKey,
         secretKey: null,
         discoveryKey: hypercoreCrypto.discoveryKey(publicKey),
-        name: null,
+        name: null
       }
     }
     if (coreOpts.default) {
@@ -280,7 +276,7 @@ class Corestore extends EventEmitter {
     const self = this
 
     const generatedKeys = this._generateKeys(coreOpts)
-    const { publicKey, discoveryKey, name, secretKey } = generatedKeys
+    const { publicKey, discoveryKey, secretKey } = generatedKeys
     const id = encodeKey(discoveryKey)
     const isInitiator = !!publicKey
 
@@ -311,7 +307,7 @@ class Corestore extends EventEmitter {
     })
 
     const core = hypercore(name => {
-      if (name === 'key')  return keyStorage.key
+      if (name === 'key') return keyStorage.key
       if (name === 'secret_key') return keyStorage.secretKey
       return createStorage(name)
     }, publicKey, {
@@ -344,7 +340,7 @@ class Corestore extends EventEmitter {
       core.ifAvailable.continue()
       if (err.unknownKeyPair) {
         // If an error occurs during creation by discovery key, then that core does not exist on disk.
-        return
+
       }
     }
 
@@ -467,7 +463,7 @@ class Corestore extends EventEmitter {
     var closing = false
     var error = null
 
-    for (const [ rootKey, streams ] of this._replicationStreams) {
+    for (const [, streams] of this._replicationStreams) {
       for (const stream of streams) {
         stream.destroy()
       }
@@ -489,6 +485,7 @@ class Corestore extends EventEmitter {
     }
 
     function reset (err) {
+      if (err) error = err
       if (closing) return
       closing = true
       self._graph.close(err => {
@@ -505,7 +502,6 @@ class Corestore extends EventEmitter {
   list () {
     return new Map([...this._externalCores])
   }
-
 }
 
 function encodeKey (key) {
@@ -521,7 +517,7 @@ function defaultStorage (dir) {
     try {
       var lock = name.endsWith('/bitfield') ? require('fd-lock') : null
     } catch (err) {}
-    return raf(name, {directory: dir, lock: lock})
+    return raf(name, { directory: dir, lock: lock })
   }
 }
 
