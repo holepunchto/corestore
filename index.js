@@ -190,13 +190,16 @@ class Corestore extends EventEmitter {
   }
 
   _recordDependencies (idx, core, coreOpts, cb) {
-    if (!coreOpts.parents) return process.nextTick(cb, null)
+    const parents = coreOpts.parents || []
     const batch = []
-    for (const parent of coreOpts.parents) {
+    for (const parent of parents) {
       const encoded = encodeKey(hypercoreCrypto.discoveryKey(parent))
       batch.push({ type: 'put', from: idx, to: encoded, label: PARENT_LABEL })
       batch.push({ type: 'put', from: encoded, to: idx, label: CHILD_LABEL })
     }
+    // Make a self-link to the idx core.
+    // When you replicate with a dkey but no children, the core should still replicates.
+    batch.push({ type: 'put', from: idx, to: idx, label: CHILD_LABEL })
     return this._graph.batch(batch, cb)
   }
 
@@ -389,7 +392,6 @@ class Corestore extends EventEmitter {
 
     const finalOpts = { ...this.opts, ...replicationOpts, ack: true }
     const mainStream = replicationOpts.stream || new HypercoreProtocol(isInitiator, { ...finalOpts })
-    const cores = replicationOpts.cores || this._externalCores.values()
 
     var closed = false
 
@@ -409,6 +411,7 @@ class Corestore extends EventEmitter {
       })
     } else {
       // Otherwise, inject all active cores.
+      const cores = replicationOpts.cores || this._externalCores.values()
       for (const activeCore of cores) {
         this._replicateCore(isInitiator, activeCore, mainStream, { ...finalOpts })
       }
