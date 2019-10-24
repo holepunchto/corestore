@@ -360,6 +360,8 @@ class Corestore extends EventEmitter {
         if (err) return replicationError(err)
         self._getAllDependencies(id, PARENT_LABEL, (err, parents) => {
           if (err) return replicationError(err)
+          // Deduplicate repeated parents.
+          parents = [...new Set(parents)]
           // Add null to the list of stream keys, as that encapsulates all complete-store replication streams.
           for (const streamKey of [ ...parents, id, null ]) {
             const streams = self._replicationStreams.get(streamKey)
@@ -403,9 +405,13 @@ class Corestore extends EventEmitter {
         const rootCore = this._getCachedCore(discoveryKey)
         this._replicateCore(isInitiator, rootCore, mainStream, { ...finalOpts })
 
+        // Deduplicate repeated children.
+        children = [...new Set(children)]
         for (const child of children) {
           const activeCore = this._externalCores.get(child)
-          if (!activeCore) continue
+          if (!activeCore) {
+            continue
+          }
           this._replicateCore(isInitiator, activeCore, mainStream, { ...finalOpts })
         }
       })
