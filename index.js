@@ -106,6 +106,17 @@ class Corestore extends EventEmitter {
     this._masterKey = null
     this._isReady = false
     this._readyCallback = thunky(this._ready.bind(this))
+
+    this._id = hypercoreCrypto.randomBytes(8)
+  }
+
+  _info () {
+    return {
+      id: this._id.toString('hex'),
+      externalCoresSize: this._externalCores.size,
+      internalCoresSize: this._internalCores.length,
+      referencesSize: this._references.size
+    }
   }
 
   ready (cb) {
@@ -149,6 +160,10 @@ class Corestore extends EventEmitter {
     this._references.set(core, updated)
     if (!updated) this._references.delete(core)
     return updated
+  }
+
+  _removeReferences (core) {
+    this._references.delete(core)
   }
 
   _replicateCore (isInitiator, core, mainStream, opts) {
@@ -341,9 +356,10 @@ class Corestore extends EventEmitter {
     function onerror (err) {
       errored = true
       core.ifAvailable.continue()
+      self._removeReferences(core)
       if (err.unknownKeyPair) {
         // If an error occurs during creation by discovery key, then that core does not exist on disk.
-
+        // TODO: This should not throw, but should propagate somehow.
       }
     }
 
@@ -441,16 +457,15 @@ class Corestore extends EventEmitter {
     function ondiscoverykey (dkey) {
       // Get will automatically add the core to all replication streams.
       const passiveCore = self.get({ discoveryKey: dkey })
-      passiveCore.once('error', oncoreerror)
-      passiveCore.once('ready', oncoreready)
+      if (passiveCore.opened) return
 
-      function oncoreerror () {
-        passiveCore.removeListener('ready', oncoreready)
+      passiveCore.once('error', onerror)
+      passiveCore.ready(() => {
+        passiveCore.removeListener('error', onerror)
+      })
+
+      function onerror () {
         mainStream.close(dkey)
-      }
-
-      function oncoreready () {
-        passiveCore.removeListener('error', oncoreerror)
       }
     }
 
