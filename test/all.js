@@ -222,9 +222,11 @@ test('raf-based corestore, simple replication', async t => {
     cb => core2.append('cat', cb),
     cb => core2.append('dog', cb),
     cb => {
-      const stream = store1.replicate(true)
-      stream.pipe(store2.replicate(false)).pipe(stream)
-      stream.on('end', cb)
+      setImmediate(() => {
+        const stream = store1.replicate(true)
+        stream.pipe(store2.replicate(false)).pipe(stream)
+        stream.on('end', cb)
+      })
     }
   ])
 

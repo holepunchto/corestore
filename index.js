@@ -207,15 +207,24 @@ class Corestore extends EventEmitter {
   _recordDependencies (idx, core, coreOpts, cb) {
     const parents = coreOpts.parents || []
     const batch = []
-    for (const parent of parents) {
-      const encoded = encodeKey(hypercoreCrypto.discoveryKey(parent))
-      batch.push({ type: 'put', from: idx, to: encoded, label: PARENT_LABEL })
-      batch.push({ type: 'put', from: encoded, to: idx, label: CHILD_LABEL })
-    }
-    // Make a self-link to the idx core.
-    // When you replicate with a dkey but no children, the core should still replicates.
-    batch.push({ type: 'put', from: idx, to: idx, label: CHILD_LABEL })
-    return this._graph.batch(batch, cb)
+
+    this._getAllDependencies(idx, PARENT_LABEL, (err, existingParents) => {
+      if (err) return cb(err)
+      this._getAllDependencies(idx, CHILD_LABEL, (err, existingChildren) => {
+        if (err) return cb(err)
+        existingParents = new Set(existingParents)
+        existingChildren = new Set(existingChildren)
+        for (const parent of parents) {
+          const encoded = encodeKey(hypercoreCrypto.discoveryKey(parent))
+          if (existingParents.has(encoded)) continue
+          batch.push({ type: 'put', from: idx, to: encoded, label: PARENT_LABEL })
+          batch.push({ type: 'put', from: encoded, to: idx, label: CHILD_LABEL })
+        }
+        if (!existingChildren.has(idx)) batch.push({ type: 'put', from: idx, to: idx, label: CHILD_LABEL })
+        if (!batch.length) return cb(null)
+        return this._graph.batch(batch, cb)
+      })
+    })
   }
 
   _getAllDependencies (discoveryKey, label, cb) {
