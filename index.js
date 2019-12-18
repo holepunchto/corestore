@@ -7,14 +7,11 @@ const datEncoding = require('dat-encoding')
 
 const thunky = require('thunky')
 const LRU = require('lru')
-const Multigraph = require('hypertrie-multigraph')
 const deriveSeed = require('derive-key')
 const derivedStorage = require('derived-key-storage')
 const maybe = require('call-me-maybe')
 const raf = require('random-access-file')
 
-const PARENT_LABEL = 'parent'
-const CHILD_LABEL = 'child'
 const MASTER_KEY_FILENAME = 'master_key'
 const NAMESPACE = 'corestore'
 
@@ -99,9 +96,6 @@ class Corestore extends EventEmitter {
       })
     })
 
-    this._graph = new Multigraph(p => this.storage('.graph/' + p))
-    this._graph.trie.on('error', err => this.emit('error', err))
-
     // Generated in _ready
     this._masterKey = null
     this._isReady = false
@@ -131,19 +125,16 @@ class Corestore extends EventEmitter {
 
   _ready (cb) {
     const keyStorage = this.storage(MASTER_KEY_FILENAME)
-    this._graph.ready(err => {
-      if (err) return cb(err)
-      keyStorage.read(0, 32, (err, key) => {
-        if (err) {
-          this._masterKey = hypercoreCrypto.randomBytes(32)
-          return keyStorage.write(0, this._masterKey, err => {
-            if (err) return cb(err)
-            keyStorage.close(cb)
-          })
-        }
-        this._masterKey = key
-        keyStorage.close(cb)
-      })
+    keyStorage.read(0, 32, (err, key) => {
+      if (err) {
+        this._masterKey = hypercoreCrypto.randomBytes(32)
+        return keyStorage.write(0, this._masterKey, err => {
+          if (err) return cb(err)
+          keyStorage.close(cb)
+        })
+      }
+      this._masterKey = key
+      keyStorage.close(cb)
     })
   }
 
@@ -202,40 +193,6 @@ class Corestore extends EventEmitter {
     const idx = encodeKey(core.discoveryKey)
     this._externalCores.delete(idx)
     this._internalCores.remove(idx)
-  }
-
-  _recordDependencies (idx, core, coreOpts, cb) {
-    const parents = coreOpts.parents || []
-    const batch = []
-
-    this._getAllDependencies(idx, PARENT_LABEL, (err, existingParents) => {
-      if (err) return cb(err)
-      this._getAllDependencies(idx, CHILD_LABEL, (err, existingChildren) => {
-        if (err) return cb(err)
-        existingParents = new Set(existingParents)
-        existingChildren = new Set(existingChildren)
-        for (const parent of parents) {
-          const encoded = encodeKey(hypercoreCrypto.discoveryKey(parent))
-          if (existingParents.has(encoded)) continue
-          batch.push({ type: 'put', from: idx, to: encoded, label: PARENT_LABEL })
-          batch.push({ type: 'put', from: encoded, to: idx, label: CHILD_LABEL })
-        }
-        if (!existingChildren.has(idx)) batch.push({ type: 'put', from: idx, to: idx, label: CHILD_LABEL })
-        if (!batch.length) return cb(null)
-        return this._graph.batch(batch, cb)
-      })
-    })
-  }
-
-  _getAllDependencies (discoveryKey, label, cb) {
-    const deps = []
-    const ite = this._graph.iterator({ from: discoveryKey, label })
-    ite.next(function onnext (err, pair) {
-      if (err) return cb(err)
-      if (!pair) return cb(null, deps)
-      deps.push(pair.to)
-      return ite.next(onnext)
-    })
   }
 
   _generateKeyPair (name) {
@@ -381,28 +338,12 @@ class Corestore extends EventEmitter {
     }
 
     function injectIntoReplicationStreams (core, cb) {
-      self._recordDependencies(id, core, coreOpts, err => {
-        if (err) return replicationError(err)
-        self._getAllDependencies(id, PARENT_LABEL, (err, parents) => {
-          if (err) return replicationError(err)
-          // Deduplicate repeated parents.
-          parents = [...new Set(parents)]
-          // Add null to the list of stream keys, as that encapsulates all complete-store replication streams.
-          for (const streamKey of [ ...parents, id, null ]) {
-            const streams = self._replicationStreams.get(streamKey)
-            if (!streams || !streams.length) continue
-            for (const { stream, opts } of streams) {
-              self._replicateCore(isInitiator, core, stream, { ...opts })
-            }
-          }
-          if (cb) cb(null)
-        })
-      })
-
-      function replicationError (err) {
-        self.emit('replication-error', err)
-        if (cb) cb(err)
+      for (const [, streams] of self._replicationStreams) {
+        for (const { stream, opts } of streams) {
+          self._replicateCore(isInitiator, core, stream, { ...opts })
+        }
       }
+      if (cb) return process.nextTick(cb, null)
     }
   }
 
@@ -422,30 +363,9 @@ class Corestore extends EventEmitter {
 
     var closed = false
 
-    if (discoveryKey) {
-      // If a starting key is specified, only inject all active child cores.
-      this._getAllDependencies(keyString, CHILD_LABEL, (err, children) => {
-        if (err) return this.emit('replication-error', err)
-
-        const rootCore = this._getCachedCore(discoveryKey)
-        this._replicateCore(isInitiator, rootCore, mainStream, { ...finalOpts })
-
-        // Deduplicate repeated children.
-        children = [...new Set(children)]
-        for (const child of children) {
-          const activeCore = this._externalCores.get(child)
-          if (!activeCore) {
-            continue
-          }
-          this._replicateCore(isInitiator, activeCore, mainStream, { ...finalOpts })
-        }
-      })
-    } else {
-      // Otherwise, inject all active cores.
-      const cores = replicationOpts.cores || this._externalCores.values()
-      for (const activeCore of cores) {
-        this._replicateCore(isInitiator, activeCore, mainStream, { ...finalOpts })
-      }
+    const cores = replicationOpts.cores || this._externalCores.values()
+    for (const activeCore of cores) {
+      this._replicateCore(isInitiator, activeCore, mainStream, { ...finalOpts })
     }
 
     mainStream.on('discovery-key', ondiscoverykey)
@@ -486,10 +406,6 @@ class Corestore extends EventEmitter {
     }
   }
 
-  replicateMetadata (isInitiator, opts) {
-    return this._graphTrie.replicate(isInitiator, opts)
-  }
-
   close (cb) {
     const self = this
     var remaining = this._externalCores.size + this._internalCores.length + 1
@@ -521,14 +437,10 @@ class Corestore extends EventEmitter {
       if (err) error = err
       if (closing) return
       closing = true
-      self._graph.close(err => {
-        if (!err) err = error
-        if (err) return cb(err)
-        self._externalCores.clear()
-        self._internalCores.clear()
-        self._replicationStreams.clear()
-        return cb(err)
-      })
+      self._externalCores.clear()
+      self._internalCores.clear()
+      self._replicationStreams.clear()
+      return cb(err)
     }
   }
 

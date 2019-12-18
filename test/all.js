@@ -8,7 +8,6 @@ const Corestore = require('..')
 const {
   runAll,
   validateCore,
-  delay,
   cleanup
 } = require('./helpers')
 
@@ -297,51 +296,6 @@ test('live replication with an additional core', async t => {
   t.end()
 })
 
-test('graph-based replication excludes cores that aren\'t dependencies', async t => {
-  const store1 = await create(ram)
-  const store2 = await create(ram)
-
-  const graphCores1 = await getGraphCores(store1)
-  const coreKeys = graphCores1.map(core => core.key)
-  const discoveryKeys = graphCores1.map(core => core.discoveryKey)
-  const graphCores2 = await getGraphCores(store2, coreKeys)
-
-  await delay(50)
-
-  const s1 = store1.replicate(true, discoveryKeys[1], { live: true })
-  const s2 = store2.replicate(false, discoveryKeys[1], { live: true })
-  s1.pipe(s2).pipe(s1)
-
-  await runAll([
-    cb => graphCores1[0].append('hello', cb),
-    cb => graphCores1[2].append('cat', cb),
-    cb => graphCores1[4].append('dog', cb),
-    cb => setImmediate(cb),
-    cb => {
-      t.same(graphCores2[0].length, 0)
-      t.same(graphCores2[2].length, 1)
-      t.same(graphCores2[4].length, 1)
-      return process.nextTick(cb, null)
-    }
-  ])
-
-  t.end()
-
-  async function getGraphCores (store, keys) {
-    const defaultCore = store.default({ key: keys && keys[0] })
-    await ready(defaultCore)
-    const core1 = store.get({ key: keys && keys[1] })
-    await ready(core1)
-    const core2 = store.get({ key: keys && keys[2], parents: [core1.key] })
-    await ready(core2)
-    const core3 = store.get({ key: keys && keys[3], parents: [core1.key] })
-    await ready(core3)
-    const core4 = store.get({ key: keys && keys[4], parents: [core3.key] })
-    await ready(core4)
-    return [defaultCore, core1, core2, core3, core4]
-  }
-})
-
 test('namespaced corestores use separate default keys', async t => {
   const store1 = await create(ram)
   const store2 = store1.namespace('store2')
@@ -357,15 +311,6 @@ test('namespaced corestores use separate default keys', async t => {
 
   t.end()
 })
-
-function ready (core) {
-  return new Promise((resolve, reject) => {
-    core.ready(err => {
-      if (err) return reject(err)
-      return resolve()
-    })
-  })
-}
 
 async function create (storage, opts) {
   const store = new Corestore(storage, opts)
