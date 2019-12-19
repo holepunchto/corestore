@@ -85,7 +85,7 @@ class Corestore extends EventEmitter {
 
     this.opts = opts
 
-    this._replicationStreams = new Map()
+    this._replicationStreams = []
     this._references = new Map()
     this._externalCores = new Map()
     this._internalCores = new LRU(opts.cacheSize || 1000)
@@ -338,29 +338,18 @@ class Corestore extends EventEmitter {
     }
 
     function injectIntoReplicationStreams (core, cb) {
-      for (const [, streams] of self._replicationStreams) {
-        for (const { stream, opts } of streams) {
-          self._replicateCore(isInitiator, core, stream, { ...opts })
-        }
+      for (const { stream, opts } of self._replicationStreams) {
+        self._replicateCore(isInitiator, core, stream, { ...opts })
       }
       if (cb) return process.nextTick(cb, null)
     }
   }
 
-  replicate (isInitiator, discoveryKey, replicationOpts = {}) {
-    if (discoveryKey && (!Buffer.isBuffer(discoveryKey) && (typeof discoveryKey !== 'string'))) {
-      return this.replicate(isInitiator, null, discoveryKey)
-    }
+  replicate (isInitiator, replicationOpts = {}) {
     const self = this
-
-    var keyString = null
-    if (discoveryKey) {
-      keyString = encodeKey(discoveryKey)
-    }
 
     const finalOpts = { ...this.opts, ...replicationOpts, ack: true }
     const mainStream = replicationOpts.stream || new HypercoreProtocol(isInitiator, { ...finalOpts })
-
     var closed = false
 
     const cores = replicationOpts.cores || this._externalCores.values()
@@ -374,12 +363,7 @@ class Corestore extends EventEmitter {
     mainStream.on('close', onclose)
 
     let streamState = { stream: mainStream, opts: finalOpts }
-    var streams = this._replicationStreams.get(keyString)
-    if (!streams) {
-      streams = []
-      this._replicationStreams.set(keyString, streams)
-    }
-    streams.push(streamState)
+    this._replicationStreams.push(streamState)
 
     return mainStream
 
@@ -387,20 +371,14 @@ class Corestore extends EventEmitter {
       // Get will automatically add the core to all replication streams.
       const passiveCore = self.get({ discoveryKey: dkey })
       if (passiveCore.opened) return
-
-      passiveCore.once('error', onerror)
-      passiveCore.ready(() => {
-        passiveCore.removeListener('error', onerror)
+      passiveCore.ready(err => {
+        if (err) mainStream.close(dkey)
       })
-
-      function onerror () {
-        mainStream.close(dkey)
-      }
     }
 
     function onclose () {
       if (!closed) {
-        streams.splice(streams.indexOf(streamState), 1)
+        self._replicationStreams.splice(self._replicationStreams.indexOf(streamState), 1)
         closed = true
       }
     }
@@ -412,10 +390,8 @@ class Corestore extends EventEmitter {
     var closing = false
     var error = null
 
-    for (const [, streams] of this._replicationStreams) {
-      for (const stream of streams) {
-        stream.destroy()
-      }
+    for (const { stream } of this._replicationStreams) {
+      stream.destroy()
     }
     for (let core of this._externalCores.values()) {
       if (!core.closed) core.close(onclose)
@@ -439,7 +415,7 @@ class Corestore extends EventEmitter {
       closing = true
       self._externalCores.clear()
       self._internalCores.clear()
-      self._replicationStreams.clear()
+      self._replicationStreams = []
       return cb(err)
     }
   }
