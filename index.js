@@ -271,13 +271,7 @@ class Corestore extends EventEmitter {
     const isInitiator = !!publicKey
 
     const cached = this._getCachedCore(discoveryKey)
-    if (cached) {
-      cached.ifAvailable.wait()
-      injectIntoReplicationStreams(cached, () => {
-        cached.ifAvailable.continue()
-      })
-      return cached
-    }
+    if (cached) return cached
 
     const storageRoot = [id.slice(0, 2), id.slice(2, 4), id].join('/')
 
@@ -376,6 +370,7 @@ class Corestore extends EventEmitter {
     function ondiscoverykey (dkey) {
       // Get will automatically add the core to all replication streams.
       const passiveCore = self.get({ discoveryKey: dkey })
+      self._replicateCore(false, passiveCore, mainStream, { ...finalOpts })
       if (passiveCore.opened) return
       passiveCore.ready(err => {
         if (err) mainStream.close(dkey)
