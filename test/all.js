@@ -312,6 +312,28 @@ test('namespaced corestores use separate default keys', async t => {
   t.end()
 })
 
+test('namespaced corestores will not increment reference multiple times', async t => {
+  const store1 = await create(ram)
+  const store2 = store1.namespace('store2')
+  const store3 = store1.namespace('store3')
+
+  await store2.ready()
+  await store3.ready()
+
+  const feed1 = store2.default()
+  await feed1.ready()
+  const feed3 = store3.get({ key: feed1.key })
+  const feed4 = store3.get({ key: feed1.key })
+  const feed5 = store3.get({ key: feed1.key })
+
+  t.same(feed1, feed3)
+  t.same(feed1, feed4)
+  t.same(feed1, feed5)
+  t.same(store1._references.get(feed1), 2)
+
+  t.end()
+})
+
 async function create (storage, opts) {
   const store = new Corestore(storage, opts)
   await store.ready()

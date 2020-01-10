@@ -24,11 +24,13 @@ class NamespacedCorestore {
   }
 
   _processCore (core) {
-    if (!this._opened.has(core)) this.store._incrementReference(core)
-    this._opened.add(core)
-    core.once('close', () => {
-      this._opened.delete(core)
-    })
+    if (!this._opened.has(core)) {
+      this.store._incrementReference(core)
+      this._opened.add(core)
+      core.once('close', () => {
+        this._opened.delete(core)
+      })
+    }
     return core
   }
 
@@ -62,6 +64,7 @@ class NamespacedCorestore {
       }
       core.close(onclose)
     }
+    this.store._namespaces.remove(this)
     onclose(null)
 
     function onclose (err) {
@@ -86,6 +89,7 @@ class Corestore extends EventEmitter {
     this.opts = opts
 
     this._replicationStreams = []
+    this._namespaces = []
     this._references = new Map()
     this._externalCores = new Map()
     this._internalCores = new LRU(opts.cacheSize || 1000)
@@ -252,7 +256,9 @@ class Corestore extends EventEmitter {
 
   namespace (name) {
     if (!name) name = hypercoreCrypto.randomBytes(32)
-    return new NamespacedCorestore(this, name)
+    const ns = new NamespacedCorestore(this, name)
+    this._namespaces.push(ns)
+    return ns
   }
 
   get (coreOpts = {}) {
