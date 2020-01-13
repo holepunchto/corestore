@@ -193,10 +193,12 @@ class Corestore extends EventEmitter {
     this._internalCores.set(idx, core)
   }
 
-  _uncacheCore (core) {
-    const idx = encodeKey(core.discoveryKey)
-    this._externalCores.delete(idx)
+  _uncacheCore (core, discoveryKey) {
+    const idx = encodeKey(discoveryKey)
+    const internalCached = this._internalCores.get(idx)
+    if (internalCached !== core) return
     this._internalCores.remove(idx)
+    this._externalCores.delete(idx)
   }
 
   _generateKeyPair (name) {
@@ -323,6 +325,7 @@ class Corestore extends EventEmitter {
       errored = true
       core.ifAvailable.continue()
       self._removeReferences(core)
+      self._uncacheCore(core, discoveryKey)
       if (err.unknownKeyPair) {
         // If an error occurs during creation by discovery key, then that core does not exist on disk.
         // TODO: This should not throw, but should propagate somehow.
@@ -330,7 +333,7 @@ class Corestore extends EventEmitter {
     }
 
     function onclose () {
-      self._uncacheCore(core)
+      self._uncacheCore(core, discoveryKey)
     }
 
     function createStorage (name) {
