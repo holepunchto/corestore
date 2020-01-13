@@ -187,8 +187,8 @@ class Corestore extends EventEmitter {
     return this._externalCores.get(idx) || this._internalCores.get(idx)
   }
 
-  _cacheCore (core, opts) {
-    const idx = encodeKey(core.discoveryKey)
+  _cacheCore (core, discoveryKey, opts) {
+    const idx = encodeKey(discoveryKey)
     if (opts && opts.external) this._externalCores.set(idx, core)
     this._internalCores.set(idx, core)
   }
@@ -299,7 +299,7 @@ class Corestore extends EventEmitter {
       ...coreOpts,
       createIfMissing: !!publicKey
     })
-    this._cacheCore(core, { external: !!publicKey })
+    this._cacheCore(core, discoveryKey, { external: !!publicKey })
     if (!coreOpts.namespaced) this._incrementReference(core)
     core.ifAvailable.wait()
 
