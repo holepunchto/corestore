@@ -334,6 +334,43 @@ test('namespaced corestores will not increment reference multiple times', async 
   t.end()
 })
 
+test('caching works correctly when reopening by discovery key', async t => {
+  var store = await create('test-store')
+  var firstCore = store.default()
+  var discoveryKey = null
+  var reopenedCore = null
+
+  await runAll([
+    cb => firstCore.ready(cb),
+    cb => {
+      discoveryKey = firstCore.discoveryKey
+      return cb(null)
+    },
+    cb => firstCore.append('hello', cb),
+    cb => store.close(cb),
+    cb => {
+      t.true(firstCore.closed)
+      return process.nextTick(cb, null)
+    },
+    cb => {
+      create('test-store').then(reopenedStore => {
+        store = reopenedStore
+        reopenedCore = store.get({ discoveryKey })
+        return reopenedCore.ready(cb)
+      })
+    },
+    cb => {
+      const idx = discoveryKey.toString('hex')
+      t.true(store._internalCores.get(idx))
+      return cb(null)
+    }
+  ])
+
+  await validateCore(t, reopenedCore, [Buffer.from('hello')])
+  await cleanup(['test-store'])
+  t.end()
+})
+
 async function create (storage, opts) {
   const store = new Corestore(storage, opts)
   await store.ready()
