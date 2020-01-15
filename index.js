@@ -64,7 +64,7 @@ class NamespacedCorestore {
       }
       core.close(onclose)
     }
-    this.store._namespaces.remove(this)
+    this.store._namespaces.delete(this.name.toString('hex'))
     onclose(null)
 
     function onclose (err) {
@@ -89,7 +89,7 @@ class Corestore extends EventEmitter {
     this.opts = opts
 
     this._replicationStreams = []
-    this._namespaces = []
+    this._namespaces = new Map()
     this._references = new Map()
     this._externalCores = new Map()
     this._internalCores = new LRU(opts.cacheSize || 1000)
@@ -259,7 +259,7 @@ class Corestore extends EventEmitter {
   namespace (name) {
     if (!name) name = hypercoreCrypto.randomBytes(32)
     const ns = new NamespacedCorestore(this, name)
-    this._namespaces.push(ns)
+    this._namespaces.set(name.toString('hex'), ns)
     return ns
   }
 
