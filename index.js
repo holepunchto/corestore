@@ -201,10 +201,16 @@ class Corestore extends EventEmitter {
     this._externalCores.delete(idx)
   }
 
+  _deriveSecret (namespace, name) {
+    return deriveSeed(namespace, this._masterKey, name)
+  }
+
   _generateKeyPair (name) {
     if (typeof name === 'string') name = Buffer.from(name)
-    if (!name) name = hypercoreCrypto.randomBytes(32)
-    const seed = deriveSeed(NAMESPACE, this._masterKey, name)
+    else if (!name) name = hypercoreCrypto.randomBytes(32)
+
+    const seed = this._deriveSecret(NAMESPACE, name)
+
     const keyPair = hypercoreCrypto.keyPair(seed)
     const discoveryKey = hypercoreCrypto.discoveryKey(keyPair.publicKey)
     return { name, publicKey: keyPair.publicKey, secretKey: keyPair.secretKey, discoveryKey }
