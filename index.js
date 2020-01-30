@@ -161,6 +161,12 @@ class Corestore extends EventEmitter {
     this._references.delete(core)
   }
 
+  _injectIntoReplicationStreams (core) {
+    for (const { stream, opts } of this._replicationStreams) {
+      this._replicateCore(false, core, stream, { ...opts })
+    }
+  }
+
   _replicateCore (isInitiator, core, mainStream, opts) {
     if (!core) return
     core.ready(function (err) {
@@ -182,9 +188,20 @@ class Corestore extends EventEmitter {
     return null
   }
 
-  _getCachedCore (discoveryKey) {
+  _getCachedCore (discoveryKey, shouldBeExternal) {
     const idx = encodeKey(discoveryKey)
-    return this._externalCores.get(idx) || this._internalCores.get(idx)
+    let core = this._externalCores.get(idx)
+
+    if (core) return core
+
+    core = this._internalCores.get(idx)
+
+    if (shouldBeExternal && core) {
+      this._externalCores.set(idx, core)
+      this._injectIntoReplicationStreams(core)
+    }
+
+    return core
   }
 
   _cacheCore (core, discoveryKey, opts) {
@@ -276,9 +293,9 @@ class Corestore extends EventEmitter {
     const generatedKeys = this._generateKeys(coreOpts)
     const { publicKey, discoveryKey, secretKey } = generatedKeys
     const id = encodeKey(discoveryKey)
-    const isInitiator = !!publicKey
+    const isExternal = !!publicKey
 
-    const cached = this._getCachedCore(discoveryKey)
+    const cached = this._getCachedCore(discoveryKey, isExternal)
     if (cached) return cached
 
     const storageRoot = [id.slice(0, 2), id.slice(2, 4), id].join('/')
@@ -307,7 +324,8 @@ class Corestore extends EventEmitter {
       ...coreOpts,
       createIfMissing: !!publicKey
     })
-    this._cacheCore(core, discoveryKey, { external: !!publicKey })
+
+    this._cacheCore(core, discoveryKey, { external: isExternal })
     if (!coreOpts.namespaced) this._incrementReference(core)
     core.ifAvailable.wait()
 
@@ -322,9 +340,9 @@ class Corestore extends EventEmitter {
       if (errored) return
       self.emit('feed', core, coreOpts)
       core.removeListener('error', onerror)
-      injectIntoReplicationStreams(core, () => {
-        core.ifAvailable.continue()
-      })
+      self._injectIntoReplicationStreams(core)
+      // TODO: nexttick here needed? prob not, just legacy
+      process.nextTick(() => core.ifAvailable.continue())
     }
 
     function onerror (err) {
@@ -344,13 +362,6 @@ class Corestore extends EventEmitter {
 
     function createStorage (name) {
       return self.storage(storageRoot + '/' + name)
-    }
-
-    function injectIntoReplicationStreams (core, cb) {
-      for (const { stream, opts } of self._replicationStreams) {
-        self._replicateCore(isInitiator, core, stream, { ...opts })
-      }
-      if (cb) return process.nextTick(cb, null)
     }
   }
 
