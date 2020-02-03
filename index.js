@@ -315,6 +315,14 @@ class Corestore extends EventEmitter {
       return cb(err)
     })
 
+    let cacheOpts = { ...this.opts.cache }
+    if (coreOpts.cache) {
+      if (coreOpts.cache.data === false) delete cacheOpts.data
+      if (coreOpts.cache.tree === false) delete cacheOpts.tree
+    }
+    if (cacheOpts.data) cacheOpts.data = cacheOpts.data.namespace()
+    if (cacheOpts.tree) cacheOpts.tree = cacheOpts.tree.namespace()
+
     const core = hypercore(name => {
       if (name === 'key') return keyStorage.key
       if (name === 'secret_key') return keyStorage.secretKey
@@ -322,6 +330,7 @@ class Corestore extends EventEmitter {
     }, publicKey, {
       ...this.opts,
       ...coreOpts,
+      cache: cacheOpts,
       createIfMissing: !!publicKey
     })
 
