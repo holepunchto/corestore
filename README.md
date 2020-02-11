@@ -9,10 +9,9 @@ A corestore is designed to efficiently store and replicate multiple sets of inte
 
 In order to do this, corestore provides:
 1. __Key derivation__ - all writable Hypercore keys are derived from a single master key.
-2. __A dependency graph__ - you can specify parent/child relationships between Hypercores (a Hyperdrive's content feed is a child of its metadata feed). The dependency graph is used to find the minimal number of Hypercores that should be replicated over a given stream. The graph can also be replicated (it is a hypertrie).
-3. __Caching__ - Two separate caches are used for passively replicating cores (those requested by peers) and active cores (those requested by the owner of the corestore).
-4. __Storage bootstrapping__ - You can create a `default` Hypercore that will be loaded when a key is not specified, which is useful when you don't want to reload a previously-created Hypercore by key.
-5. __Namespacing__ - If you want to create multiple compound data structures backed by a single corestore, you can create namespaced corestores such that each data structure's `default` feed is separate.
+2. __Caching__ - Two separate caches are used for passively replicating cores (those requested by peers) and active cores (those requested by the owner of the corestore).
+3. __Storage bootstrapping__ - You can create a `default` Hypercore that will be loaded when a key is not specified, which is useful when you don't want to reload a previously-created Hypercore by key.
+4. __Namespacing__ - If you want to create multiple compound data structures backed by a single corestore, you can create namespaced corestores such that each data structure's `default` feed is separate.
 
 ### Installation
 `npm i corestore --save`
@@ -22,10 +21,8 @@ A corestore instance can be constructed with a random-access-storage module, a f
 ```js
 const Corestore = require('corestore')
 const ram = require('random-access-memory')
-const raf = require('random-access-file')
-const store1 = new Corestore(ram)
-const store2 = new Corestore(path => raf('store2/' + path))
-const store3 = new Corestore('my-storage-dir')
+const store = new Corestore(ram)
+await store.ready()
 ```
 
 Hypercores can be generated with both the `get` and `default` methods. If the first writable core is created with `default`, it will be used for storage bootstrapping. We can always reload this bootstrapping core off disk without your having to store its public key externally. Keys for other hypercores should either be stored externally, or referenced from within the default core:
@@ -40,12 +37,15 @@ const core2 = store1.get({ key: Buffer(...) })
 ```
 All hypercores are indexed by their discovery keys, so that they can be dynamically injected into replication streams when requested.
 
-Two corestores can be replicated with the `replicate` function, which accepts hypercore's `replicate` options, as well as an optional starting node in the dependency graph (a discovery key). When specifying a starting node, only that node's children will be replicated into the stream:
+Two corestores can be replicated with the `replicate` function, which accepts hypercore's `replicate` options:
 ```js
-const store2 = corestore(ram)
-const core3 = store2.get(core1.key)
-const core4 = store2.get({ parents: [core1.key] })
-const stream = store2.replicate(true, core3.discoveryKey, { live: true }) // This will replicate core3 and core4.
+const store1 = new Corestore(ram)
+const store2 = new Corestore(ram)
+await Promise.all([store1.ready(), store2.ready()]
+
+const core1 = store2.get()
+const core2 = store2.get({ key: core1.key })
+const stream = store1.replicate(true, { live: true })
 stream.pipe(store2.replicate(false, { live: true })).pipe(stream) // This will replicate all common cores.
 ```
 
@@ -53,7 +53,7 @@ stream.pipe(store2.replicate(false, { live: true })).pipe(stream) // This will r
 #### `const store = corestore(storage, [opts])`
 Create a new corestore instance. `storage` can be either a random-access-storage module, or a function that takes a path and returns a random-access-storage instance.
 
-Opts is an optional object which can contain the following:
+Opts is an optional object which can contain any Hypercore constructor options, plus the following:
 ```js
 {
   cacheSize: 1000 // The size of the LRU cache for passively-replicating cores.
@@ -69,7 +69,6 @@ Create a new hypercore. Options can be one of the following:
 {
   key: 0x1232..., // A Buffer representing a hypercore key
   discoveryKey: 0x1232..., // A Buffer representing a hypercore discovery key (must have been previously created by key)
-  parents: [ 0x1234, 0xabba, ...], // A list of hypercore keys specifying the core's parent dependencies.
   ...opts // All other options accepted by the hypercore constructor
 }
 ```
@@ -81,8 +80,10 @@ If `opts` is a Buffer, it will be interpreted as a hypercore key.
 Emitted everytime a feed is loaded internally (ie, the first time get(key) is called).
 Options will be the full options map passed to .get.
 
-#### `store.replicate(isInitiator, [discoveryKey], [opts])`
-Create a replication stream for either all managed hypercores, or for all hypercores that are children of the one with the specified `discoveryKey`. The replication options are passed directly to Hypercore.
+#### `store.replicate(isInitiator, [opts])`
+Create a replication stream that will replicate all cores currently in memory in the corestore instance.
+
+When piped to another corestore's replication stream, only those cores that are shared between the two corestores will be successfully replicated.
 
 #### `store.list()`
 Returns a Map of all cores currently cached in memory. For each core in memory, the map will contain the following entries:
@@ -90,6 +91,26 @@ Returns a Map of all cores currently cached in memory. For each core in memory, 
 {
   discoveryKey => core,
   ...
+}
+```
+
+### `const namespacedStore = store.namespace('some-name')`
+Create a "namespaced" corestore that uses the same underlying storage as its parent, and mirrors the complete corestore API. 
+
+`namespacedStore.default` returns a different default core, using the namespace as part of key generation, which makes it easier to bootstrap multiple data structures from the same corestore. The general pattern is for all data structures to bootstrap themselves from their corestore's default feed:
+```js
+const store = new Corestore(ram)
+const drive1 = new Hyperdrive(store.namespace('drive1'))
+const drive2 = new Hyperdrive(store.namespace('drive2'))
+```
+
+Namespaces currently need to be saved separately outside of corestore (as a mapping from key to namespace), so that data structures remain writable across restarts. Extending the above code, this might look like:
+```js
+async function getDrive (opts = {}) {
+  let namespace = opts.key ? await lookupNamespace(opts.key) : await createNamespace()
+  const namespacedCorestore = store.namespace(namespace)
+  const drive = new Hyperdrive(namespacedCorestore)
+  await saveNamespace(drive.key, namespace)
 }
 ```
 
