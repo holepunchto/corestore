@@ -1,6 +1,7 @@
 const { EventEmitter } = require('events')
 
 const HypercoreProtocol = require('hypercore-protocol')
+const Nanoguard = require('nanoguard')
 const hypercore = require('hypercore')
 const hypercoreCrypto = require('hypercore-crypto')
 const datEncoding = require('dat-encoding')
@@ -85,6 +86,7 @@ class Corestore extends EventEmitter {
     if (typeof storage !== 'function') throw new Error('Storage should be a function or string')
     this.storage = storage
     this.name = opts.name || Buffer.from('default')
+    this.guard = new Nanoguard()
 
     this.opts = opts
 
@@ -296,6 +298,7 @@ class Corestore extends EventEmitter {
     const isExternal = !!publicKey
 
     const cached = this._getCachedCore(discoveryKey, isExternal)
+    console.log('CORE CACHED?', !!cached, 'OPTS:', coreOpts)
     if (cached) return cached
 
     const storageRoot = [id.slice(0, 2), id.slice(2, 4), id].join('/')
@@ -333,6 +336,7 @@ class Corestore extends EventEmitter {
       cache: cacheOpts,
       createIfMissing: !!publicKey
     })
+    core.ifAvailable.depend(this.guard)
 
     this._cacheCore(core, discoveryKey, { external: isExternal })
     if (!coreOpts.namespaced) this._incrementReference(core)
@@ -345,7 +349,8 @@ class Corestore extends EventEmitter {
 
     return core
 
-    function onready () {
+    function onready (err) {
+      if (err) console.log('READY ERR:', err)
       if (errored) return
       self.emit('feed', core, coreOpts)
       core.removeListener('error', onerror)
@@ -355,6 +360,7 @@ class Corestore extends EventEmitter {
     }
 
     function onerror (err) {
+      console.log('ERROR ERR:', err)
       errored = true
       core.ifAvailable.continue()
       self._removeReferences(core)
@@ -402,6 +408,7 @@ class Corestore extends EventEmitter {
       self._replicateCore(false, passiveCore, mainStream, { ...finalOpts })
       if (passiveCore.opened) return
       passiveCore.ready(err => {
+        console.log('ERR IN ONDISCKEY:', err)
         if (err) mainStream.close(dkey)
       })
     }
