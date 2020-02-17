@@ -144,6 +144,23 @@ class Corestore extends EventEmitter {
     })
   }
 
+  _checkIfExists (dkey, cb) {
+    const cachedCore = this._getCachedCore(dkey, false)
+    if (cachedCore) return process.nextTick(cb, null, true)
+
+    const id = datEncoding.encode(dkey)
+    const coreStorage = this.storage([id.slice(0, 2), id.slice(2, 4), id, 'key'].join('/'))
+
+    coreStorage.read(0, 32, (err, key) => {
+      if (err) return cb(err)
+      coreStorage.close(err => {
+        if (err) return cb(err)
+        if (!key) return cb(null, false)
+        return cb(null, true)
+      })
+    })
+  }
+
   _incrementReference (core) {
     const updated = (this._references.get(core) || 0) + 1
     this._references.set(core, updated)
@@ -298,7 +315,6 @@ class Corestore extends EventEmitter {
     const isExternal = !!publicKey
 
     const cached = this._getCachedCore(discoveryKey, isExternal)
-    console.log('CORE CACHED?', !!cached, 'OPTS:', coreOpts)
     if (cached) return cached
 
     const storageRoot = [id.slice(0, 2), id.slice(2, 4), id].join('/')
@@ -349,8 +365,7 @@ class Corestore extends EventEmitter {
 
     return core
 
-    function onready (err) {
-      if (err) console.log('READY ERR:', err)
+    function onready () {
       if (errored) return
       self.emit('feed', core, coreOpts)
       core.removeListener('error', onerror)
@@ -360,7 +375,6 @@ class Corestore extends EventEmitter {
     }
 
     function onerror (err) {
-      console.log('ERROR ERR:', err)
       errored = true
       core.ifAvailable.continue()
       self._removeReferences(core)
@@ -404,12 +418,11 @@ class Corestore extends EventEmitter {
 
     function ondiscoverykey (dkey) {
       // Get will automatically add the core to all replication streams.
-      const passiveCore = self.get({ discoveryKey: dkey })
-      self._replicateCore(false, passiveCore, mainStream, { ...finalOpts })
-      if (passiveCore.opened) return
-      passiveCore.ready(err => {
-        console.log('ERR IN ONDISCKEY:', err)
-        if (err) mainStream.close(dkey)
+      self._checkIfExists(dkey, (err, exists) => {
+        if (closed) return
+        if (err || !exists) return mainStream.close(dkey)
+        const passiveCore = self.get({ discoveryKey: dkey })
+        self._replicateCore(false, passiveCore, mainStream, { ...finalOpts })
       })
     }
 

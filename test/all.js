@@ -264,6 +264,7 @@ test('raf-based corestore, close and reopen', async t => {
 test('live replication with an additional core', async t => {
   const store1 = await create(ram)
   const store2 = await create(ram)
+
   const core1 = store1.default()
   var core2 = null
   var core3 = null
