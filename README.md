@@ -94,7 +94,7 @@ Returns a Map of all cores currently cached in memory. For each core in memory, 
 }
 ```
 
-### `const namespacedStore = store.namespace('some-name')`
+#### `const namespacedStore = store.namespace('some-name')`
 Create a "namespaced" corestore that uses the same underlying storage as its parent, and mirrors the complete corestore API. 
 
 `namespacedStore.default` returns a different default core, using the namespace as part of key generation, which makes it easier to bootstrap multiple data structures from the same corestore. The general pattern is for all data structures to bootstrap themselves from their corestore's default feed:
