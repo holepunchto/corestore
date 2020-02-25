@@ -76,6 +76,28 @@ class NamespacedCorestore {
       }
     }
   }
+
+  destroy (cb) {
+    const self = this
+
+	// Get a copy of current cores to not lose references
+    const currentFeeds = [...this._opened.values()]
+	let pending = currentFeeds.length
+	let error = null
+
+    this.close(function (err) {
+	  if(err) return cb(err)
+
+      for(let core of currentfeeds) {
+        core.destroy(ondestroy)
+      }
+
+      function ondestroy (err) {
+        if (err) error = err
+        if (!--pending) cb(error)
+      }
+    })
+  }
 }
 
 class Corestore extends EventEmitter {
@@ -468,6 +490,29 @@ class Corestore extends EventEmitter {
       self._replicationStreams = []
       return cb(err)
     }
+  }
+
+  destroy (cb) {
+    // TODO: Destroy master key
+    const self = this
+
+    const cores = [...this._externalCores.values(), ...this._internalCores.values()]
+    const remaining = cores.length
+	let error = null
+
+
+    this.close(function (err) {
+      if(err) return cb(err)
+
+      for(let core of cores) {
+        core.destroy(ondestroy)
+      }
+
+      function ondestroy (err) {
+        if(err) error = err
+        if(!--remaining) return cb(error)
+      }
+    })
   }
 
   list () {
