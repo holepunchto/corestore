@@ -78,17 +78,15 @@ class NamespacedCorestore {
   }
 
   destroy (cb) {
-    const self = this
-
-	// Get a copy of current cores to not lose references
+    // Get a copy of current cores to not lose references
     const currentFeeds = [...this._opened.values()]
-	let pending = currentFeeds.length
-	let error = null
+    let pending = currentFeeds.length
+    let error = null
 
     this.close(function (err) {
-	  if(err) return cb(err)
+      if (err) return cb(err)
 
-      for(let core of currentfeeds) {
+      for (const core of currentFeeds) {
         core.destroy(ondestroy)
       }
 
@@ -356,7 +354,7 @@ class Corestore extends EventEmitter {
       return cb(err)
     })
 
-    let cacheOpts = { ...this.opts.cache }
+    const cacheOpts = { ...this.opts.cache }
     if (coreOpts.cache) {
       if (coreOpts.cache.data === false) delete cacheOpts.data
       if (coreOpts.cache.tree === false) delete cacheOpts.tree
@@ -433,7 +431,7 @@ class Corestore extends EventEmitter {
     mainStream.on('end', onclose)
     mainStream.on('close', onclose)
 
-    let streamState = { stream: mainStream, opts: finalOpts }
+    const streamState = { stream: mainStream, opts: finalOpts }
     this._replicationStreams.push(streamState)
 
     return mainStream
@@ -465,11 +463,11 @@ class Corestore extends EventEmitter {
     for (const { stream } of this._replicationStreams) {
       stream.destroy()
     }
-    for (let core of this._externalCores.values()) {
+    for (const core of this._externalCores.values()) {
       if (!core.closed) core.close(onclose)
       else onclose(null)
     }
-    for (let idx of this._internalCores.keys) {
+    for (const idx of this._internalCores.keys) {
       const core = this._internalCores.get(idx)
       if (!core.closed) core.close(onclose)
       else onclose(null)
@@ -495,22 +493,23 @@ class Corestore extends EventEmitter {
   destroy (cb) {
     // TODO: Destroy master key
     const self = this
-
-    const cores = [...this._externalCores.values(), ...this._internalCores.values()]
-    const remaining = cores.length
-	let error = null
-
+    const internalCores = this._internalCores.keys.map(function (key) {
+      return self._internalCores.get(key)
+    })
+    const cores = [...this._externalCores.values(), ...internalCores]
+    let remaining = cores.length
+    let error = null
 
     this.close(function (err) {
-      if(err) return cb(err)
+      if (err) return cb(err)
 
-      for(let core of cores) {
+      for (const core of cores) {
         core.destroy(ondestroy)
       }
 
       function ondestroy (err) {
-        if(err) error = err
-        if(!--remaining) return cb(error)
+        if (err) error = err
+        if (!--remaining) return cb(error)
       }
     })
   }
