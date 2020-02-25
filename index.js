@@ -80,7 +80,7 @@ class NamespacedCorestore {
   destroy (cb) {
     // Get a copy of current cores to not lose references
     const currentFeeds = [...this._opened.values()]
-    let pending = currentFeeds.length
+    let pending = currentFeeds.length + 1
     let error = null
 
     this.close(function (err) {
@@ -89,6 +89,7 @@ class NamespacedCorestore {
       for (const core of currentFeeds) {
         core.destroy(ondestroy)
       }
+      ondestroy()
 
       function ondestroy (err) {
         if (err) error = err
@@ -497,7 +498,7 @@ class Corestore extends EventEmitter {
       return self._internalCores.get(key)
     })
     const cores = [...this._externalCores.values(), ...internalCores]
-    let remaining = cores.length
+    let remaining = cores.length + 1
     let error = null
 
     this.close(function (err) {
@@ -506,6 +507,7 @@ class Corestore extends EventEmitter {
       for (const core of cores) {
         core.destroy(ondestroy)
       }
+      ondestroy()
 
       function ondestroy (err) {
         if (err) error = err
