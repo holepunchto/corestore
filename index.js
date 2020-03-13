@@ -397,7 +397,7 @@ class Corestore extends EventEmitter {
   replicate (isInitiator, replicationOpts = {}) {
     const self = this
 
-    const finalOpts = { ...this.opts, ...replicationOpts, ack: true }
+    const finalOpts = { ...this.opts, ...replicationOpts }
     const mainStream = replicationOpts.stream || new HypercoreProtocol(isInitiator, { ...finalOpts })
     var closed = false
 
