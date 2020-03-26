@@ -356,7 +356,7 @@ class Corestore extends EventEmitter {
 
     this._cacheCore(core, discoveryKey, { external: isExternal })
     if (!coreOpts.namespaced) this._incrementReference(core)
-    core.ifAvailable.wait()
+    if (!core.writable) core.ifAvailable.wait()
 
     var errored = false
     core.once('error', onerror)
@@ -371,12 +371,12 @@ class Corestore extends EventEmitter {
       core.removeListener('error', onerror)
       self._injectIntoReplicationStreams(core)
       // TODO: nexttick here needed? prob not, just legacy
-      process.nextTick(() => core.ifAvailable.continue())
+      if (!core.writable) process.nextTick(() => core.ifAvailable.continue())
     }
 
     function onerror (err) {
       errored = true
-      core.ifAvailable.continue()
+      if (!core.writable) core.ifAvailable.continue()
       self._removeReferences(core)
       self._uncacheCore(core, discoveryKey)
       if (err.unknownKeyPair) {
