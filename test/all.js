@@ -2,6 +2,7 @@ const p = require('path')
 const ram = require('random-access-memory')
 const raf = require('random-access-file')
 const datEncoding = require('dat-encoding')
+const hypercoreCrypto = require('hypercore-crypto')
 const test = require('tape')
 
 const Corestore = require('..')
@@ -14,7 +15,7 @@ const {
 test('ram-based corestore, different get options', async t => {
   const store1 = await create(ram)
   const core1 = store1.default()
-  var core2, core3, core4, core5
+  var core2, core3, core4, core5, core6
 
   await runAll([
     cb => core1.ready(cb),
@@ -38,6 +39,11 @@ test('ram-based corestore, different get options', async t => {
       // String option
       core5 = store1.get({ key: datEncoding.encode(core1.key) })
       return core5.ready(cb)
+    },
+    cb => {
+      // Custom keypair option
+      core6 = store1.get({ keyPair: { secretKey: core1.secretKey, publicKey: core1.key } })
+      return core6.ready(cb)
     }
   ])
 
@@ -45,6 +51,7 @@ test('ram-based corestore, different get options', async t => {
   t.same(core1, core3)
   t.same(core1, core4)
   t.same(core1, core5)
+  t.same(core1, core6)
   t.end()
 })
 
@@ -261,6 +268,35 @@ test('raf-based corestore, close and reopen', async t => {
   t.end()
 })
 
+test('raf-based corestore, close and reopen with keypair option', async t => {
+  var store = await create('test-store')
+  const keyPair = hypercoreCrypto.keyPair()
+  var firstCore = store.get({ keyPair })
+  var reopenedCore = null
+
+  await runAll([
+    cb => firstCore.ready(cb),
+    cb => firstCore.append('hello', cb),
+    cb => store.close(cb),
+    cb => {
+      t.true(firstCore.closed)
+      return process.nextTick(cb, null)
+    },
+    cb => {
+      create('test-store').then(store => {
+        reopenedCore = store.get({ key: keyPair.publicKey })
+        return reopenedCore.ready(cb)
+      })
+    }
+  ])
+
+  await validateCore(t, reopenedCore, [Buffer.from('hello')])
+  t.true(reopenedCore.writable)
+
+  await cleanup(['test-store'])
+  t.end()
+})
+
 test('live replication with an additional core', async t => {
   const store1 = await create(ram)
   const store2 = await create(ram)
@@ -369,6 +405,24 @@ test('caching works correctly when reopening by discovery key', async t => {
 
   await validateCore(t, reopenedCore, [Buffer.from('hello')])
   await cleanup(['test-store'])
+  t.end()
+})
+
+test('can check if cores are loaded', async t => {
+  const store = await create(ram)
+  await store.ready()
+
+  const feed1 = store.default()
+  const feed2 = store.get()
+  const badKey = hypercoreCrypto.randomBytes(32)
+  const badDiscoveryKey = hypercoreCrypto.discoveryKey(badKey)
+
+  t.true(store.isLoaded({ key: feed1.key }))
+  t.true(store.isLoaded({ discoveryKey: feed1.discoveryKey }))
+  t.true(store.isLoaded({ discoveryKey: feed2.discoveryKey }))
+  t.false(store.isLoaded({ key: badKey }))
+  t.false(store.isLoaded({ key: badDiscoveryKey }))
+
   t.end()
 })
 

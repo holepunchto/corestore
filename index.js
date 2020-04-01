@@ -305,6 +305,11 @@ class Corestore extends EventEmitter {
     return ns
   }
 
+  isLoaded (coreOpts) {
+    const generatedKeys = this._generateKeys(coreOpts)
+    return !!this._getCachedCore(generatedKeys.discoveryKey, false)
+  }
+
   get (coreOpts = {}) {
     if (!this._isReady) throw new Error('Corestore.ready must be called before get.')
     const self = this
@@ -334,7 +339,7 @@ class Corestore extends EventEmitter {
       return cb(err)
     })
 
-    let cacheOpts = { ...this.opts.cache }
+    const cacheOpts = { ...this.opts.cache }
     if (coreOpts.cache) {
       if (coreOpts.cache.data === false) delete cacheOpts.data
       if (coreOpts.cache.tree === false) delete cacheOpts.tree
@@ -356,7 +361,7 @@ class Corestore extends EventEmitter {
 
     this._cacheCore(core, discoveryKey, { external: isExternal })
     if (!coreOpts.namespaced) this._incrementReference(core)
-    if (!core.writable) core.ifAvailable.wait()
+    core.ifAvailable.wait()
 
     var errored = false
     core.once('error', onerror)
@@ -371,12 +376,12 @@ class Corestore extends EventEmitter {
       core.removeListener('error', onerror)
       self._injectIntoReplicationStreams(core)
       // TODO: nexttick here needed? prob not, just legacy
-      if (!core.writable) process.nextTick(() => core.ifAvailable.continue())
+      process.nextTick(() => core.ifAvailable.continue())
     }
 
     function onerror (err) {
       errored = true
-      if (!core.writable) core.ifAvailable.continue()
+      core.ifAvailable.continue()
       self._removeReferences(core)
       self._uncacheCore(core, discoveryKey)
       if (err.unknownKeyPair) {
@@ -411,7 +416,7 @@ class Corestore extends EventEmitter {
     mainStream.on('end', onclose)
     mainStream.on('close', onclose)
 
-    let streamState = { stream: mainStream, opts: finalOpts }
+    const streamState = { stream: mainStream, opts: finalOpts }
     this._replicationStreams.push(streamState)
 
     return mainStream
@@ -443,11 +448,11 @@ class Corestore extends EventEmitter {
     for (const { stream } of this._replicationStreams) {
       stream.destroy()
     }
-    for (let core of this._externalCores.values()) {
+    for (const core of this._externalCores.values()) {
       if (!core.closed) core.close(onclose)
       else onclose(null)
     }
-    for (let idx of this._internalCores.keys) {
+    for (const idx of this._internalCores.keys) {
       const core = this._internalCores.get(idx)
       if (!core.closed) core.close(onclose)
       else onclose(null)
