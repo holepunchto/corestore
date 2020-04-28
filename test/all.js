@@ -371,6 +371,27 @@ test('namespaced corestores will not increment reference multiple times', async 
   t.end()
 })
 
+test('namespaced corestores can be nested', async t => {
+  const store1 = await create(ram)
+  const store2 = store1.namespace('store2')
+  const store1a = store1.namespace('a')
+  const store2a = store2.namespace('a')
+
+  const feed1 = store1.default()
+  const feed2 = store2.default()
+  const feed1a = store1a.default()
+  const feed2a = store2a.default()
+
+  await feed1.ready()
+  await feed2.ready()
+  await feed1a.ready()
+  await feed2a.ready()
+
+  t.notEqual(feed1a.key, feed2a.key)
+
+  t.end()
+})
+
 test('caching works correctly when reopening by discovery key', async t => {
   var store = await create('test-store')
   var firstCore = store.default()

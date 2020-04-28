@@ -15,6 +15,7 @@ const raf = require('random-access-file')
 
 const MASTER_KEY_FILENAME = 'master_key'
 const NAMESPACE = 'corestore'
+const NAMESPACE_SEPERATOR = ':'
 
 class NamespacedCorestore {
   constructor (corestore, name) {
@@ -50,6 +51,11 @@ class NamespacedCorestore {
   replicate (discoveryKey, opts) {
     // TODO: This should only replicate the cores in this._opened.
     return this.store.replicate(discoveryKey, { ...opts, cores: this._opened })
+  }
+
+  namespace (name) {
+    if (Buffer.isBuffer(name)) name = name.toString('hex')
+    return this.store.namespace(this.name + NAMESPACE_SEPERATOR + name)
   }
 
   close (cb) {
@@ -300,8 +306,10 @@ class Corestore extends EventEmitter {
 
   namespace (name) {
     if (!name) name = hypercoreCrypto.randomBytes(32)
+    if (Buffer.isBuffer(name)) name = name.toString('hex')
+    if (this._namespaces.has(name)) return this._namespaces.get(name)
     const ns = new NamespacedCorestore(this, name)
-    this._namespaces.set(name.toString('hex'), ns)
+    this._namespaces.set(name, ns)
     return ns
   }
 
