@@ -1,8 +1,6 @@
 # corestore
 [![Build Status](https://travis-ci.com/andrewosh/corestore.svg?token=WgJmQm3Kc6qzq1pzYrkx&branch=master)](https://travis-ci.com/andrewosh/corestore)
 
-__Note: These APIs are still in progress and are subject to change prior to the Hyperdrive v10 release.__
-
 This module is the canonical implementation of the "corestore" interface, which exposes a Hypercore factory and a set of associated functions for managing generated Hypercores.
 
 A corestore is designed to efficiently store and replicate multiple sets of interlinked Hypercores, such as those used by [Hyperdrive](https://github.com/mafintosh/hyperdrive) and [mountable-hypertrie](https://github.com/andrewosh/hypertrie), removing the responsibility of managing custom storage/replication code from these higher-level modules.
