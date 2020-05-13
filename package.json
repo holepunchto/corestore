@@ -31,7 +31,7 @@
     "derive-key": "^1.0.0",
     "derived-key-storage": "^2.1.0",
     "fd-lock": "^1.0.2",
-    "hypercore": "^8.0.0",
+    "hypercore": "^9.0.0",
     "hypercore-crypto": "^1.0.0",
     "hypercore-protocol": "^7.6.0",
     "lru": "^3.1.0",
