@@ -1,6 +1,6 @@
 {
   "name": "corestore",
-  "version": "5.3.0",
+  "version": "5.3.1",
   "description": "A Hypercore factory that stores and replicates linked cores.",
   "main": "index.js",
   "scripts": {
