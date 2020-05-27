@@ -318,6 +318,11 @@ class Corestore extends EventEmitter {
     return !!this._getCachedCore(generatedKeys.discoveryKey, false)
   }
 
+  isExternal (coreOpts) {
+    const generatedKeys = this._generateKeys(coreOpts)
+    return this._externalCores.has(encodeKey(generatedKeys.discoveryKey))
+  }
+
   get (coreOpts = {}) {
     if (!this._isReady) throw new Error('Corestore.ready must be called before get.')
     const self = this
