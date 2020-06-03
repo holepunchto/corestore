@@ -1,36 +1,42 @@
-const { EventEmitter } = require('events')
-
 const HypercoreProtocol = require('hypercore-protocol')
+const Nanoresource = require('nanoresource/emitter')
 const Nanoguard = require('nanoguard')
 const hypercore = require('hypercore')
 const hypercoreCrypto = require('hypercore-crypto')
 const datEncoding = require('dat-encoding')
+const maybe = require('call-me-maybe')
 
-const thunky = require('thunky')
 const LRU = require('lru')
 const deriveSeed = require('derive-key')
 const derivedStorage = require('derived-key-storage')
-const maybe = require('call-me-maybe')
 const raf = require('random-access-file')
 
 const MASTER_KEY_FILENAME = 'master_key'
 const NAMESPACE = 'corestore'
 const NAMESPACE_SEPERATOR = ':'
 
-class NamespacedCorestore {
+class NamespacedCorestore extends Nanoresource {
   constructor (corestore, name) {
+    super()
     this.name = name
     this.store = corestore
-    this._opened = new Set()
-    this.ready = this.store.ready.bind(this.store)
+    this._openedCores = new Set()
+  }
+
+  ready (cb) {
+    return this.open(cb)
+  }
+
+  _open (cb) {
+    return this.store.ready(cb)
   }
 
   _processCore (core) {
-    if (!this._opened.has(core)) {
+    if (!this._openedCores.has(core)) {
       this.store._incrementReference(core)
-      this._opened.add(core)
+      this._openedCores.add(core)
       core.once('close', () => {
-        this._opened.delete(core)
+        this._openedCores.delete(core)
       })
     }
     return core
@@ -50,7 +56,7 @@ class NamespacedCorestore {
 
   replicate (discoveryKey, opts) {
     // TODO: This should only replicate the cores in this._opened.
-    return this.store.replicate(discoveryKey, { ...opts, cores: this._opened })
+    return this.store.replicate(discoveryKey, { ...opts, cores: this._openedCores })
   }
 
   namespace (name) {
@@ -58,12 +64,12 @@ class NamespacedCorestore {
     return this.store.namespace(this.name + NAMESPACE_SEPERATOR + name)
   }
 
-  close (cb) {
+  _close (cb) {
     const self = this
-    let pending = this._opened.size + 1
+    let pending = this._openedCores.size + 1
     let error = null
 
-    for (const core of this._opened) {
+    for (const core of this._openedCores) {
       const ref = this.store._decrementReference(core)
       if (ref) {
         onclose(null)
@@ -77,14 +83,14 @@ class NamespacedCorestore {
     function onclose (err) {
       if (err) error = err
       if (!--pending) {
-        self._opened.clear()
+        self._openedCores.clear()
         return cb(error)
       }
     }
   }
 }
 
-class Corestore extends EventEmitter {
+class Corestore extends Nanoresource {
   constructor (storage, opts = {}) {
     super()
 
@@ -108,12 +114,20 @@ class Corestore extends EventEmitter {
       })
     })
 
-    // Generated in _ready
+    // Generated in _open
     this._masterKey = null
-    this._isReady = false
-    this._readyCallback = thunky(this._ready.bind(this))
-
     this._id = hypercoreCrypto.randomBytes(8)
+    this._readyProm = null
+  }
+
+  ready (cb) {
+    this._readyProm = this._readyProm || new Promise((resolve, reject) => {
+      this.open(err => {
+        if (err) return reject(err)
+        return resolve()
+      })
+    })
+    return maybe(cb, this._readyProm)
   }
 
   _info () {
@@ -125,17 +139,7 @@ class Corestore extends EventEmitter {
     }
   }
 
-  ready (cb) {
-    return maybe(cb, new Promise((resolve, reject) => {
-      this._readyCallback(err => {
-        if (err) return reject(err)
-        this._isReady = true
-        return resolve()
-      })
-    }))
-  }
-
-  _ready (cb) {
+  _open (cb) {
     const keyStorage = this.storage(MASTER_KEY_FILENAME)
     keyStorage.read(0, 32, (err, key) => {
       if (err) {
@@ -241,6 +245,7 @@ class Corestore extends EventEmitter {
     if (internalCached !== core) return
     this._internalCores.remove(idx)
     this._externalCores.delete(idx)
+    this._references.delete(core)
   }
 
   _deriveSecret (namespace, name) {
@@ -324,7 +329,7 @@ class Corestore extends EventEmitter {
   }
 
   get (coreOpts = {}) {
-    if (!this._isReady) throw new Error('Corestore.ready must be called before get.')
+    if (!this.opened) throw new Error('Corestore.ready must be called before get.')
     const self = this
 
     const generatedKeys = this._generateKeys(coreOpts)
@@ -452,7 +457,7 @@ class Corestore extends EventEmitter {
     }
   }
 
-  close (cb) {
+  _close (cb) {
     const self = this
     var remaining = this._externalCores.size + this._internalCores.length + 1
     var closing = false
