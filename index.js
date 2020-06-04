@@ -117,17 +117,15 @@ class Corestore extends Nanoresource {
     // Generated in _open
     this._masterKey = null
     this._id = hypercoreCrypto.randomBytes(8)
-    this._readyProm = null
   }
 
   ready (cb) {
-    this._readyProm = this._readyProm || new Promise((resolve, reject) => {
+    return maybe(cb, new Promise((resolve, reject) => {
       this.open(err => {
         if (err) return reject(err)
         return resolve()
       })
-    })
-    return maybe(cb, this._readyProm)
+    }))
   }
 
   _info () {
