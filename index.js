@@ -115,7 +115,7 @@ class Corestore extends Nanoresource {
     })
 
     // Generated in _open
-    this._masterKey = null
+    this._masterKey = opts.masterKey || null
     this._id = hypercoreCrypto.randomBytes(8)
   }
 
@@ -138,6 +138,7 @@ class Corestore extends Nanoresource {
   }
 
   _open (cb) {
+    if (this._masterKey) return cb()
     const keyStorage = this.storage(MASTER_KEY_FILENAME)
     keyStorage.read(0, 32, (err, key) => {
       if (err) {
