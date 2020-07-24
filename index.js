@@ -317,6 +317,15 @@ class Corestore extends Nanoresource {
     this._isNamespaced = !!opts.name
     this._isTopLevel = !opts.inner
     this._openedCores = new Map()
+
+    const onfeed = feed => this.emit('feed', feed)
+    const onerror = err => this.emit('error', err)
+    this.inner.on('feed', onfeed)
+    this.inner.on('error', onerror)
+    this._unlisten = () => {
+      this.inner.removeListener('feed', onfeed)
+      this.inner.removeListener('error', onerror)
+    }
   }
 
   ready (cb) {
@@ -335,6 +344,7 @@ class Corestore extends Nanoresource {
   }
 
   _close (cb) {
+    this._unlisten()
     if (this._isTopLevel) return this.inner.close(cb)
     for (const dkey of this._openedCores) {
       this.cache.decrement(dkey)
