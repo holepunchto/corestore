@@ -366,7 +366,9 @@ test('namespaced corestores will not increment reference multiple times', async 
   t.same(feed1, feed3)
   t.same(feed1, feed4)
   t.same(feed1, feed5)
-  t.same(store1._references.get(feed1), 2)
+
+  const entry = store1.cache.entry(feed1.discoveryKey.toString('hex'))
+  t.same(entry.refs, 2)
 
   t.end()
 })
@@ -419,7 +421,7 @@ test('caching works correctly when reopening by discovery key', async t => {
     },
     cb => {
       const idx = discoveryKey.toString('hex')
-      t.true(store._internalCores.get(idx))
+      t.true(store.cache.has(idx))
       return cb(null)
     }
   ])

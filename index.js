@@ -6,7 +6,7 @@ const hypercoreCrypto = require('hypercore-crypto')
 const datEncoding = require('dat-encoding')
 const maybe = require('call-me-maybe')
 
-const LRU = require('lru')
+const RefPool = require('refpool')
 const deriveSeed = require('derive-key')
 const derivedStorage = require('derived-key-storage')
 const raf = require('random-access-file')
@@ -15,103 +15,25 @@ const MASTER_KEY_FILENAME = 'master_key'
 const NAMESPACE = 'corestore'
 const NAMESPACE_SEPERATOR = ':'
 
-class NamespacedCorestore extends Nanoresource {
-  constructor (corestore, name) {
-    super()
-    this.name = name
-    this.store = corestore
-    this._openedCores = new Set()
-  }
-
-  ready (cb) {
-    return this.open(cb)
-  }
-
-  _open (cb) {
-    return this.store.ready(cb)
-  }
-
-  _processCore (core) {
-    if (!this._openedCores.has(core)) {
-      this.store._incrementReference(core)
-      this._openedCores.add(core)
-      core.once('close', () => {
-        this._openedCores.delete(core)
-      })
-    }
-    return core
-  }
-
-  default (coreOpts = {}) {
-    if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
-    const core = this.store.default({ ...coreOpts, _name: this.name, namespaced: true })
-    return this._processCore(core)
-  }
-
-  get (coreOpts = {}) {
-    if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
-    const core = this.store.get({ ...coreOpts, namespaced: true })
-    return this._processCore(core)
-  }
-
-  replicate (discoveryKey, opts) {
-    // TODO: This should only replicate the cores in this._opened.
-    return this.store.replicate(discoveryKey, { ...opts, cores: this._openedCores })
-  }
-
-  namespace (name) {
-    if (Buffer.isBuffer(name)) name = name.toString('hex')
-    return this.store.namespace(this.name + NAMESPACE_SEPERATOR + name)
-  }
-
-  _close (cb) {
-    const self = this
-    let pending = this._openedCores.size + 1
-    let error = null
-
-    for (const core of this._openedCores) {
-      const ref = this.store._decrementReference(core)
-      if (ref) {
-        onclose(null)
-        continue
-      }
-      core.close(onclose)
-    }
-    this.store._namespaces.delete(this.name.toString('hex'))
-    onclose(null)
-
-    function onclose (err) {
-      if (err) error = err
-      if (!--pending) {
-        self._openedCores.clear()
-        return cb(error)
-      }
-    }
-  }
-}
-
-class Corestore extends Nanoresource {
+class InnerCorestore extends Nanoresource {
   constructor (storage, opts = {}) {
     super()
 
     if (typeof storage === 'string') storage = defaultStorage(storage)
     if (typeof storage !== 'function') throw new Error('Storage should be a function or string')
     this.storage = storage
-    this.name = opts.name || Buffer.from('default')
     this.guard = new Nanoguard()
 
     this.opts = opts
 
     this._replicationStreams = []
-    this._namespaces = new Map()
-    this._references = new Map()
-    this._externalCores = new Map()
-    this._internalCores = new LRU(opts.cacheSize || 1000)
-    this._internalCores.on('evict', ({ key, value: core }) => {
-      if (this._externalCores.get(key)) return
-      core.close(err => {
-        if (err) this.emit('error', err)
-      })
+    this.cache = new RefPool({
+      maxSize: opts.cacheSize || 1000,
+      close: core => {
+        core.close(err => {
+          if (err) this.emit('error', err)
+        })
+      }
     })
 
     // Generated in _open
@@ -119,23 +41,7 @@ class Corestore extends Nanoresource {
     this._id = hypercoreCrypto.randomBytes(8)
   }
 
-  ready (cb) {
-    return maybe(cb, new Promise((resolve, reject) => {
-      this.open(err => {
-        if (err) return reject(err)
-        return resolve()
-      })
-    }))
-  }
-
-  _info () {
-    return {
-      id: this._id.toString('hex'),
-      externalCoresSize: this._externalCores.size,
-      internalCoresSize: this._internalCores.length,
-      referencesSize: this._references.size
-    }
-  }
+  // Nanoresource Methods
 
   _open (cb) {
     if (this._masterKey) return cb()
@@ -153,12 +59,30 @@ class Corestore extends Nanoresource {
     })
   }
 
-  _checkIfExists (dkey, cb) {
-    const cachedCore = this._getCachedCore(dkey, false)
-    if (cachedCore) return process.nextTick(cb, null, true)
+  _close (cb) {
+    let error = null
+    for (const { stream } of this._replicationStreams) {
+      stream.destroy()
+    }
+    let remaining = this.cache.size
+    for (const { value: core } of this.cache.entries.values()) {
+      core.close(err => {
+        if (err) error = err
+        if (!--remaining) {
+          if (error) return cb(error)
+          return cb(null)
+        }
+      })
+    }
+  }
 
-    const id = datEncoding.encode(dkey)
-    const coreStorage = this.storage([id.slice(0, 2), id.slice(2, 4), id, 'key'].join('/'))
+  // Private Methods
+
+  _checkIfExists (dkey, cb) {
+    dkey = encodeKey(dkey)
+    if (this.cache.has(dkey)) return process.nextTick(cb, null, true)
+
+    const coreStorage = this.storage([dkey.slice(0, 2), dkey.slice(2, 4), dkey, 'key'].join('/'))
 
     coreStorage.read(0, 32, (err, key) => {
       if (err) return cb(err)
@@ -168,25 +92,6 @@ class Corestore extends Nanoresource {
         return cb(null, true)
       })
     })
-  }
-
-  _incrementReference (core) {
-    const updated = (this._references.get(core) || 0) + 1
-    this._references.set(core, updated)
-    return updated
-  }
-
-  _decrementReference (core) {
-    const refs = this._references.get(core)
-    const updated = refs - 1
-    if (updated < 0) throw new Error('References should not go negative.')
-    this._references.set(core, updated)
-    if (!updated) this._references.delete(core)
-    return updated
-  }
-
-  _removeReferences (core) {
-    this._references.delete(core)
   }
 
   _injectIntoReplicationStreams (core) {
@@ -204,47 +109,6 @@ class Corestore extends Nanoresource {
         stream: mainStream
       })
     })
-  }
-
-  _getCacheIndex (coreOpts) {
-    if (coreOpts.default) return 'default'
-    else if (coreOpts.discoveryKey) return encodeKey(coreOpts.discoveryKey)
-    else if (coreOpts.key) {
-      const key = decodeKey(coreOpts.key)
-      return hypercoreCrypto.discoveryKey(key)
-    }
-    return null
-  }
-
-  _getCachedCore (discoveryKey, shouldBeExternal) {
-    const idx = encodeKey(discoveryKey)
-    let core = this._externalCores.get(idx)
-
-    if (core) return core
-
-    core = this._internalCores.get(idx)
-
-    if (shouldBeExternal && core) {
-      this._externalCores.set(idx, core)
-      this._injectIntoReplicationStreams(core)
-    }
-
-    return core
-  }
-
-  _cacheCore (core, discoveryKey, opts) {
-    const idx = encodeKey(discoveryKey)
-    if (opts && opts.external) this._externalCores.set(idx, core)
-    this._internalCores.set(idx, core)
-  }
-
-  _uncacheCore (core, discoveryKey) {
-    const idx = encodeKey(discoveryKey)
-    const internalCached = this._internalCores.get(idx)
-    if (internalCached !== core) return
-    this._internalCores.remove(idx)
-    this._externalCores.delete(idx)
-    this._references.delete(core)
   }
 
   _deriveSecret (namespace, name) {
@@ -284,9 +148,9 @@ class Corestore extends Nanoresource {
         name: null
       }
     }
-    if (coreOpts.default) {
-      const name = coreOpts._name || this.name
-      return this._generateKeyPair(name)
+    if (coreOpts.default || coreOpts.name) {
+      if (!coreOpts.name) throw new Error('If the default option is set, a name must be specified.')
+      return this._generateKeyPair(coreOpts.name)
     }
     if (coreOpts.discoveryKey) {
       const discoveryKey = decodeKey(coreOpts.discoveryKey)
@@ -300,31 +164,18 @@ class Corestore extends Nanoresource {
     return this._generateKeyPair(null)
   }
 
-  default (coreOpts = {}) {
-    if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
-    return this.get({
-      ...coreOpts,
-      default: true
-    })
-  }
-
-  namespace (name) {
-    if (!name) name = hypercoreCrypto.randomBytes(32)
-    if (Buffer.isBuffer(name)) name = name.toString('hex')
-    if (this._namespaces.has(name)) return this._namespaces.get(name)
-    const ns = new NamespacedCorestore(this, name)
-    this._namespaces.set(name, ns)
-    return ns
-  }
+  // Public Methods
 
   isLoaded (coreOpts) {
     const generatedKeys = this._generateKeys(coreOpts)
-    return !!this._getCachedCore(generatedKeys.discoveryKey, false)
+    return this.cache.has(encodeKey(generatedKeys.discoveryKey))
   }
 
   isExternal (coreOpts) {
     const generatedKeys = this._generateKeys(coreOpts)
-    return this._externalCores.has(encodeKey(generatedKeys.discoveryKey))
+    const entry = this._cache.entry(encodeKey(generatedKeys.discoveryKey))
+    if (!entry) return false
+    return entry.refs !== 0
   }
 
   get (coreOpts = {}) {
@@ -334,9 +185,8 @@ class Corestore extends Nanoresource {
     const generatedKeys = this._generateKeys(coreOpts)
     const { publicKey, discoveryKey, secretKey } = generatedKeys
     const id = encodeKey(discoveryKey)
-    const isExternal = !!publicKey
 
-    const cached = this._getCachedCore(discoveryKey, isExternal)
+    const cached = this.cache.get(id)
     if (cached) return cached
 
     const storageRoot = [id.slice(0, 2), id.slice(2, 4), id].join('/')
@@ -376,8 +226,7 @@ class Corestore extends Nanoresource {
     })
     core.ifAvailable.depend(this.guard)
 
-    this._cacheCore(core, discoveryKey, { external: isExternal })
-    if (!coreOpts.namespaced) this._incrementReference(core)
+    this.cache.set(id, core)
     core.ifAvailable.wait()
 
     var errored = false
@@ -399,8 +248,7 @@ class Corestore extends Nanoresource {
     function onerror (err) {
       errored = true
       core.ifAvailable.continue()
-      self._removeReferences(core)
-      self._uncacheCore(core, discoveryKey)
+      self.cache.delete(id)
       if (err.unknownKeyPair) {
         // If an error occurs during creation by discovery key, then that core does not exist on disk.
         // TODO: This should not throw, but should propagate somehow.
@@ -408,7 +256,7 @@ class Corestore extends Nanoresource {
     }
 
     function onclose () {
-      self._uncacheCore(core, discoveryKey)
+      self.cache.delete(id)
     }
 
     function createStorage (name) {
@@ -416,16 +264,15 @@ class Corestore extends Nanoresource {
     }
   }
 
-  replicate (isInitiator, replicationOpts = {}) {
+  replicate (isInitiator, cores, replicationOpts = {}) {
     const self = this
 
     const finalOpts = { ...this.opts, ...replicationOpts }
     const mainStream = replicationOpts.stream || new HypercoreProtocol(isInitiator, { ...finalOpts })
     var closed = false
 
-    const cores = replicationOpts.cores || this._externalCores.values()
-    for (const activeCore of cores) {
-      this._replicateCore(isInitiator, activeCore, mainStream, { ...finalOpts })
+    for (const core of cores) {
+      this._replicateCore(isInitiator, core, mainStream, { ...finalOpts })
     }
 
     mainStream.on('discovery-key', ondiscoverykey)
@@ -455,45 +302,95 @@ class Corestore extends Nanoresource {
       }
     }
   }
+}
+
+class Corestore extends Nanoresource {
+  constructor (storage, opts = {}) {
+    super()
+
+    this.storage = storage
+    this.name = opts.name || 'default'
+    this.inner = opts.inner || new InnerCorestore(storage, opts)
+    this.cache = this.inner.cache
+    this.store = this // Backwards-compat for NamespacedCorestore
+
+    this._isNamespaced = !!opts.name
+    this._isTopLevel = !opts.inner
+    this._openedCores = new Map()
+  }
+
+  ready (cb) {
+    return maybe(cb, new Promise((resolve, reject) => {
+      this.open(err => {
+        if (err) return reject(err)
+        return resolve()
+      })
+    }))
+  }
+
+  // Nanoresource Methods
+
+  _open (cb) {
+    return this.inner.open(cb)
+  }
 
   _close (cb) {
-    const self = this
-    var remaining = this._externalCores.size + this._internalCores.length + 1
-    var closing = false
-    var error = null
+    if (this._isTopLevel) return this.inner.close(cb)
+    for (const dkey of this._openedCores) {
+      this.cache.decrement(dkey)
+    }
+    return process.nextTick(cb, null)
+  }
 
-    for (const { stream } of this._replicationStreams) {
-      stream.destroy()
-    }
-    for (const core of this._externalCores.values()) {
-      if (!core.closed) core.close(onclose)
-      else onclose(null)
-    }
-    for (const idx of this._internalCores.keys) {
-      const core = this._internalCores.get(idx)
-      if (!core.closed) core.close(onclose)
-      else onclose(null)
-    }
-    onclose()
+  // Private Methods
 
-    function onclose (err) {
-      if (err) error = err
-      if (!--remaining) return reset(error)
-    }
+  _maybeIncrement (core) {
+    const id = encodeKey(core.discoveryKey)
+    if (this._openedCores.has(id)) return
+    this._openedCores.set(id, core)
+    this.cache.increment(id)
+  }
 
-    function reset (err) {
-      if (err) error = err
-      if (closing) return
-      closing = true
-      self._externalCores.clear()
-      self._internalCores.clear()
-      self._replicationStreams = []
-      return cb(err)
-    }
+  // Public Methods
+
+  get (coreOpts = {}) {
+    if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
+    const core = this.inner.get(coreOpts)
+    this._maybeIncrement(core)
+    return core
+  }
+
+  default (coreOpts = {}) {
+    if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
+    const core = this.inner.get({ ...coreOpts, name: this.name })
+    this._maybeIncrement(core)
+    return core
+  }
+
+  namespace (name) {
+    if (!name) name = hypercoreCrypto.randomBytes(32)
+    if (Buffer.isBuffer(name)) name = name.toString('hex')
+    name = this._isNamespaced ? this.name + NAMESPACE_SEPERATOR + name : name
+    return new Corestore(this.storage, {
+      inner: this.inner,
+      name
+    })
+  }
+
+  replicate (isInitiator, opts) {
+    return this.inner.replicate(isInitiator, this._openedCores.values(), opts)
+  }
+
+  isLoaded (coreOpts) {
+    return this.inner.isLoaded(coreOpts)
+  }
+
+  isExternal (coreOpts) {
+    return this.inner.isExternal(coreOpts)
   }
 
   list () {
-    return new Map([...this._externalCores])
+    return new Map([...this._openedCores])
   }
 }
 
