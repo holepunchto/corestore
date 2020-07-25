@@ -372,9 +372,7 @@ class Corestore extends Nanoresource {
 
   default (coreOpts = {}) {
     if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
-    const core = this.inner.get({ ...coreOpts, name: this.name })
-    this._maybeIncrement(core)
-    return core
+    return this.get({ ...coreOpts, name: this.name })
   }
 
   namespace (name) {
