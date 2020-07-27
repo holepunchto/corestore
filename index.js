@@ -1,6 +1,5 @@
 const HypercoreProtocol = require('hypercore-protocol')
 const Nanoresource = require('nanoresource/emitter')
-const Nanoguard = require('nanoguard')
 const hypercore = require('hypercore')
 const hypercoreCrypto = require('hypercore-crypto')
 const datEncoding = require('dat-encoding')
@@ -22,7 +21,6 @@ class InnerCorestore extends Nanoresource {
     if (typeof storage === 'string') storage = defaultStorage(storage)
     if (typeof storage !== 'function') throw new Error('Storage should be a function or string')
     this.storage = storage
-    this.guard = new Nanoguard()
 
     this.opts = opts
 
@@ -224,7 +222,6 @@ class InnerCorestore extends Nanoresource {
       cache: cacheOpts,
       createIfMissing: !!publicKey
     })
-    core.ifAvailable.depend(this.guard)
 
     this.cache.set(id, core)
     core.ifAvailable.wait()
