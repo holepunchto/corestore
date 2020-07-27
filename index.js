@@ -62,6 +62,7 @@ class InnerCorestore extends Nanoresource {
     for (const { stream } of this._replicationStreams) {
       stream.destroy()
     }
+    if (!this.cache.size) return process.nextTick(cb, null)
     let remaining = this.cache.size
     for (const { value: core } of this.cache.entries.values()) {
       core.close(err => {
