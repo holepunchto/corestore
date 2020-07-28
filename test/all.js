@@ -449,6 +449,35 @@ test('can check if cores are loaded', async t => {
   t.end()
 })
 
+test('top-level corestore replicates all opened cores', async t => {
+  const store1 = await create(ram)
+  const store2 = await create(ram)
+
+  const core1 = store1.default()
+  const ns1 = store1.namespace()
+  var core2 = ns1.default()
+  var core3 = null
+
+  await runAll([
+    cb => core1.ready(cb),
+    cb => core2.ready(cb),
+    cb => {
+      // Only replicate the top-level corestore
+      const stream = store1.replicate(true, { live: true })
+      stream.pipe(store2.replicate(false, { live: true })).pipe(stream)
+      return cb(null)
+    },
+    cb => {
+      core3 = store2.get(core2.key)
+      return core3.ready(cb)
+    },
+    cb => core2.append('hello', cb),
+    cb => core2.append('world', cb)
+  ])
+
+  await validateCore(t, core3, [Buffer.from('hello'), Buffer.from('world')])
+  t.end()
+})
 async function create (storage, opts) {
   const store = new Corestore(storage, opts)
   await store.ready()
