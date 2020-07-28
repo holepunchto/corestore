@@ -312,8 +312,8 @@ class Corestore extends Nanoresource {
     this.cache = this.inner.cache
     this.store = this // Backwards-compat for NamespacedCorestore
 
+    this._parent = opts.parent
     this._isNamespaced = !!opts.name
-    this._isTopLevel = !opts.inner
     this._openedCores = new Map()
 
     const onfeed = feed => this.emit('feed', feed)
@@ -343,7 +343,7 @@ class Corestore extends Nanoresource {
 
   _close (cb) {
     this._unlisten()
-    if (this._isTopLevel) return this.inner.close(cb)
+    if (!this._parent) return this.inner.close(cb)
     for (const dkey of this._openedCores) {
       this.cache.decrement(dkey)
     }
@@ -379,12 +379,14 @@ class Corestore extends Nanoresource {
     name = this._isNamespaced ? this.name + NAMESPACE_SEPERATOR + name : name
     return new Corestore(this.storage, {
       inner: this.inner,
+      parent: this,
       name
     })
   }
 
   replicate (isInitiator, opts) {
-    return this.inner.replicate(isInitiator, this._openedCores.values(), opts)
+    const cores = !this._parent ? allReferenced(this.cache) : this._openedCores.values()
+    return this.inner.replicate(isInitiator, cores, opts)
   }
 
   isLoaded (coreOpts) {
@@ -397,6 +399,13 @@ class Corestore extends Nanoresource {
 
   list () {
     return new Map([...this._openedCores])
+  }
+}
+
+function * allReferenced (cache) {
+  for (const entry of cache.entries.values()) {
+    if (entry.refs > 0) yield entry.value
+    continue
   }
 }
 
