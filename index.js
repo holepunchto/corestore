@@ -126,6 +126,8 @@ class InnerCorestore extends Nanoresource {
   }
 
   _generateKeys (coreOpts) {
+    if (!coreOpts) coreOpts = {}
+    if (typeof coreOpts === 'string') coreOpts = Buffer.from(coreOpts, 'hex')
     if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
 
     if (coreOpts.keyPair) {
@@ -179,6 +181,7 @@ class InnerCorestore extends Nanoresource {
 
   get (coreOpts = {}) {
     if (!this.opened) throw new Error('Corestore.ready must be called before get.')
+
     const self = this
 
     const generatedKeys = this._generateKeys(coreOpts)
