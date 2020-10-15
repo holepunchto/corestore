@@ -1,13 +1,13 @@
 /**
  * Makes a couple dozen namespaced corestores
- * 
+ *
  * For example, kappa-mulitfeed makes a new corestore for each new multifeed
- * 
+ *
  * When more than 11 corestores are made, a MaxListenersExceededWarning happens
  * due to too many listeners, see:
- * 
+ *
  * https://github.com/andrewosh/corestore/issues/20
- * 
+ *
  */
 const ram = require('random-access-memory')
 const test = require('tape')
