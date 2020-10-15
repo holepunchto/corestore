@@ -1,10 +1,13 @@
 /**
  * Makes a couple dozen namespaced corestores
- * Point is, every time a new corestore is made event listeners for 'feed' and 'error' are
- * added but never removed unless the namespace is closed.
- *
- * emit 'feed' seems to be only needed for onready,
- * if _unlisten is added after onready emits feed, this test passes
+ * 
+ * For example, kappa-mulitfeed makes a new corestore for each new multifeed
+ * 
+ * When more than 11 corestores are made, a MaxListenersExceededWarning happens
+ * due to too many listeners, see:
+ * 
+ * https://github.com/andrewosh/corestore/issues/20
+ * 
  */
 const ram = require('random-access-memory')
 const test = require('tape')
@@ -23,6 +26,7 @@ test('make a couple dozen namespaced corestores (without MaxListener warning)', 
       cores[index] = spaces[index].default()
       await cores[index].ready()
 
+      // feed and event never passes 3 listeners
       t.ok(store.inner._events.feed.length < 3, '## feed event listener length before is only 1 or 2')
       t.ok(spaces[index].inner._events.feed.length < 3, '## feed event listener length before is only 1 or 2')
       t.ok(store.inner._events.error.length < 3, '## feed event listener length before is only 1 or 2')
@@ -30,6 +34,7 @@ test('make a couple dozen namespaced corestores (without MaxListener warning)', 
 
       await once(store.inner, 'feed')
 
+      // feed and event never passes 0 listeners
       t.ok(store.inner._events.feed === undefined, '## feed event listener length after is zero')
       t.ok(spaces[index].inner._events.feed === undefined, '## feed event listener length after is zero')
       t.ok(store.inner._events.error === undefined, '## feed event listener length after is zero')
