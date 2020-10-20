@@ -37,6 +37,9 @@ class InnerCorestore extends Nanoresource {
     // Generated in _open
     this._masterKey = opts.masterKey || null
     this._id = hypercoreCrypto.randomBytes(8)
+
+    // As discussed in https://github.com/andrewosh/corestore/issues/20
+    this.setMaxListeners(0)
   }
 
   // Nanoresource Methods
