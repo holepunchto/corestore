@@ -49,7 +49,7 @@ class InnerCorestore extends Nanoresource {
     const keyStorage = this.storage(MASTER_KEY_FILENAME)
     keyStorage.stat((err, st) => {
       if (err && err.code !== 'ENOENT') return cb(err)
-      if (err || st.size === 0) {
+      if (err || st.size < 32) {
         this._masterKey = hypercoreCrypto.randomBytes(32)
         return keyStorage.write(0, this._masterKey, err => {
           if (err) return cb(err)
