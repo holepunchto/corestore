@@ -47,16 +47,20 @@ class InnerCorestore extends Nanoresource {
   _open (cb) {
     if (this._masterKey) return cb()
     const keyStorage = this.storage(MASTER_KEY_FILENAME)
-    keyStorage.read(0, 32, (err, key) => {
-      if (err) {
+    keyStorage.stat((err, st) => {
+      if (err && err.code !== 'ENOENT') return cb(err)
+      if (err || st.size === 0) {
         this._masterKey = hypercoreCrypto.randomBytes(32)
         return keyStorage.write(0, this._masterKey, err => {
           if (err) return cb(err)
           keyStorage.close(cb)
         })
       }
-      this._masterKey = key
-      keyStorage.close(cb)
+      keyStorage.read(0, 32, (err, key) => {
+        if (err) return cb(err)
+        this._masterKey = key
+        keyStorage.close(cb)
+      })
     })
   }
 
