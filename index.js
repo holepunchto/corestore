@@ -14,19 +14,12 @@ module.exports = class Corestore extends Nanoresource {
     if (typeof storage !== 'function') throw new errors.InvalidStorageError()
     this.storage = storage
 
-    this._namespace = opts._namespace || ['default']
+    this._namespace = opts.namespace || ['default']
     this._db = opts._db || new Index(this.storage, opts)
     this._loader = opts._loader || new Loader(this.storage, this._db, opts)
     this._replicator = opts._replicator || new Replicator(this._loader, opts)
 
-    this._loader.on('core', core => {
-      this._replicator.inject(core)
-    })
     this._loader.on('error', err => this.emit('error', err))
-
-    // Eagerly open.
-    // TODO: Disabled for testing
-    // this.open()
   }
 
   get cache () {
@@ -60,6 +53,7 @@ module.exports = class Corestore extends Nanoresource {
     }
     if (opts.key && typeof opts.key === 'string') opts.key = Buffer.from(opts.key, 'hex')
     if (opts.key && opts.key.length !== 32) throw new errors.InvalidKeyError()
+    if (opts.name && !Array.isArray(opts.name)) opts.name = [opts.name]
     return opts
   }
 
