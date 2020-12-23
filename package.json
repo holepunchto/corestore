@@ -1,0 +1,39 @@
+{
+  "name": "corestore",
+  "version": "6.0.0",
+  "description": "A Hypercore factory that stores and replicates linked cores.",
+  "main": "index.js",
+  "scripts": {
+    "test": "standard && tape test/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewosh/corestore.git"
+  },
+  "keywords": [
+    "corestore"
+  ],
+  "author": "Andrew Osheroff <andrewosh@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/andrewosh/corestore/issues"
+  },
+  "homepage": "https://github.com/andrewosh/corestore#readme",
+  "devDependencies": {
+    "random-access-file": "^2.1.4",
+    "random-access-memory": "^3.1.1",
+    "standard": "^12.0.1",
+    "tape": "^4.10.1"
+  },
+  "dependencies": {
+    "derive-key": "^1.0.0",
+    "end-of-stream": "^1.4.4",
+    "fd-lock": "^1.0.2",
+    "hyperbee": "^1.1.1",
+    "hypercore": "^9.0.0",
+    "hypercore-crypto": "^2.0.0",
+    "hypercore-protocol": "^8.0.0",
+    "random-access-storage": "^1.4.1",
+    "refpool": "^1.2.0"
+  }
+}
