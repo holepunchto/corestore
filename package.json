@@ -20,20 +20,23 @@
   },
   "homepage": "https://github.com/andrewosh/corestore#readme",
   "devDependencies": {
-    "random-access-file": "^2.1.4",
+    "hypercore-promisifier": "^1.0.3",
     "random-access-memory": "^3.1.1",
-    "standard": "^12.0.1",
-    "tape": "^4.10.1"
+    "standard": "^16.0.3",
+    "tape": "^5.0.1"
   },
   "dependencies": {
-    "derive-key": "^1.0.0",
+    "custom-error-class": "^1.0.0",
+    "derive-key": "^1.0.1",
     "end-of-stream": "^1.4.4",
-    "fd-lock": "^1.0.2",
+    "fd-lock": "^1.1.1",
     "hyperbee": "^1.1.1",
-    "hypercore": "^9.0.0",
-    "hypercore-crypto": "^2.0.0",
-    "hypercore-protocol": "^8.0.0",
+    "hypercore": "^9.6.0",
+    "hypercore-crypto": "^2.2.0",
+    "hypercore-protocol": "^8.0.7",
+    "nanoresource-promise": "^2.0.0",
+    "random-access-file": "^2.1.4",
     "random-access-storage": "^1.4.1",
-    "refpool": "^1.2.0"
+    "refpool": "^1.2.2"
   }
 }

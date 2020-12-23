@@ -2,7 +2,7 @@ const { NanoresourcePromise: Nanoresource } = require('nanoresource-promise/emit
 const raf = require('random-access-file')
 
 const Replicator = require('./lib/replicator')
-const Index = require('./lib/index')
+const Index = require('./lib/db')
 const Loader = require('./lib/loader')
 const errors = require('./lib/errors')
 
@@ -17,7 +17,7 @@ module.exports = class Corestore extends Nanoresource {
     this._namespace = opts._namespace || ['default']
     this._db = opts._db || new Index(this.storage, opts)
     this._loader = opts._loader || new Loader(this.storage, this._db, opts)
-    this._replicator = opts._replicator || new Replicator(this.loader, opts)
+    this._replicator = opts._replicator || new Replicator(this._loader, opts)
 
     this._loader.on('core', core => {
       this._replicator.inject(core)
@@ -25,7 +25,12 @@ module.exports = class Corestore extends Nanoresource {
     this._loader.on('error', err => this.emit('error', err))
 
     // Eagerly open.
-    this.open()
+    // TODO: Disabled for testing
+    // this.open()
+  }
+
+  get cache () {
+    return this._loader.cache
   }
 
   // Nanoresource Methods
@@ -45,12 +50,16 @@ module.exports = class Corestore extends Nanoresource {
 
   _validateGetOptions (opts) {
     if (typeof opts === 'object') {
-      if (!Buffer.isBuffer(opts) && !opts.key && !opts.name) throw new errors.InvalidOptionsError()
-      else opts = { key: opts }
+      if (!Buffer.isBuffer(opts)) {
+        if (!opts.key && !opts.name && !opts.keyPair) throw new errors.InvalidOptionsError()
+      } else {
+        opts = { key: opts }
+      }
     } else {
       opts = { key: Buffer.from(opts, 'hex') }
     }
-    if (opts.key && opts.key.length !== 64) throw new errors.InvalidKeyError()
+    if (opts.key && typeof opts.key === 'string') opts.key = Buffer.from(opts.key, 'hex')
+    if (opts.key && opts.key.length !== 32) throw new errors.InvalidKeyError()
     return opts
   }
 
@@ -81,10 +90,10 @@ module.exports = class Corestore extends Nanoresource {
 
   async backup () {
     if (!this.opened) await this.open()
-    const allNames = await this._db.getAllNames()
+    const allCores = await this._db.getAllCores()
     return {
-      masterKey: this._masterKey.toString('hex'),
-      names: [...allNames]
+      masterKey: this._loader.masterKey.toString('hex'),
+      cores: allCores
     }
   }
 
@@ -95,6 +104,7 @@ module.exports = class Corestore extends Nanoresource {
   static async restore (manifest, target) {
     if (!manifest || !manifest.masterKey) throw new Error('Malformed manifest.')
     const store = new this(target, {
+      overwriteMasterKey: true,
       masterKey: Buffer.from(manifest.masterKey, 'hex')
     })
     await store.restore(manifest)
@@ -104,8 +114,9 @@ module.exports = class Corestore extends Nanoresource {
 
 function defaultStorage (dir) {
   return function (name) {
+    let lock = null
     try {
-      var lock = name.endsWith('/bitfield') ? require('fd-lock') : null
+      lock = name.endsWith('/bitfield') ? require('fd-lock') : null
     } catch (err) {}
     return raf(name, { directory: dir, lock: lock })
   }
