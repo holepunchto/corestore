@@ -210,6 +210,19 @@ test('raf-based corestore, close and reopen with keypair option', async t => {
   t.end()
 })
 
+test('namespace method is equivalent to name array', async t => {
+  const store = create(ram)
+
+  const core1 = store.get({ name: ['a', 'b', 'c'] })
+  const core2 = store.namespace('a').namespace('b').get({ name: 'c' })
+
+  await toPromises(core1).ready()
+  await toPromises(core2).ready()
+
+  t.same(core1, core2)
+  t.end()
+})
+
 test('can backup/restore', async t => {
   const firstStore = create(ram)
   const core1 = firstStore.get({ name: 'hello-world' })
