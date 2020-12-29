@@ -14,7 +14,7 @@ module.exports = class Corestore extends Nanoresource {
     if (typeof storage !== 'function') throw new errors.InvalidStorageError()
     this.storage = storage
 
-    this._namespace = opts.namespace || ['default']
+    this._namespace = opts.namespace || []
     this._db = opts._db || new Index(this.storage, opts)
     this._loader = opts._loader || new Loader(this.storage, this._db, opts)
     this._replicator = opts._replicator || new Replicator(this._loader, opts)
