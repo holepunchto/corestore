@@ -4,6 +4,7 @@ const raf = require('random-access-file')
 const test = require('tape')
 const hypercoreCrypto = require('hypercore-crypto')
 const { toPromises } = require('hypercore-promisifier')
+const OldCorestore = require('@andrewosh/corestore-migration')
 
 const Corestore = require('..')
 const { cleanup } = require('./helpers')
@@ -235,6 +236,64 @@ test('can backup/restore', async t => {
 
   t.true(core2.writable)
 
+  t.end()
+})
+
+test('can migrate an old corestore', async t => {
+  const oldStore = new OldCorestore('test-store')
+  await oldStore.ready()
+
+  const oldCores = [
+    oldStore.default(),
+    oldStore.namespace('hello').default(),
+    oldStore.namespace('hello').namespace('world').default(),
+    oldStore.get({ name: 'test-name' }),
+    // The randomly-generated name will also be migrated.
+    oldStore.get()
+  ]
+  await Promise.all(oldCores.map(c => new Promise(resolve => c.ready(resolve))))
+
+  const names = [
+    'default',
+    ['hello'],
+    ['hello', 'world'],
+    'test-name'
+  ]
+  const keys = oldCores.map(c => c.key)
+  await new Promise(resolve => oldStore.close(resolve))
+
+  {
+    const store = create('test-store', {
+      migrationRoot: 'test-store'
+    })
+
+    // Cores are writable when loaded by name
+    for (let i = 0; i < names.length; i++) {
+      const core = store.get({ name: names[i] })
+      await toPromises(core).ready()
+      t.true(core.writable)
+      t.same(core.key, keys[i])
+    }
+
+    await store.close()
+  }
+
+  {
+    const store = create('test-store', {
+      migrationRoot: 'test-store'
+    })
+
+    // Cores are writable when loaded by key
+    for (let i = 0; i < keys.length; i++) {
+      const core = store.get({ key: keys[i] })
+      await toPromises(core).ready()
+      t.true(core.writable)
+    }
+
+    await store.close()
+  }
+
+  await cleanup(['test-store'])
   t.end()
 })
 
