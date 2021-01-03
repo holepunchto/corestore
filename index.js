@@ -19,7 +19,12 @@ module.exports = class Corestore extends Nanoresource {
     this._loader = opts._loader || new Loader(this.storage, this._db, opts)
     this._replicator = opts._replicator || new Replicator(this._loader, opts)
 
+    this._db.on('error', err => this.emit('db-error', err))
     this._loader.on('error', err => this.emit('error', err))
+    this._loader.on('core', (core, opts) => this.emit('core', core, opts))
+    this._loader.on('core', (core, opts) => this.emit('feed', core, opts))
+
+    this.ready = this.open.bind(this)
   }
 
   get cache () {
