@@ -248,7 +248,7 @@ test('can migrate an old corestore', async t => {
     oldStore.namespace('hello').default(),
     oldStore.namespace('hello').namespace('world').default(),
     oldStore.get({ name: 'test-name' }),
-    // The randomly-generated name will also be migrated.
+    // Randomly-generated names should also be migrated.
     oldStore.get()
   ]
   await Promise.all(oldCores.map(c => new Promise(resolve => c.ready(resolve))))
@@ -279,9 +279,8 @@ test('can migrate an old corestore', async t => {
   }
 
   {
-    const store = create('test-store', {
-      migrationRoot: 'test-store'
-    })
+    // The second time should work without a migration.
+    const store = create('test-store')
 
     // Cores are writable when loaded by key
     for (let i = 0; i < keys.length; i++) {
