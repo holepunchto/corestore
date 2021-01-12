@@ -10,6 +10,7 @@ These features might eventually become Corestore v6:
 * Namespacing is far more lightweight.
 * Reference counting is far simpler, and is decoupled from namespaces.
 * Backup/restore write capabilities from a "manifest" file.
+* Migration from Corestore 5
 
 
 
