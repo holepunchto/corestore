@@ -1,4 +1,6 @@
 # neocorestore
+![Test on Node.js](https://github.com/andrewosh/neocorestore/workflows/Test%20on%20Node.js/badge.svg)
+
 A __WIP__, experimental take on Corestore.
 
 These features might eventually become Corestore v6:
