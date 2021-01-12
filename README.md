@@ -1,7 +1,7 @@
 # neocorestore
 ![Test on Node.js](https://github.com/andrewosh/neocorestore/workflows/Test%20on%20Node.js/badge.svg)
 
-A __WIP__, experimental take on Corestore.
+A __WIP__, experimental take on Corestore. Still in-progress, but check out the tests for API diffs with v5.
 
 These features might eventually become Corestore v6:
 * Replaces derived-key-storage with a Hyperbee database of names.
