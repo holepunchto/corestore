@@ -1,2 +1,4 @@
 # neocorestore
-A new take on Corestore
+
+A WIP, new take on Corestore
+
