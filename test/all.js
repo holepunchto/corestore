@@ -220,12 +220,11 @@ test('namespace method is equivalent to name array', async t => {
   t.end()
 })
 
-test.only('can backup/restore', async t => {
+test('can backup/restore', async t => {
   const firstStore = create(ram)
   const core1 = firstStore.get({ name: 'hello-world' })
   await core1.ready()
   const manifest = await firstStore.backup()
-  console.log('manifest:', manifest)
 
   const secondStore = await Corestore.restore(manifest, ram)
   const core2 = secondStore.get({ key: core1.key })
