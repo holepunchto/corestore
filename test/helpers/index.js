@@ -1,12 +1,7 @@
-const fs = require('fs')
+const fs = require('fs').promises
 
 async function cleanup (dirs) {
-  return Promise.all(dirs.map(dir => new Promise((resolve, reject) => {
-    fs.rmdir(dir, { recursive: true }, err => {
-      if (err) return reject(err)
-      return resolve()
-    })
-  })))
+  return Promise.allSettled(dirs.map(dir => fs.rmdir(dir, { recursive: true })))
 }
 
 function delay (ms, cb) {
