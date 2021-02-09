@@ -35,7 +35,7 @@
     "hyperbee": "^1.1.1",
     "hypercore-crypto": "^2.2.0",
     "nanoresource-promise": "^2.0.0",
-    "omega": "github:mafintosh/omega#async-keypair-option",
+    "omega": "github:mafintosh/omega#secret-key-fix",
     "random-access-file": "^2.1.4",
     "random-access-storage": "^1.4.1",
     "refpool": "^1.2.2",

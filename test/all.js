@@ -18,35 +18,35 @@ test('ram-based corestore, acceptable get options', async t => {
     // Buffer arg
     const core = store.get(core1.key)
     await core.ready()
-    t.true(core === core1)
+    t.same(core.writer, core1.writer)
   }
 
   {
     // String arg
     const core = store.get(core1.key.toString('hex'))
     await core.ready()
-    t.same(core, core1)
+    t.same(core.writer, core1.writer)
   }
 
   {
     // Object arg
     const core = store.get({ key: core1.key })
     await core.ready()
-    t.same(core, core1)
+    t.same(core.writer, core1.writer)
   }
 
   {
     // Object arg with string key
     const core = store.get({ key: core1.key.toString('hex') })
     await core.ready()
-    t.same(core, core1)
+    t.same(core.writer, core1.writer)
   }
 
   {
     // Custom keypair
     const core = store.get({ keyPair: { secretKey: core1.secretKey, publicKey: core1.key } })
     await core.ready()
-    t.same(core, core1)
+    t.same(core.writer, core1.writer)
   }
 
   t.end()
@@ -82,8 +82,8 @@ test('ram-based corestore, many gets before ready', async t => {
     core3.ready()
   ])
 
-  t.same(core1, core2)
-  t.notSame(core1, core3)
+  t.same(core1.writer, core2.writer)
+  t.notSame(core1.writer, core3.writer)
 
   // At this point, the pre-ready cores should've been moved to the main cache.
   t.same(store.cache.size, 2)
@@ -139,6 +139,7 @@ test('ram-based corestore, sparse replication', async t => {
 test('raf-based corestore, simple replication', async t => {
   const store1 = create(path => raf(p.join('store1', path)))
   const store2 = create(path => raf(p.join('store2', path)))
+  await store1.ready()
 
   const core1 = store1.get({ name: 'core1', valueEncoding: 'utf-8' })
   await core1.append('hello')
@@ -159,8 +160,7 @@ test('raf-based corestore, simple replication', async t => {
   t.end()
 })
 
-// TODO: Implement when Omega close is implemented
-test.skip('raf-based corestore, close and reopen', async t => {
+test('raf-based corestore, close and reopen', async t => {
   let store = create('test-store')
 
   let core1 = store.get({ name: 'core1', valueEncoding: 'utf-8' })
@@ -168,27 +168,18 @@ test.skip('raf-based corestore, close and reopen', async t => {
 
   t.same(await core1.get(0), 'hello')
 
-  console.log('core1:', core1)
-
-  console.log('before close')
   await store.close()
-  console.log('after close')
 
   store = create('test-store')
-  console.log(1)
   core1 = store.get({ name: 'core1', valueEncoding: 'utf-8' })
-  console.log(2)
 
-  console.log('core1 reopened:', core1)
   t.same(await core1.get(0), 'hello')
-  console.log(3)
 
   await cleanup(['test-store'])
   t.end()
 })
 
-// TODO: Implement when Omega close is implemented
-test.skip('raf-based corestore, close and reopen with keypair option', async t => {
+test('raf-based corestore, close and reopen with keypair option', async t => {
   let store = create('test-store')
   const keyPair = hypercoreCrypto.keyPair()
 
@@ -200,7 +191,10 @@ test.skip('raf-based corestore, close and reopen with keypair option', async t =
   await store.close()
   store = create('test-store')
   core1 = store.get({ keyPair, valueEncoding: 'utf-8' })
+  await core1.ready()
 
+  t.same(core1.key, keyPair.publicKey)
+  t.true(core1.writable)
   t.same(await core1.get(0), 'hello')
 
   await cleanup(['test-store'])
@@ -216,7 +210,7 @@ test('namespace method is equivalent to name array', async t => {
   await core1.ready()
   await core2.ready()
 
-  t.same(core1, core2)
+  t.same(core1.writer, core2.writer)
   t.end()
 })
 
@@ -231,6 +225,30 @@ test('can backup/restore', async t => {
   await core2.ready()
 
   t.true(core2.writable)
+
+  t.end()
+})
+
+test('all sessions closing leads to eviction', async t => {
+  const store = create(ram, { cacheSize: 1 })
+
+  const core1 = store.get({ name: 'test-core' })
+  const core2 = store.get({ name: 'test-core' })
+
+  const core3 = store.get({ name: 'test-core-2' })
+
+  await Promise.all([core1.ready(), core2.ready(), core3.ready()])
+
+  t.same(store.cache.size, 2)
+
+  await core3.close()
+
+  t.same(store.cache.size, 1)
+
+  await core1.close()
+  await core2.close()
+
+  t.same(store.cache.size, 0)
 
   t.end()
 })
