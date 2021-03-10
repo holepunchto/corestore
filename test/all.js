@@ -1,18 +1,18 @@
 const p = require('path')
 const ram = require('random-access-memory')
 const raf = require('random-access-file')
-const datEncoding = require('dat-encoding')
-const hypercoreCrypto = require('hypercore-crypto')
+const dwebEncoding = require('dwebx-encoding')
+const ddatabaseCrypto = require('@ddatabase/crypto')
 const test = require('tape')
 
-const Corestore = require('..')
+const Basestorevault = require('..')
 const {
   runAll,
   validateCore,
   cleanup
 } = require('./helpers')
 
-test('ram-based corestore, different get options', async t => {
+test('ram-based basestorevault, different get options', async t => {
   const store1 = await create(ram)
   const core1 = store1.default()
   var core2, core3, core4, core5, core6
@@ -37,7 +37,7 @@ test('ram-based corestore, different get options', async t => {
     },
     cb => {
       // String option
-      core5 = store1.get({ key: datEncoding.encode(core1.key) })
+      core5 = store1.get({ key: dwebEncoding.encode(core1.key) })
       return core5.ready(cb)
     },
     cb => {
@@ -55,7 +55,7 @@ test('ram-based corestore, different get options', async t => {
   t.end()
 })
 
-test('ram-based corestore, simple replication', async t => {
+test('ram-based basestorevault, simple replication', async t => {
   const store1 = await create(ram)
   const store2 = await create(ram)
   const core1 = store1.default()
@@ -91,7 +91,7 @@ test('ram-based corestore, simple replication', async t => {
   t.end()
 })
 
-test('ram-based corestore, replicating with different default keys', async t => {
+test('ram-based basestorevault, replicating with different default keys', async t => {
   const store1 = await create(ram)
   const store2 = await create(ram)
   const core1 = store1.default()
@@ -123,7 +123,7 @@ test('ram-based corestore, replicating with different default keys', async t => 
   t.end()
 })
 
-test('ram-based corestore, sparse replication', async t => {
+test('ram-based basestorevault, sparse replication', async t => {
   const store1 = await create(ram, { sparse: true })
   const store2 = await create(ram, { sparse: true })
   const core1 = store1.default()
@@ -168,7 +168,7 @@ test('ram-based corestore, sparse replication', async t => {
   t.end()
 })
 
-test('ram-based corestore, sparse replication with different default keys', async t => {
+test('ram-based basestorevault, sparse replication with different default keys', async t => {
   const store1 = await create(ram, { sparse: true })
   const store2 = await create(ram, { sparse: true })
   const core1 = store1.default()
@@ -204,7 +204,7 @@ test('ram-based corestore, sparse replication with different default keys', asyn
   t.end()
 })
 
-test('raf-based corestore, simple replication', async t => {
+test('raf-based basestorevault, simple replication', async t => {
   const store1 = await create(path => raf(p.join('store1', path)))
   const store2 = await create(path => raf(p.join('store2', path)))
   const core1 = store1.default()
@@ -242,7 +242,7 @@ test('raf-based corestore, simple replication', async t => {
   t.end()
 })
 
-test('raf-based corestore, close and reopen', async t => {
+test('raf-based basestorevault, close and reopen', async t => {
   var store = await create('test-store')
   var firstCore = store.default()
   var reopenedCore = null
@@ -268,9 +268,9 @@ test('raf-based corestore, close and reopen', async t => {
   t.end()
 })
 
-test('raf-based corestore, close and reopen with keypair option', async t => {
+test('raf-based basestorevault, close and reopen with keypair option', async t => {
   var store = await create('test-store')
-  const keyPair = hypercoreCrypto.keyPair()
+  const keyPair = ddatabaseCrypto.keyPair()
   var firstCore = store.get({ keyPair })
   var reopenedCore = null
 
@@ -297,7 +297,7 @@ test('raf-based corestore, close and reopen with keypair option', async t => {
   t.end()
 })
 
-test('live replication with an additional core', async t => {
+test('live replication with an additional base', async t => {
   const store1 = await create(ram)
   const store2 = await create(ram)
 
@@ -431,14 +431,14 @@ test('caching works correctly when reopening by discovery key', async t => {
   t.end()
 })
 
-test('can check if cores are loaded', async t => {
+test('can check if bases are loaded', async t => {
   const store = await create(ram)
   await store.ready()
 
   const feed1 = store.default()
   const feed2 = store.get()
-  const badKey = hypercoreCrypto.randomBytes(32)
-  const badDiscoveryKey = hypercoreCrypto.discoveryKey(badKey)
+  const badKey = ddatabaseCrypto.randomBytes(32)
+  const badDiscoveryKey = ddatabaseCrypto.discoveryKey(badKey)
 
   t.true(store.isLoaded({ key: feed1.key }))
   t.true(store.isLoaded({ discoveryKey: feed1.discoveryKey }))
@@ -449,7 +449,7 @@ test('can check if cores are loaded', async t => {
   t.end()
 })
 
-test('top-level corestore replicates all opened cores', async t => {
+test('top-level basestorevault replicates all opened bases', async t => {
   const store1 = await create(ram)
   const store2 = await create(ram)
 
@@ -462,7 +462,7 @@ test('top-level corestore replicates all opened cores', async t => {
     cb => core1.ready(cb),
     cb => core2.ready(cb),
     cb => {
-      // Only replicate the top-level corestore
+      // Only replicate the top-level basestorevault
       const stream = store1.replicate(true, { live: true })
       stream.pipe(store2.replicate(false, { live: true })).pipe(stream)
       return cb(null)
@@ -479,7 +479,7 @@ test('top-level corestore replicates all opened cores', async t => {
   t.end()
 })
 async function create (storage, opts) {
-  const store = new Corestore(storage, opts)
+  const store = new Basestorevault(storage, opts)
   await store.ready()
   return store
 }
