@@ -1,7 +1,7 @@
 const p = require('path')
 const ram = require('random-access-memory')
 const raf = require('random-access-file')
-const test = require('ava')
+const test = require('tape')
 const hypercoreCrypto = require('hypercore-crypto')
 
 const Corestore = require('..')
@@ -123,7 +123,7 @@ test('ram-based corestore, sparse replication', async t => {
   t.is(await clone2.get(0), 'world')
 })
 
-test.serial('raf-based corestore, simple replication', async t => {
+test('raf-based corestore, simple replication', async t => {
   const store1 = create(path => raf(p.join('store1', path)))
   const store2 = create(path => raf(p.join('store2', path)))
   await store1.ready()
@@ -146,7 +146,7 @@ test.serial('raf-based corestore, simple replication', async t => {
   await cleanup(['store1', 'store2'])
 })
 
-test.serial('raf-based corestore, close and reopen', async t => {
+test('raf-based corestore, close and reopen', async t => {
   let store = create('test-store')
 
   let core1 = store.get({ name: 'core1', valueEncoding: 'utf-8' })
@@ -164,7 +164,7 @@ test.serial('raf-based corestore, close and reopen', async t => {
   await cleanup(['test-store'])
 })
 
-test.serial('raf-based corestore, close and reopen with keypair option', async t => {
+test('raf-based corestore, close and reopen with keypair option', async t => {
   let store = create('test-store')
   const keyPair = hypercoreCrypto.keyPair()
 
