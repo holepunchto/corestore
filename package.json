@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrewosh/corestore.git"
+    "url": "git+https://github.com/hypercore-skunkworks/neocorestore.git"
   },
   "keywords": [
     "corestore"
@@ -16,9 +16,9 @@
   "author": "Andrew Osheroff <andrewosh@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/andrewosh/corestore/issues"
+    "url": "https://github.com/hypercore-skunkworks/neocorestore/issues"
   },
-  "homepage": "https://github.com/andrewosh/corestore#readme",
+  "homepage": "https://github.com/hypercore-skunkworks/neocorestore#readme",
   "devDependencies": {
     "@andrewosh/corestore-migration": "^5.8.2",
     "hypercore-promisifier": "^1.0.3",
@@ -27,6 +27,7 @@
     "tape": "^5.0.1"
   },
   "dependencies": {
+    "hypercore": "github:hypercore-skunkworks/hypercore-x",
     "@jsdevtools/readdir-enhanced": "^6.0.4",
     "custom-error-class": "^1.0.0",
     "derive-key": "^1.0.1",
@@ -35,7 +36,6 @@
     "hyperbee": "^1.1.1",
     "hypercore-crypto": "^2.2.0",
     "nanoresource-promise": "^2.0.0",
-    "omega": "github:mafintosh/omega",
     "random-access-file": "^2.1.4",
     "random-access-storage": "^1.4.1",
     "refpool": "^1.2.2",
