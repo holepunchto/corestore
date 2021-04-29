@@ -478,6 +478,24 @@ test('top-level corestore replicates all opened cores', async t => {
   await validateCore(t, core3, [Buffer.from('hello'), Buffer.from('world')])
   t.end()
 })
+
+test('replication before ready is done but once', async t => {
+  const store1 = await create(ram)
+  const store2 = await create(ram)
+  const core1 = store1.get()
+  const replications = []
+  core1.on('replicating', () => replications.push('a'))
+  const core2 = store2.get(core1.key)
+  core2.on('replicating', () => replications.push('b'))
+  const stream = store1.replicate(true)
+  stream.pipe(store2.replicate(false)).pipe(stream)
+  await runAll([
+    cb => core1.ready(cb),
+    cb => core2.ready(cb)
+  ])
+  t.deepEquals(replications, ['a', 'b'])
+  t.end()
+})
 async function create (storage, opts) {
   const store = new Corestore(storage, opts)
   await store.ready()

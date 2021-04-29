@@ -280,7 +280,9 @@ class InnerCorestore extends Nanoresource {
     var closed = false
 
     for (const core of cores) {
-      this._replicateCore(isInitiator, core, mainStream, { ...finalOpts })
+      if (core.opened) {
+        this._replicateCore(isInitiator, core, mainStream, { ...finalOpts })
+      }
     }
 
     mainStream.on('discovery-key', ondiscoverykey)
