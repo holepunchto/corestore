@@ -1,122 +1,197 @@
-const { NanoresourcePromise: Nanoresource } = require('nanoresource-promise/emitter')
-const raf = require('random-access-file')
+const { EventEmitter } = require('events')
+const crypto = require('hypercore-crypto')
+const sodium = require('sodium-universal')
+const KeyManager = require('key-manager')
+const Hypercore = require('hypercore-x')
 
-const Replicator = require('./lib/replicator')
-const Index = require('./lib/db')
-const Loader = require('./lib/loader')
-const errors = require('./lib/errors')
+const CORES_DIR = 'cores'
+const KEYS_DIR = 'keys'
+const DEFAULT_NAMESPACE = generateNamespace('@corestore/default')
 
-module.exports = class Corestore extends Nanoresource {
+module.exports = class Corestore extends EventEmitter {
   constructor (storage, opts = {}) {
     super()
 
-    if (typeof storage === 'string') storage = defaultStorage(storage)
-    if (typeof storage !== 'function') throw new errors.InvalidStorageError()
-    this.storage = storage
+    this.storage = Hypercore.defaultStorage(storage)
 
-    this._namespace = opts.namespace || []
-    this._db = opts._db || new Index(this.storage, opts)
-    this._loader = opts._loader || new Loader(this.storage, this._db, opts)
-    this._replicator = opts._replicator || new Replicator(this._loader, opts)
+    this.cores = opts._cores || new Map()
+    this.keys = opts.keys
 
-    this._db.on('error', err => this.emit('db-error', err))
-    this._loader.on('error', err => this.emit('error', err))
-    this._loader.on('core', (core, opts) => this.emit('core', core, opts))
-    this._loader.on('core', (core, opts) => this.emit('feed', core, opts))
+    this._namespace = opts._namespace || DEFAULT_NAMESPACE
+    this._replicationStreams = []
 
-    this.ready = this.open.bind(this)
+    this._opening = opts._opening ? opts._opening.then(() => this._open()) : this._open()
+    this._opening.catch(noop)
+    this.ready = () => this._opening
   }
-
-  get cache () {
-    return this._loader.cache
-  }
-
-  // Nanoresource Methods
 
   async _open () {
-    await this._db.open()
-    return this._loader.open()
-  }
-
-  async _close () {
-    await this._replicator.close()
-    await this._loader.close()
-    return this._db.close()
-  }
-
-  // Private Methods
-
-  _validateGetOptions (opts) {
-    if (typeof opts === 'object') {
-      if (!Buffer.isBuffer(opts)) {
-        if (!opts.key && !opts.name && !opts.keyPair) throw new errors.InvalidOptionsError()
-      } else {
-        opts = { key: opts }
-      }
+    if (this.keys) {
+      this.keys = await this.keys // opts.keys can be a Promise that resolves to a KeyManager
     } else {
-      opts = { key: Buffer.from(opts, 'hex') }
+      this.keys = await KeyManager.fromStorage(p => this.storage(KEYS_DIR + '/' + p))
     }
-    if (opts.key && typeof opts.key === 'string') opts.key = Buffer.from(opts.key, 'hex')
-    if (opts.key && opts.key.length !== 32) throw new errors.InvalidKeyError()
-    if (opts.name && !Array.isArray(opts.name)) opts.name = [opts.name]
-    return opts
   }
 
-  // Public Methods
+  async _generateKeys (opts) {
+    if (opts.discoveryKey) {
+      return {
+        keyPair: null,
+        sign: null,
+        discoveryKey: opts.discoveryKey
+      }
+    }
+    if (!opts.name) {
+      return {
+        keyPair: {
+          publicKey: opts.publicKey,
+          secretKey: opts.secretKey
+        },
+        sign: opts.sign,
+        discoveryKey: crypto.discoveryKey(opts.publicKey)
+      }
+    }
+    const { publicKey, sign } = await this.keys.createHypercoreKeyPair(opts.name, this._namespace)
+    return {
+      keyPair: {
+        publicKey,
+        secretKey: null
+      },
+      sign,
+      discoveryKey: crypto.discoveryKey(publicKey)
+    }
+  }
+
+  async _preload (opts) {
+    await this.ready()
+
+    const { discoveryKey, keyPair, sign } = await this._generateKeys(opts)
+    const id = discoveryKey.toString('hex')
+
+    while (this.cores.has(id)) {
+      const existing = this.cores.get(id)
+      if (existing) {
+        // TODO: Support the closing property on Hypercore
+        if (!existing.closing) return { from: existing, keyPair, sign }
+        await existing.close()
+      }
+    }
+
+    // No more async ticks allowed after this point -- necessary for caching
+
+    const storageRoot = [CORES_DIR, id.slice(0, 2), id.slice(2, 4), id].join('/')
+    const core = new Hypercore(p => this.storage(storageRoot + '/' + p), {
+      // TODO: Add autoclose Hypercore flag so that the core closes when all sessions close
+      autoClose: true,
+      keyPair: {
+        publicKey: keyPair.publicKey,
+        secretKey: null
+      },
+      sign: null,
+      createIfMissing: !!opts.keyPair
+    })
+
+    this.cores.set(id, core)
+    for (const stream of this._replicationStreams) {
+      core.replicate(stream)
+    }
+    // TODO: Add a closing event to Hypecore
+    core.once('close', () => {
+      this.cores.delete(id)
+    })
+
+    return { from: core, keyPair, sign }
+  }
 
   get (opts = {}) {
-    opts = this._validateGetOptions(opts)
-    if (!this.opened) this.open().catch(err => this.emit('error', err))
-    return this._loader.get(this._namespace, opts)
+    opts = validateGetOptions(opts)
+    const core = new Hypercore(null, {
+      ...opts,
+      name: null,
+      preload: () => this._preload(opts)
+    })
+    return core
+  }
+
+  replicate (opts = {}) {
+    const stream = opts.stream || Hypercore.createProtocolStream(opts)
+    for (const core of this.cores.values()) {
+      core.replicate(stream)
+    }
+    stream.on('discovery-key', discoveryKey => {
+      const core = this.get({ discoveryKey })
+      core.ready().then(() => {
+        core.replicate(stream)
+      }, () => {
+        stream.close(discoveryKey)
+      })
+    })
+    this._replicationStreams.push(stream)
+    stream.once('close', () => {
+      this._replicationStreams.splice(this._replicationStreams.indexOf(stream), 1)
+    })
+    return stream
   }
 
   namespace (name) {
-    if (!name) throw new Error('A name must be provided as the first argument.')
-    if (Buffer.isBuffer(name)) name = name.toString('hex')
+    if (!Buffer.isBuffer(name)) name = Buffer.from(name)
     return new Corestore(this.storage, {
-      namespace: [...this._namespace, name],
-      _db: this._db,
-      _loader: this._loader,
-      _replicator: this._replicator
+      _namespace: generateNamespace(this._namespace, name),
+      _opening: this._opening,
+      _cores: this.cores,
+      keys: this._opening.then(() => this.keys)
     })
   }
 
-  replicate (isInitiator, opts) {
-    return this._replicator.replicate(isInitiator, opts)
-  }
-
-  // Backup/Restore
-
-  async backup () {
-    if (!this.opened) await this.open()
-    const allCores = await this._db.getAllCores()
-    return {
-      masterKey: this._loader.masterKey.toString('hex'),
-      cores: allCores
+  async _close () {
+    if (this._closing) return this._closing
+    const closePromises = []
+    for (const core of this.cores.values()) {
+      closePromises.push(core.close())
+    }
+    await Promise.allSettled(closePromises)
+    for (const stream of this._replicationStreams) {
+      stream.destroy()
     }
   }
 
-  restore (manifest) {
-    return this._db.restore(manifest)
+  close () {
+    if (this._closing) return this._closing
+    this._closing = this._close()
+    this._closing.catch(noop)
+    return this._closing
   }
 
-  static async restore (manifest, target) {
-    if (!manifest || !manifest.masterKey) throw new Error('Malformed manifest.')
-    const store = new this(target, {
-      overwriteMasterKey: true,
-      masterKey: Buffer.from(manifest.masterKey, 'hex')
-    })
-    await store.restore(manifest)
-    return store
+  static createToken () {
+    return KeyManager.createToken()
   }
 }
 
-function defaultStorage (dir) {
-  return function (name) {
-    let lock = null
-    try {
-      lock = name.endsWith('/bitfield') ? require('fd-lock') : null
-    } catch (err) {}
-    return raf(name, { directory: dir, lock: lock })
+// TODO: Implement
+function validateGetOptions (opts) {
+  if (Buffer.isBuffer(opts)) return { key: opts }
+  if (opts.key) {
+    opts.publicKey = opts.key
   }
+  if (opts.keyPair) {
+    opts.publicKey = opts.keyPair.publicKey
+    opts.secretKey = opts.keyPair.secretKey
+  }
+  if (opts.name && typeof opts.name !== 'string') throw new Error('name option must be a String')
+  if (opts.name && opts.secretKey) throw new Error('Cannot provide both a name and a secret key')
+  if (opts.publicKey && !Buffer.isBuffer(opts.publicKey)) throw new Error('publicKey option must be a Buffer')
+  if (opts.secretKey && !Buffer.isBuffer(opts.secretKey)) throw new Error('secretKey option must be a Buffer')
+  if (opts.discoveryKey && !Buffer.isBuffer(opts.discoveryKey)) throw new Error('discoveryKey option must be a Buffer')
+  if (!opts.name && !opts.publicKey) throw new Error('Must provide either a name or a publicKey')
+  return opts
 }
+
+function generateNamespace (first, second) {
+  if (!Buffer.isBuffer(first)) first = Buffer.from(first)
+  if (second && !Buffer.isBuffer(second)) second = Buffer.from(second)
+  const out = Buffer.allocUnsafe(32)
+  sodium.crypto_generichash(out, second ? Buffer.concat([first, second]) : first)
+  return out
+}
+
+function noop () {}
