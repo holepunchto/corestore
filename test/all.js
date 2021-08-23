@@ -1,238 +1,110 @@
-const p = require('path')
-const ram = require('random-access-memory')
-const raf = require('random-access-file')
 const test = require('tape')
-const hypercoreCrypto = require('hypercore-crypto')
+const crypto = require('hypercore-crypto')
+const ram = require('random-access-memory')
 
 const Corestore = require('..')
-const { cleanup } = require('./helpers')
 
-test('ram-based corestore, acceptable get options', async t => {
-  const store = create(ram)
+test('basic get with caching', async function (t) {
+  const store = new Corestore(ram)
+  const core1a = store.get({ name: 'core-1' })
+  const core1b = store.get({ name: 'core-1' })
+  const core2 = store.get({ name: 'core-2' })
 
-  // A name option
-  const core1 = store.get({ name: 'default' })
-  await core1.ready()
+  await Promise.all([core1a.ready(), core1b.ready(), core2.ready()])
 
-  {
-    // Buffer arg
-    const core = store.get(core1.key)
-    await core.ready()
-    t.is(core.writer, core1.writer)
-  }
+  t.same(core1a.key, core1b.key)
+  t.notSame(core1a.key, core2.key)
 
-  {
-    // String arg
-    const core = store.get(core1.key.toString('hex'))
-    await core.ready()
-    t.is(core.writer, core1.writer)
-  }
+  t.true(core1a.writable)
+  t.true(core1b.writable)
 
-  {
-    // Object arg
-    const core = store.get({ key: core1.key })
-    await core.ready()
-    t.is(core.writer, core1.writer)
-  }
+  t.same(store.cores.size, 2)
 
-  {
-    // Object arg with string key
-    const core = store.get({ key: core1.key.toString('hex') })
-    await core.ready()
-    t.is(core.writer, core1.writer)
-  }
-
-  {
-    // Custom keypair
-    const core = store.get({ keyPair: { secretKey: core1.secretKey, publicKey: core1.key } })
-    await core.ready()
-    t.is(core.writer, core1.writer)
-  }
+  t.end()
 })
 
-test('ram-based corestore, unacceptable get options', async t => {
-  const store = create(ram)
-  const badGets = [
-    () => store.get(),
-    () => store.get('abc'),
-    () => store.get({ name: null }),
-    () => store.get({ key: null })
-  ]
-  for (const get of badGets) {
-    t.throws(get)
-  }
-})
+test('basic get with custom keypair', async function (t) {
+  const store = new Corestore(ram)
+  const kp1 = crypto.keyPair()
+  const kp2 = crypto.keyPair()
 
-test('ram-based corestore, many gets before ready', async t => {
-  const store = create(ram)
-  const core1 = store.get({ name: 'core1' })
-  const core2 = store.get({ name: 'core1' })
-  const core3 = store.get({ name: 'core3' })
+  const core1 = store.get(kp1)
+  const core2 = store.get(kp2)
+  await Promise.all([core1.ready(), core2.ready()])
 
-  await Promise.all([
-    core1.ready(),
-    core2.ready(),
-    core3.ready()
-  ])
-
-  t.is(core1.writer, core2.writer)
-  t.not(core1.writer, core3.writer)
-
-  // At this point, the pre-ready cores should've been moved to the main cache.
-  t.is(store.cache.size, 2)
-})
-
-test('ram-based corestore, simple replication', async t => {
-  const store1 = create(ram)
-  const store2 = create(ram)
-
-  const core1 = store1.get({ name: 'core1', valueEncoding: 'utf-8' })
-  await core1.append('hello')
-
-  const s1 = store1.replicate(true)
-  s1.pipe(store2.replicate(false)).pipe(s1)
-
-  const clone1 = store2.get({ key: core1.key, valueEncoding: 'utf-8' })
-
-  t.is(await clone1.get(0), 'hello')
-
-  const core2 = store1.get({ name: 'core2', valueEncoding: 'utf-8' })
-  await core2.append('world')
-
-  const clone2 = store2.get({ key: core2.key, valueEncoding: 'utf-8' })
-  t.is(await clone2.get(0), 'world')
-})
-
-test('ram-based corestore, sparse replication', async t => {
-  const store1 = create(ram, { sparse: true })
-  const store2 = create(ram, { sparse: true })
-
-  const core1 = store1.get({ name: 'core1', valueEncoding: 'utf-8' })
-  await core1.append('hello')
-
-  const s1 = store1.replicate(true)
-  s1.pipe(store2.replicate(false)).pipe(s1)
-
-  const clone1 = store2.get({ key: core1.key, valueEncoding: 'utf-8' })
-  t.is(await clone1.get(0), 'hello')
-
-  const core2 = store1.get({ name: 'core2', valueEncoding: 'utf-8' })
-  await core2.append('world')
-
-  const clone2 = store2.get({ key: core2.key, valueEncoding: 'utf-8' })
-  t.is(await clone2.get(0), 'world')
-})
-
-test('raf-based corestore, simple replication', async t => {
-  const store1 = create(path => raf(p.join('store1', path)))
-  const store2 = create(path => raf(p.join('store2', path)))
-  await store1.ready()
-
-  const core1 = store1.get({ name: 'core1', valueEncoding: 'utf-8' })
-  await core1.append('hello')
-
-  const s1 = store1.replicate(true)
-  s1.pipe(store2.replicate(false)).pipe(s1)
-
-  const clone1 = store2.get({ key: core1.key, valueEncoding: 'utf-8' })
-  t.is(await clone1.get(0), 'hello')
-
-  const core2 = store1.get({ name: 'core2', valueEncoding: 'utf-8' })
-  await core2.append('world')
-
-  const clone2 = store2.get({ key: core2.key, valueEncoding: 'utf-8' })
-  t.is(await clone2.get(0), 'world')
-
-  await cleanup(['store1', 'store2'])
-})
-
-test('raf-based corestore, close and reopen', async t => {
-  let store = create('test-store')
-
-  let core1 = store.get({ name: 'core1', valueEncoding: 'utf-8' })
-  await core1.append('hello')
-
-  t.is(await core1.get(0), 'hello')
-
-  await store.close()
-
-  store = create('test-store')
-  core1 = store.get({ name: 'core1', valueEncoding: 'utf-8' })
-
-  t.is(await core1.get(0), 'hello')
-
-  await cleanup(['test-store'])
-})
-
-test('raf-based corestore, close and reopen with keypair option', async t => {
-  let store = create('test-store')
-  const keyPair = hypercoreCrypto.keyPair()
-
-  let core1 = store.get({ keyPair, valueEncoding: 'utf-8' })
-  await core1.append('hello')
-
-  t.is(await core1.get(0), 'hello')
-
-  await store.close()
-  store = create('test-store')
-  core1 = store.get({ keyPair, valueEncoding: 'utf-8' })
-  await core1.ready()
-
-  t.deepEqual(core1.key, keyPair.publicKey)
+  t.same(core1.key, kp1.publicKey)
+  t.same(core2.key, kp2.publicKey)
   t.true(core1.writable)
-  t.is(await core1.get(0), 'hello')
-
-  await cleanup(['test-store'])
-})
-
-test('namespace method is equivalent to name array', async t => {
-  const store = create(ram)
-
-  const core1 = store.get({ name: ['a', 'b', 'c'] })
-  const core2 = store.namespace('a').namespace('b').get({ name: 'c' })
-
-  await core1.ready()
-  await core2.ready()
-
-  t.is(core1.writer, core2.writer)
-})
-
-test('can backup/restore', async t => {
-  const firstStore = create(ram)
-  const core1 = firstStore.get({ name: 'hello-world' })
-  await core1.ready()
-  const manifest = await firstStore.backup()
-
-  const secondStore = await Corestore.restore(manifest, ram)
-  const core2 = secondStore.get({ key: core1.key })
-  await core2.ready()
-
   t.true(core2.writable)
+
+  t.end()
 })
 
-test('all sessions closing leads to eviction', async t => {
-  const store = create(ram, { cacheSize: 1 })
+test('basic namespaces', async function (t) {
+  const store = new Corestore(ram)
+  const ns1 = store.namespace('ns1')
+  const ns2 = store.namespace('ns2')
+  const ns3 = store.namespace('ns1') // Duplicate namespace
 
-  const core1 = store.get({ name: 'test-core' })
-  const core2 = store.get({ name: 'test-core' })
-
-  const core3 = store.get({ name: 'test-core-2' })
-
+  const core1 = ns1.get({ name: 'main' })
+  const core2 = ns2.get({ name: 'main' })
+  const core3 = ns3.get({ name: 'main' })
   await Promise.all([core1.ready(), core2.ready(), core3.ready()])
 
-  t.is(store.cache.size, 2)
+  t.false(core1.key.equals(core2.key))
+  t.true(core1.key.equals(core3.key))
+  t.true(core1.writable)
+  t.true(core2.writable)
+  t.true(core3.writable)
+  t.same(store.cores.size, 2)
 
-  await core3.close()
-
-  t.is(store.cache.size, 1)
-
-  await core1.close()
-  await core2.close()
-
-  t.is(store.cache.size, 0)
+  t.end()
 })
 
-function create (storage, opts) {
-  const store = new Corestore(storage, opts)
-  return store
-}
+test('basic replication', async function (t) {
+  const store1 = new Corestore(ram)
+  const store2 = new Corestore(ram)
+
+  const core1 = store1.get({ name: 'core-1' })
+  const core2 = store1.get({ name: 'core-2' })
+  await core1.append('hello')
+  await core2.append('world')
+
+  const core3 = store2.get({ key: core1.key })
+  const core4 = store2.get({ key: core2.key })
+
+  const s = store1.replicate(true)
+  s.pipe(store2.replicate(false)).pipe(s)
+
+  t.same(await core3.get(0), Buffer.from('hello'))
+  t.same(await core4.get(0), Buffer.from('world'))
+
+  t.end()
+})
+
+test('nested namespaces', async function (t) {
+  const store = new Corestore(ram)
+  const ns1a = store.namespace('ns1').namespace('a')
+  const ns1b = store.namespace('ns1').namespace('b')
+
+  const core1 = ns1a.get({ name: 'main' })
+  const core2 = ns1b.get({ name: 'main' })
+  await Promise.all([core1.ready(), core2.ready()])
+
+  t.false(core1.key.equals(core2.key))
+  t.true(core1.writable)
+  t.true(core2.writable)
+  t.same(store.cores.size, 2)
+
+  t.end()
+})
+
+test('core uncached when all sessions close', async function (t) {
+  const store = new Corestore(ram)
+  const core1 = store.get({ name: 'main' })
+  await core1.ready()
+  t.same(store.cores.size, 1)
+  await core1.close()
+  t.same(store.cores.size, 0)
+  t.end()
+})
