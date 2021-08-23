@@ -71,7 +71,6 @@ module.exports = class Corestore extends EventEmitter {
     while (this.cores.has(id)) {
       const existing = this.cores.get(id)
       if (existing) {
-        // TODO: Support the closing property on Hypercore
         if (!existing.closing) return { from: existing, keyPair, sign }
         await existing.close()
       }
@@ -81,7 +80,6 @@ module.exports = class Corestore extends EventEmitter {
 
     const storageRoot = [CORES_DIR, id.slice(0, 2), id.slice(2, 4), id].join('/')
     const core = new Hypercore(p => this.storage(storageRoot + '/' + p), {
-      // TODO: Add autoclose Hypercore flag so that the core closes when all sessions close
       autoClose: true,
       keyPair: {
         publicKey: keyPair.publicKey,
@@ -95,7 +93,6 @@ module.exports = class Corestore extends EventEmitter {
     for (const stream of this._replicationStreams) {
       core.replicate(stream)
     }
-    // TODO: Add a closing event to Hypecore
     core.once('close', () => {
       this.cores.delete(id)
     })
@@ -167,7 +164,6 @@ module.exports = class Corestore extends EventEmitter {
   }
 }
 
-// TODO: Implement
 function validateGetOptions (opts) {
   if (Buffer.isBuffer(opts)) return { key: opts }
   if (opts.key) {
