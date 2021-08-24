@@ -165,7 +165,7 @@ module.exports = class Corestore extends EventEmitter {
 }
 
 function validateGetOptions (opts) {
-  if (Buffer.isBuffer(opts)) return { key: opts }
+  if (Buffer.isBuffer(opts)) return { key: opts, publicKey: opts }
   if (opts.key) {
     opts.publicKey = opts.key
   }
