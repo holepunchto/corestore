@@ -6,6 +6,8 @@ const Hypercore = require('hypercore-x')
 
 const CORES_DIR = 'cores'
 const KEYS_DIR = 'keys'
+const USERDATA_NAME_KEY = '@corestore/name'
+const USERDATA_NAMESPACE_KEY = '@corestore/namespace'
 const DEFAULT_NAMESPACE = generateNamespace('@corestore/default')
 
 module.exports = class Corestore extends EventEmitter {
@@ -62,6 +64,20 @@ module.exports = class Corestore extends EventEmitter {
     }
   }
 
+  async _postload (core) {
+    const name = await core.getUserData(USERDATA_NAME_KEY)
+    if (!name) return
+
+    const namespace = await core.getUserData(USERDATA_NAMESPACE_KEY)
+    const { publicKey, sign } = await this.keys.createHypercoreKeyPair(name.toString(), namespace)
+    if (!publicKey.equals(core.key)) throw new Error('Stored core key does not match the provided name')
+
+    // TODO: Should Hypercore expose a helper for this, or should postload return keypair/sign?
+    core.sign = sign
+    core.key = publicKey
+    core.writable = true
+  }
+
   async _preload (opts) {
     await this.ready()
 
@@ -76,6 +92,12 @@ module.exports = class Corestore extends EventEmitter {
       }
     }
 
+    const userData = {}
+    if (opts.name) {
+      userData[USERDATA_NAME_KEY] = Buffer.from(opts.name)
+      userData[USERDATA_NAMESPACE_KEY] = this._namespace
+    }
+
     // No more async ticks allowed after this point -- necessary for caching
 
     const storageRoot = [CORES_DIR, id.slice(0, 2), id.slice(2, 4), id].join('/')
@@ -85,7 +107,9 @@ module.exports = class Corestore extends EventEmitter {
         publicKey: keyPair.publicKey,
         secretKey: null
       },
+      userData,
       sign: null,
+      postload: this._postload.bind(this),
       createIfMissing: !!opts.keyPair
     })
 

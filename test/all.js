@@ -1,6 +1,7 @@
 const test = require('tape')
 const crypto = require('hypercore-crypto')
 const ram = require('random-access-memory')
+const tmp = require('tmp-promise')
 
 const Corestore = require('..')
 
@@ -106,5 +107,31 @@ test('core uncached when all sessions close', async function (t) {
   t.same(store.cores.size, 1)
   await core1.close()
   t.same(store.cores.size, 0)
+  t.end()
+})
+
+test('writable core loaded from name userData', async function (t) {
+  const dir = await tmp.dir()
+
+  let store = new Corestore(dir.path)
+  let core = store.get({ name: 'main' })
+  await core.ready()
+  const key = core.key
+
+  t.true(core.writable)
+  await core.append('hello')
+  t.same(core.length, 1)
+
+  await store.close()
+  store = new Corestore(dir.path)
+  core = store.get(key)
+  await core.ready()
+
+  t.true(core.writable)
+  await core.append('world')
+  t.same(core.length, 2)
+  t.same(await core.get(0), Buffer.from('hello'))
+  t.same(await core.get(1), Buffer.from('world'))
+
   t.end()
 })
