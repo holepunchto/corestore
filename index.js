@@ -135,7 +135,7 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   replicate (opts = {}) {
-    const stream = opts.stream || Hypercore.createProtocolStream(opts)
+    const stream = isStream(opts) ? opts : (opts.stream || Hypercore.createProtocolStream(opts))
     for (const core of this.cores.values()) {
       core.replicate(stream)
     }
@@ -212,6 +212,10 @@ function generateNamespace (first, second) {
   const out = Buffer.allocUnsafe(32)
   sodium.crypto_generichash(out, second ? Buffer.concat([first, second]) : first)
   return out
+}
+
+function isStream (s) {
+  return typeof s === 'object' && s && typeof s.pipe === 'function'
 }
 
 function noop () {}
