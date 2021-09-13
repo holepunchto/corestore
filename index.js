@@ -20,7 +20,7 @@ module.exports = class Corestore extends EventEmitter {
     this.keys = opts.keys
 
     this._namespace = opts._namespace || DEFAULT_NAMESPACE
-    this._replicationStreams = []
+    this._replicationStreams = opts._streams || []
 
     this._opening = opts._opening ? opts._opening.then(() => this._open()) : this._open()
     this._opening.catch(noop)
@@ -160,6 +160,7 @@ module.exports = class Corestore extends EventEmitter {
       _namespace: generateNamespace(this._namespace, name),
       _opening: this._opening,
       _cores: this.cores,
+      _streams: this._replicationStreams,
       keys: this._opening.then(() => this.keys)
     })
   }
