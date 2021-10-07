@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "hypercore-crypto": "^2.3.0",
-    "hypercore-x": "github:hypercore-skunkworks/hypercore-x",
+    "hypercore-x": "github:hypercore-skunkworks/hypercore-x#add-extension-destroy",
     "key-manager": "github:hypercore-skunkworks/key-manager",
     "sodium-universal": "^3.0.4"
   }
