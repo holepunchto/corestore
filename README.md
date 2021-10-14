@@ -41,7 +41,7 @@ const store1 = new Corestore(ram)
 const store2 = new Corestore(ram)
 await Promise.all([store1.ready(), store2.ready()]
 
-const core1 = store2.get()
+const core1 = store1.get()
 const core2 = store2.get({ key: core1.key })
 const stream = store1.replicate(true, { live: true })
 stream.pipe(store2.replicate(false, { live: true })).pipe(stream) // This will replicate all common cores.
