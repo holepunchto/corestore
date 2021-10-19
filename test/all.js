@@ -141,9 +141,9 @@ test('storage locking', async function (t) {
   const dir = await tmp.dir({ unsafeCleanup: true })
 
   const store1 = new Corestore(dir.path)
-  const store2 = new Corestore(dir.path)
   await store1.ready()
 
+  const store2 = new Corestore(dir.path)
   try {
     await store2.ready()
     t.fail('dir should have been locked')
