@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/hypercore-protocol/corestore#readme",
   "devDependencies": {
+    "random-access-file": "^2.2.0",
     "random-access-memory": "^3.1.2",
     "standardx": "^7.0.0",
     "tape": "^5.3.1",
@@ -30,7 +31,6 @@
     "derive-key": "^1.0.1",
     "hypercore": "next",
     "hypercore-crypto": "^2.3.0",
-    "random-access-file": "^2.2.0",
     "sodium-universal": "^3.0.4"
   }
 }

@@ -6,7 +6,7 @@ const Hypercore = require('hypercore')
 const KeyManager = require('./lib/keys')
 
 const CORES_DIR = 'cores'
-const KEYS_DIR = 'keys'
+const PROFILES_DIR = 'profiles'
 const USERDATA_NAME_KEY = '@corestore/name'
 const USERDATA_NAMESPACE_KEY = '@corestore/namespace'
 const DEFAULT_NAMESPACE = generateNamespace('@corestore/default')
@@ -15,7 +15,7 @@ module.exports = class Corestore extends EventEmitter {
   constructor (storage, opts = {}) {
     super()
 
-    this.storage = Hypercore.defaultStorage(storage, { lock: KEYS_DIR + '/profile' })
+    this.storage = Hypercore.defaultStorage(storage, { lock: PROFILES_DIR + '/default' })
 
     this.cores = opts._cores || new Map()
     this.keys = opts.keys
@@ -32,7 +32,7 @@ module.exports = class Corestore extends EventEmitter {
     if (this.keys) {
       this.keys = await this.keys // opts.keys can be a Promise that resolves to a KeyManager
     } else {
-      this.keys = await KeyManager.fromStorage(p => this.storage(KEYS_DIR + '/' + p))
+      this.keys = await KeyManager.fromStorage(p => this.storage(PROFILES_DIR + '/' + p))
     }
   }
 
@@ -168,6 +168,7 @@ module.exports = class Corestore extends EventEmitter {
 
   async _close () {
     if (this._closing) return this._closing
+    await this._opening
     const closePromises = []
     for (const core of this.cores.values()) {
       closePromises.push(core.close())
@@ -176,6 +177,7 @@ module.exports = class Corestore extends EventEmitter {
     for (const stream of this._replicationStreams) {
       stream.destroy()
     }
+    await this.keys.close()
   }
 
   close () {
