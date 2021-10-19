@@ -15,7 +15,7 @@ module.exports = class Corestore extends EventEmitter {
   constructor (storage, opts = {}) {
     super()
 
-    this.storage = Hypercore.defaultStorage(storage)
+    this.storage = Hypercore.defaultStorage(storage, { lock: KEYS_DIR + '/profile' })
 
     this.cores = opts._cores || new Map()
     this.keys = opts.keys
