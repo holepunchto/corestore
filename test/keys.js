@@ -19,19 +19,6 @@ test('can create hypercore keypairs', async t => {
   t.end()
 })
 
-test('can create network identities', async t => {
-  const keys = await KeyManager.fromStorage(ram)
-
-  const id1 = await keys.createNetworkIdentity('id1')
-  const id2 = await keys.createNetworkIdentity('id2')
-
-  t.same(id1.publicKey.length, 32)
-  t.same(id2.publicKey.length, 32)
-  t.notSame(id1.publicKey, id2.publicKey)
-
-  t.end()
-})
-
 test('distinct tokens create distinct hypercore keypairs', async t => {
   const keys = await KeyManager.fromStorage(ram)
   const token1 = KeyManager.createToken()
@@ -41,19 +28,6 @@ test('distinct tokens create distinct hypercore keypairs', async t => {
   const kp2 = await keys.createHypercoreKeyPair('core1', token2)
 
   t.notSame(kp1.publicKey, kp2.publicKey)
-
-  t.end()
-})
-
-test('distinct tokens create distinct network identities', async t => {
-  const keys = await KeyManager.fromStorage(ram)
-  const token1 = KeyManager.createToken()
-  const token2 = KeyManager.createToken()
-
-  const id1 = await keys.createNetworkIdentity('id1', token1)
-  const id2 = await keys.createNetworkIdentity('id1', token2)
-
-  t.notSame(id1.publicKey, id2.publicKey)
 
   t.end()
 })
