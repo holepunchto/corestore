@@ -26,9 +26,11 @@
     "tmp-promise": "^3.0.2"
   },
   "dependencies": {
-    "hypercore-crypto": "^2.3.0",
+    "blake2b-universal": "^1.0.1",
+    "derive-key": "^1.0.1",
     "hypercore": "next",
-    "key-manager": "github:hypercore-skunkworks/key-manager",
+    "hypercore-crypto": "^2.3.0",
+    "random-access-file": "^2.2.0",
     "sodium-universal": "^3.0.4"
   }
 }
