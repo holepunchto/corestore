@@ -111,7 +111,7 @@ test('core uncached when all sessions close', async function (t) {
 })
 
 test('writable core loaded from name userData', async function (t) {
-  const dir = await tmp.dir()
+  const dir = await tmp.dir({ unsafeCleanup: true })
 
   let store = new Corestore(dir.path)
   let core = store.get({ name: 'main' })
@@ -133,5 +133,28 @@ test('writable core loaded from name userData', async function (t) {
   t.same(await core.get(0), Buffer.from('hello'))
   t.same(await core.get(1), Buffer.from('world'))
 
+  await dir.cleanup()
+  t.end()
+})
+
+test('storage locking', async function (t) {
+  const dir = await tmp.dir({ unsafeCleanup: true })
+
+  const store1 = new Corestore(dir.path)
+  const store2 = new Corestore(dir.path)
+
+  const core1 = store1.get({ name: 'main' })
+  await core1.ready()
+
+  const core2 = store2.get({ name: 'main' })
+
+  try {
+    await core2.ready()
+    t.fail('core was not locked')
+  } catch {
+    t.pass('core was locked')
+  }
+
+  await dir.cleanup()
   t.end()
 })
