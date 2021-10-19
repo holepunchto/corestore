@@ -1,14 +1,14 @@
 {
   "name": "corestore",
   "version": "6.0.0-beta2",
-  "description": "A Hypercore factory that stores and replicates linked cores.",
+  "description": "A Hypercore factory that simplifies managing collections of cores.",
   "main": "index.js",
   "scripts": {
     "test": "standard && tape test/*.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hypercore-skunkworks/neocorestore.git"
+    "url": "git+https://github.com/hypercore-protocol/corestore.git"
   },
   "keywords": [
     "corestore"
@@ -16,9 +16,9 @@
   "author": "Andrew Osheroff <andrewosh@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/hypercore-skunkworks/neocorestore/issues"
+    "url": "https://github.com/hypercore-protocol/corestore/issues"
   },
-  "homepage": "https://github.com/hypercore-skunkworks/neocorestore#readme",
+  "homepage": "https://github.com/hypercore-protocol/corestore#readme",
   "devDependencies": {
     "random-access-memory": "^3.1.2",
     "standardx": "^7.0.0",
@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "hypercore-crypto": "^2.3.0",
-    "hypercore-x": "github:hypercore-skunkworks/hypercore-x#add-extension-destroy",
+    "hypercore": "next",
     "key-manager": "github:hypercore-skunkworks/key-manager",
     "sodium-universal": "^3.0.4"
   }
