@@ -1,8 +1,9 @@
 const { EventEmitter } = require('events')
 const crypto = require('hypercore-crypto')
 const sodium = require('sodium-universal')
-const KeyManager = require('key-manager')
-const Hypercore = require('hypercore-x')
+const Hypercore = require('hypercore')
+
+const KeyManager = require('./lib/keys')
 
 const CORES_DIR = 'cores'
 const KEYS_DIR = 'keys'
