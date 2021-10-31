@@ -104,6 +104,7 @@ module.exports = class Corestore extends EventEmitter {
     const storageRoot = [CORES_DIR, id.slice(0, 2), id.slice(2, 4), id].join('/')
     const core = new Hypercore(p => this.storage(storageRoot + '/' + p), {
       autoClose: true,
+      encryptionKey: opts.encryptionKey || null,
       keyPair: {
         publicKey: keyPair.publicKey,
         secretKey: null
