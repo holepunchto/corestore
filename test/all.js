@@ -1,4 +1,4 @@
-const test = require('tape')
+const test = require('brittle')
 const crypto = require('hypercore-crypto')
 const ram = require('random-access-memory')
 const tmp = require('tmp-promise')
@@ -13,15 +13,13 @@ test('basic get with caching', async function (t) {
 
   await Promise.all([core1a.ready(), core1b.ready(), core2.ready()])
 
-  t.same(core1a.key, core1b.key)
-  t.notSame(core1a.key, core2.key)
+  t.alike(core1a.key, core1b.key)
+  t.unlike(core1a.key, core2.key)
 
-  t.true(core1a.writable)
-  t.true(core1b.writable)
+  t.ok(core1a.writable)
+  t.ok(core1b.writable)
 
-  t.same(store.cores.size, 2)
-
-  t.end()
+  t.is(store.cores.size, 2)
 })
 
 test('basic get with custom keypair', async function (t) {
@@ -33,12 +31,10 @@ test('basic get with custom keypair', async function (t) {
   const core2 = store.get(kp2)
   await Promise.all([core1.ready(), core2.ready()])
 
-  t.same(core1.key, kp1.publicKey)
-  t.same(core2.key, kp2.publicKey)
-  t.true(core1.writable)
-  t.true(core2.writable)
-
-  t.end()
+  t.alike(core1.key, kp1.publicKey)
+  t.alike(core2.key, kp2.publicKey)
+  t.ok(core1.writable)
+  t.ok(core2.writable)
 })
 
 test('basic namespaces', async function (t) {
@@ -52,12 +48,12 @@ test('basic namespaces', async function (t) {
   const core3 = ns3.get({ name: 'main' })
   await Promise.all([core1.ready(), core2.ready(), core3.ready()])
 
-  t.false(core1.key.equals(core2.key))
-  t.true(core1.key.equals(core3.key))
-  t.true(core1.writable)
-  t.true(core2.writable)
-  t.true(core3.writable)
-  t.same(store.cores.size, 2)
+  t.absent(core1.key.equals(core2.key))
+  t.ok(core1.key.equals(core3.key))
+  t.ok(core1.writable)
+  t.ok(core2.writable)
+  t.ok(core3.writable)
+  t.is(store.cores.size, 2)
 
   t.end()
 })
@@ -77,10 +73,8 @@ test('basic replication', async function (t) {
   const s = store1.replicate(true)
   s.pipe(store2.replicate(false)).pipe(s)
 
-  t.same(await core3.get(0), Buffer.from('hello'))
-  t.same(await core4.get(0), Buffer.from('world'))
-
-  t.end()
+  t.alike(await core3.get(0), Buffer.from('hello'))
+  t.alike(await core4.get(0), Buffer.from('world'))
 })
 
 test('nested namespaces', async function (t) {
@@ -92,22 +86,19 @@ test('nested namespaces', async function (t) {
   const core2 = ns1b.get({ name: 'main' })
   await Promise.all([core1.ready(), core2.ready()])
 
-  t.false(core1.key.equals(core2.key))
-  t.true(core1.writable)
-  t.true(core2.writable)
-  t.same(store.cores.size, 2)
-
-  t.end()
+  t.not(core1.key.equals(core2.key))
+  t.ok(core1.writable)
+  t.ok(core2.writable)
+  t.is(store.cores.size, 2)
 })
 
 test('core uncached when all sessions close', async function (t) {
   const store = new Corestore(ram)
   const core1 = store.get({ name: 'main' })
   await core1.ready()
-  t.same(store.cores.size, 1)
+  t.is(store.cores.size, 1)
   await core1.close()
-  t.same(store.cores.size, 0)
-  t.end()
+  t.is(store.cores.size, 0)
 })
 
 test('writable core loaded from name userData', async function (t) {
@@ -118,23 +109,22 @@ test('writable core loaded from name userData', async function (t) {
   await core.ready()
   const key = core.key
 
-  t.true(core.writable)
+  t.ok(core.writable)
   await core.append('hello')
-  t.same(core.length, 1)
+  t.is(core.length, 1)
 
   await store.close()
   store = new Corestore(dir.path)
   core = store.get(key)
   await core.ready()
 
-  t.true(core.writable)
+  t.ok(core.writable)
   await core.append('world')
-  t.same(core.length, 2)
-  t.same(await core.get(0), Buffer.from('hello'))
-  t.same(await core.get(1), Buffer.from('world'))
+  t.is(core.length, 2)
+  t.alike(await core.get(0), Buffer.from('hello'))
+  t.alike(await core.get(1), Buffer.from('world'))
 
   await dir.cleanup()
-  t.end()
 })
 
 test('storage locking', async function (t) {
@@ -152,5 +142,4 @@ test('storage locking', async function (t) {
   }
 
   await dir.cleanup()
-  t.end()
 })

@@ -65,15 +65,22 @@ module.exports = class Corestore extends EventEmitter {
     }
   }
 
-  async _postload (core) {
-    const name = await core.getUserData(USERDATA_NAME_KEY)
+  _getPrereadyUserData (core, key) {
+    for (const { key: savedKey, value } of core.core.header.userData) {
+      if (key === savedKey) return value
+    }
+    return null
+  }
+
+  async _preready (core) {
+    const name = this._getPrereadyUserData(core, USERDATA_NAME_KEY)
     if (!name) return
 
-    const namespace = await core.getUserData(USERDATA_NAMESPACE_KEY)
+    const namespace = this._getPrereadyUserData(core, USERDATA_NAMESPACE_KEY)
     const { publicKey, sign } = await this.keys.createHypercoreKeyPair(name.toString(), namespace)
     if (!publicKey.equals(core.key)) throw new Error('Stored core key does not match the provided name')
 
-    // TODO: Should Hypercore expose a helper for this, or should postload return keypair/sign?
+    // TODO: Should Hypercore expose a helper for this, or should preready return keypair/sign?
     core.sign = sign
     core.key = publicKey
     core.writable = true
@@ -111,7 +118,7 @@ module.exports = class Corestore extends EventEmitter {
       },
       userData,
       sign: null,
-      postload: this._postload.bind(this),
+      _preready: this._preready.bind(this),
       createIfMissing: !!opts.keyPair
     })
 

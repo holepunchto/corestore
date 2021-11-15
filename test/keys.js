@@ -1,7 +1,7 @@
 const p = require('path')
 const fs = require('fs')
 
-const test = require('tape')
+const test = require('brittle')
 const ram = require('random-access-memory')
 const raf = require('random-access-file')
 
@@ -13,11 +13,9 @@ test('can create hypercore keypairs', async t => {
   const kp1 = await keys.createHypercoreKeyPair('core1')
   const kp2 = await keys.createHypercoreKeyPair('core2')
 
-  t.same(kp1.publicKey.length, 32)
-  t.same(kp2.publicKey.length, 32)
-  t.notSame(kp1.publicKey, kp2.publicKey)
-
-  t.end()
+  t.is(kp1.publicKey.length, 32)
+  t.is(kp2.publicKey.length, 32)
+  t.unlike(kp1.publicKey, kp2.publicKey)
 })
 
 test('distinct tokens create distinct hypercore keypairs', async t => {
@@ -28,9 +26,7 @@ test('distinct tokens create distinct hypercore keypairs', async t => {
   const kp1 = await keys.createHypercoreKeyPair('core1', token1)
   const kp2 = await keys.createHypercoreKeyPair('core1', token2)
 
-  t.notSame(kp1.publicKey, kp2.publicKey)
-
-  t.end()
+  t.unlike(kp1.publicKey, kp2.publicKey)
 })
 
 test('short user-provided token will throw', async t => {
@@ -42,8 +38,6 @@ test('short user-provided token will throw', async t => {
   } catch {
     t.pass('threw correctly')
   }
-
-  t.end()
 })
 
 test('persistent storage regenerates keys correctly', async t => {
@@ -55,10 +49,9 @@ test('persistent storage regenerates keys correctly', async t => {
   const keys2 = await KeyManager.fromStorage((name) => raf(testPath, { directory: testPath }))
   const kp2 = await keys2.createHypercoreKeyPair('core1')
 
-  t.same(kp1.publicKey, kp2.publicKey)
+  t.alike(kp1.publicKey, kp2.publicKey)
 
   await fs.promises.rm(testPath, { recursive: true })
-  t.end()
 })
 
 test('different master keys -> different keys', async t => {
@@ -68,7 +61,5 @@ test('different master keys -> different keys', async t => {
   const kp1 = await keys1.createHypercoreKeyPair('core1')
   const kp2 = await keys2.createHypercoreKeyPair('core1')
 
-  t.notSame(kp1.publicKey, kp2.publicKey)
-
-  t.end()
+  t.unlike(kp1.publicKey, kp2.publicKey)
 })
