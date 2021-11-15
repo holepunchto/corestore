@@ -4,7 +4,7 @@
   "description": "A Hypercore factory that simplifies managing collections of cores.",
   "main": "index.js",
   "scripts": {
-    "test": "standard && tape test/*.js"
+    "test": "standard && brittle test/*.js"
   },
   "repository": {
     "type": "git",
@@ -20,10 +20,10 @@
   },
   "homepage": "https://github.com/hypercore-protocol/corestore#readme",
   "devDependencies": {
+    "brittle": "^1.6.0",
     "random-access-file": "^2.2.0",
     "random-access-memory": "^3.1.2",
     "standardx": "^7.0.0",
-    "tape": "^5.3.1",
     "tmp-promise": "^3.0.2"
   },
   "dependencies": {
