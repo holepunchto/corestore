@@ -123,7 +123,7 @@ module.exports = class Corestore extends EventEmitter {
     })
 
     this.cores.set(id, core)
-    for (const stream of this._replicationStreams) {
+    for (const { stream } of this._replicationStreams) {
       core.replicate(stream)
     }
     core.once('close', () => {
@@ -144,6 +144,7 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   replicate (isInitiator, opts) {
+    const isExternal = isStream(isInitiator) || !!(opts && opts.stream)
     const stream = Hypercore.createProtocolStream(isInitiator, opts)
     for (const core of this.cores.values()) {
       core.replicate(stream)
@@ -156,9 +157,10 @@ module.exports = class Corestore extends EventEmitter {
         stream.close(discoveryKey)
       })
     })
-    this._replicationStreams.push(stream)
+    const streamRecord = { stream, isExternal }
+    this._replicationStreams.push(streamRecord)
     stream.once('close', () => {
-      this._replicationStreams.splice(this._replicationStreams.indexOf(stream), 1)
+      this._replicationStreams.splice(this._replicationStreams.indexOf(streamRecord), 1)
     })
     return stream
   }
@@ -182,8 +184,9 @@ module.exports = class Corestore extends EventEmitter {
       closePromises.push(core.close())
     }
     await Promise.allSettled(closePromises)
-    for (const stream of this._replicationStreams) {
-      stream.destroy()
+    for (const { stream, isExternal } of this._replicationStreams) {
+      // Only close streams that were created by the Corestore
+      if (!isExternal) stream.destroy()
     }
     await this.keys.close()
   }
@@ -224,6 +227,10 @@ function generateNamespace (first, second) {
   const out = Buffer.allocUnsafe(32)
   sodium.crypto_generichash(out, second ? Buffer.concat([first, second]) : first)
   return out
+}
+
+function isStream (s) {
+  return typeof s === 'object' && s && typeof s.pipe === 'function'
 }
 
 function noop () {}
