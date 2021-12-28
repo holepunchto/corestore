@@ -77,6 +77,46 @@ test('basic replication', async function (t) {
   t.alike(await core4.get(0), Buffer.from('world'))
 })
 
+test('replicating cores created after replication begins', async function (t) {
+  const store1 = new Corestore(ram)
+  const store2 = new Corestore(ram)
+
+  const s = store1.replicate(true, { live: true })
+  s.pipe(store2.replicate(false, { live: true })).pipe(s)
+
+  const core1 = store1.get({ name: 'core-1' })
+  const core2 = store1.get({ name: 'core-2' })
+  await core1.append('hello')
+  await core2.append('world')
+
+  const core3 = store2.get({ key: core1.key })
+  const core4 = store2.get({ key: core2.key })
+
+  t.alike(await core3.get(0), Buffer.from('hello'))
+  t.alike(await core4.get(0), Buffer.from('world'))
+})
+
+test('replicating cores using discovery key hook', async function (t) {
+  const dir = await tmp.dir({ unsafeCleanup: true })
+  let store1 = new Corestore(dir.path)
+  const store2 = new Corestore(ram)
+
+  const core = store1.get({ name: 'main' })
+  await core.append('hello')
+  const key = core.key
+
+  await store1.close()
+  store1 = new Corestore(dir.path)
+
+  const s = store1.replicate(true, { live: true })
+  s.pipe(store2.replicate(false, { live: true })).pipe(s)
+
+  const core2 = store2.get(key)
+  t.alike(await core2.get(0), Buffer.from('hello'))
+
+  await dir.cleanup()
+})
+
 test('nested namespaces', async function (t) {
   const store = new Corestore(ram)
   const ns1a = store.namespace('ns1').namespace('a')
