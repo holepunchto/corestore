@@ -1,9 +1,11 @@
-const test = require('brittle')
+const { test, configure } = require('brittle')
 const crypto = require('hypercore-crypto')
 const ram = require('random-access-memory')
 const tmp = require('tmp-promise')
 
 const Corestore = require('..')
+
+configure({ serial: true })
 
 test('basic get with caching', async function (t) {
   const store = new Corestore(ram)
@@ -182,4 +184,24 @@ test('storage locking', async function (t) {
   }
 
   await dir.cleanup()
+})
+
+test('closing a namespace does not close cores', async function (t) {
+  const store = new Corestore(ram)
+  const ns1 = store.namespace('ns1')
+  const core1 = ns1.get({ name: 'core-1' })
+  const core2 = ns1.get({ name: 'core-2' })
+  await Promise.all([core1.ready(), core2.ready()])
+
+  await ns1.close()
+
+  t.is(store.cores.size, 2)
+  t.not(core1.closed)
+  t.not(core1.closed)
+
+  await store.close()
+
+  t.is(store.cores.size, 0)
+  t.ok(core1.closed)
+  t.ok(core2.closed)
 })
