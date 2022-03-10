@@ -25,7 +25,7 @@ module.exports = class Corestore extends EventEmitter {
     this._replicationStreams = opts._streams || []
 
     this._opening = opts._opening ? opts._opening.then(() => this._open()) : this._open()
-    this._opening.catch(noop)
+    this._opening.catch(safetyCatch)
     this.ready = () => this._opening
   }
 
@@ -184,8 +184,8 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   async _close () {
-    if (this._closing) return this._closing
     await this._opening
+    if (!this._namespace.equals(DEFAULT_NAMESPACE)) return // namespaces should not release resources on close
     const closePromises = []
     for (const core of this.cores.values()) {
       closePromises.push(core.close())
@@ -201,7 +201,7 @@ module.exports = class Corestore extends EventEmitter {
   close () {
     if (this._closing) return this._closing
     this._closing = this._close()
-    this._closing.catch(noop)
+    this._closing.catch(safetyCatch)
     return this._closing
   }
 
@@ -238,5 +238,3 @@ function generateNamespace (first, second) {
 function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
 }
-
-function noop () {}
