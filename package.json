@@ -27,7 +27,7 @@
     "tmp-promise": "^3.0.2"
   },
   "dependencies": {
-    "hypercore": "github:hypercore-protocol/hypercore-next",
+    "hypercore": "next",
     "blake2b-universal": "^1.0.1",
     "derive-key": "^1.0.1",
     "hypercore-crypto": "^2.3.0",
