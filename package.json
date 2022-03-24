@@ -27,6 +27,7 @@
     "tmp-promise": "^3.0.2"
   },
   "dependencies": {
+    "b4a": "^1.3.1",
     "hypercore": "next",
     "blake2b-universal": "^1.0.1",
     "derive-key": "^1.0.1",
