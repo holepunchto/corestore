@@ -81,7 +81,7 @@ module.exports = class Corestore extends EventEmitter {
 
     const namespace = this._getPrereadyUserData(core, USERDATA_NAMESPACE_KEY)
     const { publicKey, sign } = await this.keys.createHypercoreKeyPair(b4a.toString(name), namespace)
-    if (!publicKey.equals(core.key)) throw new Error('Stored core key does not match the provided name')
+    if (!b4a.equals(publicKey, core.key)) throw new Error('Stored core key does not match the provided name')
 
     // TODO: Should Hypercore expose a helper for this, or should preready return keypair/sign?
     core.sign = sign
