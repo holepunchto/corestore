@@ -1,7 +1,8 @@
 const { test, configure } = require('brittle')
 const crypto = require('hypercore-crypto')
 const ram = require('random-access-memory')
-const tmp = require('tmp-promise')
+const os = require('os')
+const path = require('path')
 
 const Corestore = require('..')
 
@@ -99,8 +100,8 @@ test('replicating cores created after replication begins', async function (t) {
 })
 
 test('replicating cores using discovery key hook', async function (t) {
-  const dir = await tmp.dir({ unsafeCleanup: true })
-  let store1 = new Corestore(dir.path)
+  const dir = tmpdir()
+  let store1 = new Corestore(dir)
   const store2 = new Corestore(ram)
 
   const core = store1.get({ name: 'main' })
@@ -108,15 +109,13 @@ test('replicating cores using discovery key hook', async function (t) {
   const key = core.key
 
   await store1.close()
-  store1 = new Corestore(dir.path)
+  store1 = new Corestore(dir)
 
   const s = store1.replicate(true, { live: true })
   s.pipe(store2.replicate(false, { live: true })).pipe(s)
 
   const core2 = store2.get(key)
   t.alike(await core2.get(0), Buffer.from('hello'))
-
-  await dir.cleanup()
 })
 
 test('nested namespaces', async function (t) {
@@ -144,9 +143,9 @@ test('core uncached when all sessions close', async function (t) {
 })
 
 test('writable core loaded from name userData', async function (t) {
-  const dir = await tmp.dir({ unsafeCleanup: true })
+  const dir = tmpdir()
 
-  let store = new Corestore(dir.path)
+  let store = new Corestore(dir)
   let core = store.get({ name: 'main' })
   await core.ready()
   const key = core.key
@@ -156,7 +155,7 @@ test('writable core loaded from name userData', async function (t) {
   t.is(core.length, 1)
 
   await store.close()
-  store = new Corestore(dir.path)
+  store = new Corestore(dir)
   core = store.get(key)
   await core.ready()
 
@@ -165,25 +164,21 @@ test('writable core loaded from name userData', async function (t) {
   t.is(core.length, 2)
   t.alike(await core.get(0), Buffer.from('hello'))
   t.alike(await core.get(1), Buffer.from('world'))
-
-  await dir.cleanup()
 })
 
 test('storage locking', async function (t) {
-  const dir = await tmp.dir({ unsafeCleanup: true })
+  const dir = tmpdir()
 
-  const store1 = new Corestore(dir.path)
+  const store1 = new Corestore(dir)
   await store1.ready()
 
-  const store2 = new Corestore(dir.path)
+  const store2 = new Corestore(dir)
   try {
     await store2.ready()
     t.fail('dir should have been locked')
   } catch {
     t.pass('dir was locked')
   }
-
-  await dir.cleanup()
 })
 
 test('closing a namespace does not close cores', async function (t) {
@@ -205,3 +200,7 @@ test('closing a namespace does not close cores', async function (t) {
   t.ok(core1.closed)
   t.ok(core2.closed)
 })
+
+function tmpdir () {
+  return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
+}
