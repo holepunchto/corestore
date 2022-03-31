@@ -51,6 +51,9 @@ test('persistent storage regenerates keys correctly', async t => {
 
   t.alike(kp1.publicKey, kp2.publicKey)
 
+  await keys1.close()
+  await keys2.close()
+
   await fs.promises.rm(testPath, { recursive: true })
 })
 
