@@ -43,7 +43,7 @@ module.exports = class Corestore extends EventEmitter {
     if (opts._discoveryKey) {
       return {
         keyPair: null,
-        sign: null,
+        auth: null,
         discoveryKey: opts._discoveryKey
       }
     }
@@ -54,16 +54,17 @@ module.exports = class Corestore extends EventEmitter {
           secretKey: opts.secretKey
         },
         sign: opts.sign,
+        auth: opts.auth,
         discoveryKey: crypto.discoveryKey(opts.publicKey)
       }
     }
-    const { publicKey, sign } = await this.keys.createHypercoreKeyPair(opts.name, this._namespace)
+    const { publicKey, auth } = await this.keys.createHypercoreKeyPair(opts.name, this._namespace)
     return {
       keyPair: {
         publicKey,
         secretKey: null
       },
-      sign,
+      auth,
       discoveryKey: crypto.discoveryKey(publicKey)
     }
   }
@@ -80,11 +81,11 @@ module.exports = class Corestore extends EventEmitter {
     if (!name) return
 
     const namespace = this._getPrereadyUserData(core, USERDATA_NAMESPACE_KEY)
-    const { publicKey, sign } = await this.keys.createHypercoreKeyPair(b4a.toString(name), namespace)
+    const { publicKey, auth } = await this.keys.createHypercoreKeyPair(b4a.toString(name), namespace)
     if (!b4a.equals(publicKey, core.key)) throw new Error('Stored core key does not match the provided name')
 
-    // TODO: Should Hypercore expose a helper for this, or should preready return keypair/sign?
-    core.sign = sign
+    // TODO: Should Hypercore expose a helper for this, or should preready return keypair/auth?
+    core.auth = auth
     core.key = publicKey
     core.writable = true
   }
@@ -92,12 +93,12 @@ module.exports = class Corestore extends EventEmitter {
   async _preload (opts) {
     await this.ready()
 
-    const { discoveryKey, keyPair, sign } = await this._generateKeys(opts)
+    const { discoveryKey, keyPair, auth } = await this._generateKeys(opts)
     const id = b4a.toString(discoveryKey, 'hex')
 
     while (this.cores.has(id)) {
       const existing = this.cores.get(id)
-      if (existing.opened && !existing.closing) return { from: existing, keyPair, sign }
+      if (existing.opened && !existing.closing) return { from: existing, keyPair, auth }
       if (!existing.opened) {
         await existing.ready().catch(safetyCatch)
       } else if (existing.closing) {
@@ -119,7 +120,7 @@ module.exports = class Corestore extends EventEmitter {
       autoClose: true,
       encryptionKey: opts.encryptionKey || null,
       userData,
-      sign: null,
+      auth,
       createIfMissing: !opts._discoveryKey,
       keyPair: keyPair && keyPair.publicKey
         ? {
@@ -144,7 +145,7 @@ module.exports = class Corestore extends EventEmitter {
       this.cores.delete(id)
     })
 
-    return { from: core, keyPair, sign }
+    return { from: core, keyPair, auth }
   }
 
   get (opts = {}) {
