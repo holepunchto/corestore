@@ -202,7 +202,7 @@ module.exports = class Corestore extends EventEmitter {
 
   async _close () {
     await this._opening
-    if (!this._namespace.equals(DEFAULT_NAMESPACE)) return // namespaces should not release resources on close
+    if (!b4a.equals(this._namespace, DEFAULT_NAMESPACE)) return // namespaces should not release resources on close
     const closePromises = []
     for (const core of this.cores.values()) {
       closePromises.push(core.close())
