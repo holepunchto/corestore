@@ -25,10 +25,41 @@ module.exports = class Corestore extends EventEmitter {
     this._namespace = opts._namespace || DEFAULT_NAMESPACE
     this._replicationStreams = opts._streams || []
     this._streamSessions = opts._streamSessions || new Map()
+    this._sessions = new Set() // sessions for THIS namespace
+
+    this._findingPeersCount = 0
+    this._findingPeers = []
 
     this._opening = opts._opening ? opts._opening.then(() => this._open()) : this._open()
     this._opening.catch(safetyCatch)
     this.ready = () => this._opening
+  }
+
+  findingPeers () {
+    let done = false
+    this._incFindingPeers()
+
+    return () => {
+      if (done) return
+      done = true
+      this._decFindingPeers()
+    }
+  }
+
+  _incFindingPeers () {
+    if (++this._findingPeersCount !== 1) return
+
+    for (const core of this._sessions) {
+      this._findingPeers.push(core.findingPeers())
+    }
+  }
+
+  _decFindingPeers () {
+    if (--this._findingPeersCount !== 0) return
+
+    while (this._findingPeers.length > 0) {
+      this._findingPeers.pop()()
+    }
   }
 
   async _open () {
@@ -155,6 +186,19 @@ module.exports = class Corestore extends EventEmitter {
       name: null,
       preload: () => this._preload(opts)
     })
+
+    this._sessions.add(core)
+    if (this._findingPeersCount > 0) {
+      this._findingPeers.push(core.findingPeers())
+    }
+
+    core.once('close', () => {
+      // technically better to also clear _findingPeers if we added it,
+      // but the lifecycle for those are pretty short so prob not worth the complexity
+      // as _decFindingPeers clear them all.
+      this._sessions.delete(core)
+    })
+
     return core
   }
 

@@ -201,6 +201,52 @@ test('closing a namespace does not close cores', async function (t) {
   t.ok(core2.closed)
 })
 
+test('findingPeers', async function (t) {
+  t.plan(6)
+
+  const store = new Corestore(ram)
+
+  const ns1 = store.namespace('ns1')
+  const ns2 = store.namespace('ns2')
+
+  const a = ns1.get(Buffer.alloc(32).fill('a'))
+  const b = ns2.get(Buffer.alloc(32).fill('b'))
+
+  const done = ns1.findingPeers()
+
+  let aUpdated = false
+  let bUpdated = false
+  let cUpdated = false
+
+  const c = ns1.get(Buffer.alloc(32).fill('c'))
+
+  a.update().then(function (bool) {
+    aUpdated = true
+  })
+
+  b.update().then(function (bool) {
+    bUpdated = true
+  })
+
+  c.update().then(function (bool) {
+    cUpdated = true
+  })
+
+  await new Promise(resolve => setImmediate(resolve))
+
+  t.is(aUpdated, false)
+  t.is(bUpdated, true)
+  t.is(cUpdated, false)
+
+  done()
+
+  await new Promise(resolve => setImmediate(resolve))
+
+  t.is(aUpdated, true)
+  t.is(bUpdated, true)
+  t.is(cUpdated, true)
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
 }
