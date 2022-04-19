@@ -2,18 +2,16 @@ const { EventEmitter } = require('events')
 const safetyCatch = require('safety-catch')
 const crypto = require('hypercore-crypto')
 const sodium = require('sodium-universal')
-const blake2b = require('blake2b-universal')
 const Hypercore = require('hypercore')
 const b4a = require('b4a')
 
-const DEFAULT_TOKEN = b4a.alloc(0)
-const NAMESPACE = b4a.from('corestore')
+const [NS] = crypto.namespace('corestore', 1)
+const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
 
 const CORES_DIR = 'cores'
 const PRIMARY_KEY_FILE_NAME = 'primary-key'
-const USERDATA_NAME_KEY = '@corestore/name'
-const USERDATA_NAMESPACE_KEY = '@corestore/namespace'
-const DEFAULT_NAMESPACE = generateNamespace('@corestore/default')
+const USERDATA_NAME_KEY = 'corestore/name'
+const USERDATA_NAMESPACE_KEY = 'corestore/namespace'
 
 module.exports = class Corestore extends EventEmitter {
   constructor (storage, opts = {}) {
@@ -25,7 +23,7 @@ module.exports = class Corestore extends EventEmitter {
 
     this._keyStorage = null
     this._primaryKey = opts.primaryKey
-    this._namespace = opts._namespace || DEFAULT_NAMESPACE
+    this._namespace = opts.namespace || DEFAULT_NAMESPACE
     this._replicationStreams = opts._streams || []
     this._overwrite = opts.overwrite === true
 
@@ -34,6 +32,8 @@ module.exports = class Corestore extends EventEmitter {
 
     this._findingPeersCount = 0
     this._findingPeers = []
+
+    if (this._namespace.byteLength !== 32) throw new Error('Namespace must be a 32-byte Buffer or Uint8Array')
 
     this._opening = opts._opening ? opts._opening.then(() => this._open()) : this._open()
     this._opening.catch(safetyCatch)
@@ -77,7 +77,7 @@ module.exports = class Corestore extends EventEmitter {
       this._keyStorage.stat((err, st) => {
         if (err && err.code !== 'ENOENT') return reject(err)
         if (err || st.size < 32 || this._overwrite) {
-          const key = randomBytes(32)
+          const key = crypto.randomBytes(32)
           return this._keyStorage.write(0, key, err => {
             if (err) return reject(err)
             return resolve(key)
@@ -123,6 +123,7 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   _getPrereadyUserData (core, key) {
+    // Need to manually read the header values before the Hypercore is ready, hence the ugliness.
     for (const { key: savedKey, value } of core.core.header.userData) {
       if (key === savedKey) return value
     }
@@ -275,20 +276,23 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   namespace (name) {
-    if (!b4a.isBuffer(name)) name = b4a.from(name)
     return new Corestore(this.storage, {
-      _namespace: generateNamespace(this._namespace, name),
+      primaryKey: this._opening.then(() => this.primaryKey),
+      namespace: generateNamespace(this._namespace, name),
       _opening: this._opening,
       _cores: this.cores,
       _streams: this._replicationStreams,
-      _streamSessions: this._streamSessions,
-      primaryKey: this._opening.then(() => this.primaryKey)
+      _streamSessions: this._streamSessions
     })
   }
 
   async _close () {
     await this._opening
-    if (!b4a.equals(this._namespace, DEFAULT_NAMESPACE)) return // namespaces should not release resources on close
+    if (!b4a.equals(this._namespace, DEFAULT_NAMESPACE)) {
+      // namespaces should not release resources on close
+      // TODO: Refactor the namespace close logic to actually close sessions with ref counting
+      return
+    }
     const closePromises = []
     for (const core of this.cores.values()) {
       closePromises.push(core.close())
@@ -312,10 +316,6 @@ module.exports = class Corestore extends EventEmitter {
     this._closing = this._close()
     this._closing.catch(safetyCatch)
     return this._closing
-  }
-
-  static createToken () {
-    return randomBytes(32)
   }
 }
 
@@ -343,34 +343,20 @@ function validateGetOptions (opts) {
   return opts
 }
 
-function generateNamespace (first, second) {
-  if (!b4a.isBuffer(first)) first = b4a.from(first)
-  if (second && !b4a.isBuffer(second)) second = b4a.from(second)
+function generateNamespace (namespace, name) {
+  if (!b4a.isBuffer(name)) name = b4a.from(name)
   const out = b4a.allocUnsafe(32)
-  sodium.crypto_generichash(out, second ? b4a.concat([first, second]) : first)
+  sodium.crypto_generichash_batch(out, [namespace, name])
+  return out
+}
+
+function deriveSeed (primaryKey, namespace, name) {
+  if (!b4a.isBuffer(name)) name = b4a.from(name)
+  const out = b4a.alloc(32)
+  sodium.crypto_generichash_batch(out, [NS, namespace, name], primaryKey)
   return out
 }
 
 function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
-}
-
-function deriveSeed (profile, token, name, output) {
-  if (token && token.length < 32) throw new Error('Token must be a Buffer with length >= 32')
-  if (!name || typeof name !== 'string') throw new Error('name must be a String')
-  if (!output) output = b4a.alloc(32)
-
-  blake2b.batch(output, [
-    NAMESPACE,
-    token || DEFAULT_TOKEN,
-    b4a.from(b4a.byteLength(name, 'ascii') + '\n' + name, 'ascii')
-  ], profile)
-
-  return output
-}
-
-function randomBytes (n) {
-  const buf = b4a.allocUnsafe(n)
-  sodium.randombytes_buf(buf)
-  return buf
 }
