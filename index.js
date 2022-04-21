@@ -202,7 +202,7 @@ module.exports = class Corestore extends EventEmitter {
     return { from: core, keyPair, auth }
   }
 
-  async createKeyPair (name) {
+  async createKeyPair (name, namespace = this._namespace) {
     if (!this.primaryKey) await this._opening
 
     const keyPair = {
@@ -216,7 +216,7 @@ module.exports = class Corestore extends EventEmitter {
       }
     }
 
-    const seed = deriveSeed(this.primaryKey, this._namespace, name)
+    const seed = deriveSeed(this.primaryKey, namespace, name)
     sodium.crypto_sign_seed_keypair(keyPair.publicKey, keyPair.secretKey, seed)
 
     return keyPair

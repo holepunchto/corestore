@@ -168,6 +168,30 @@ test('writable core loaded from name userData', async function (t) {
   t.alike(await core.get(1), Buffer.from('world'))
 })
 
+test('writable core loaded from name and namespace userData', async function (t) {
+  const dir = tmpdir()
+
+  let store = new Corestore(dir)
+  let core = store.namespace('ns1').get({ name: 'main' })
+  await core.ready()
+  const key = core.key
+
+  t.ok(core.writable)
+  await core.append('hello')
+  t.is(core.length, 1)
+
+  await store.close()
+  store = new Corestore(dir)
+  core = store.get(key)
+  await core.ready()
+
+  t.ok(core.writable)
+  await core.append('world')
+  t.is(core.length, 2)
+  t.alike(await core.get(0), Buffer.from('hello'))
+  t.alike(await core.get(1), Buffer.from('world'))
+})
+
 test('storage locking', async function (t) {
   const dir = tmpdir()
 
