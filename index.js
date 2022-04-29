@@ -211,7 +211,7 @@ module.exports = class Corestore extends EventEmitter {
       auth: {
         sign: (msg) => sign(keyPair, msg),
         verify: (signable, signature) => {
-          return sodium.crypto_sign_detached(signature, signable, keyPair.publicKey)
+          return crypto.verify(signable, signature, keyPair.publicKey)
         }
       }
     }
@@ -321,9 +321,7 @@ module.exports = class Corestore extends EventEmitter {
 
 function sign (keyPair, message) {
   if (!keyPair.secretKey) throw new Error('Invalid key pair')
-  const signature = b4a.allocUnsafe(sodium.crypto_sign_BYTES)
-  sodium.crypto_sign_detached(signature, message, keyPair.secretKey)
-  return signature
+  return crypto.sign(message, keyPair.secretKey)
 }
 
 function validateGetOptions (opts) {
