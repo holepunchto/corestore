@@ -311,6 +311,20 @@ test('keypair auth verify', async function (t) {
   t.absent(keyPair.auth.verify(message, b4a.alloc(64)))
 })
 
+test('core caching after reopen regression', async function (t) {
+  const store = new Corestore(ram)
+  const core = store.get({ name: 'test-core' })
+  await core.ready()
+
+  core.close()
+  await core.opening
+
+  const core2 = store.get({ name: 'test-core' })
+  await core2.ready()
+
+  t.pass('did not infinite loop')
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
 }
