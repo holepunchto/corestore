@@ -153,10 +153,10 @@ module.exports = class Corestore extends EventEmitter {
     while (this.cores.has(id)) {
       const existing = this.cores.get(id)
       if (existing.opened && !existing.closing) return { from: existing, keyPair, auth }
-      if (!existing.opened) {
-        await existing.ready().catch(safetyCatch)
-      } else if (existing.closing) {
+      if (existing.closing) {
         await existing.close()
+      } else {
+        await existing.ready().catch(safetyCatch)
       }
     }
 
