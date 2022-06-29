@@ -3,6 +3,7 @@ const safetyCatch = require('safety-catch')
 const crypto = require('hypercore-crypto')
 const sodium = require('sodium-universal')
 const Hypercore = require('hypercore')
+const Xache = require('xache')
 const b4a = require('b4a')
 
 const [NS] = crypto.namespace('corestore', 1)
@@ -20,6 +21,7 @@ module.exports = class Corestore extends EventEmitter {
     this.storage = Hypercore.defaultStorage(storage, { lock: PRIMARY_KEY_FILE_NAME })
     this.cores = opts._cores || new Map()
     this.primaryKey = null
+    this.cache = !!opts.cache
 
     this._keyStorage = null
     this._primaryKey = opts.primaryKey
@@ -175,6 +177,7 @@ module.exports = class Corestore extends EventEmitter {
       encryptionKey: opts.encryptionKey || null,
       userData,
       auth,
+      cache: opts.cache,
       createIfMissing: !opts._discoveryKey,
       keyPair: keyPair && keyPair.publicKey
         ? {
@@ -224,6 +227,11 @@ module.exports = class Corestore extends EventEmitter {
 
   get (opts = {}) {
     opts = validateGetOptions(opts)
+
+    if (opts.cache !== false) {
+      opts.cache = opts.cache === true || (this.cache && !opts.cache) ? defaultCache() : opts.cache
+    }
+
     const core = new Hypercore(null, {
       ...opts,
       name: null,
@@ -279,6 +287,7 @@ module.exports = class Corestore extends EventEmitter {
     return new Corestore(this.storage, {
       primaryKey: this._opening.then(() => this.primaryKey),
       namespace: generateNamespace(this._namespace, name),
+      cache: this.cache,
       _opening: this._opening,
       _cores: this.cores,
       _streams: this._replicationStreams,
@@ -353,6 +362,10 @@ function deriveSeed (primaryKey, namespace, name) {
   const out = b4a.alloc(32)
   sodium.crypto_generichash_batch(out, [NS, namespace, name], primaryKey)
   return out
+}
+
+function defaultCache () {
+  return new Xache({ maxSize: 65536, maxAge: 0 })
 }
 
 function isStream (s) {
