@@ -1,4 +1,4 @@
-const { test, configure } = require('brittle')
+const test = require('brittle')
 const crypto = require('hypercore-crypto')
 const ram = require('random-access-memory')
 const os = require('os')
@@ -7,8 +7,6 @@ const b4a = require('b4a')
 const sodium = require('sodium-universal')
 
 const Corestore = require('..')
-
-configure({ serial: true })
 
 test('basic get with caching', async function (t) {
   const store = new Corestore(ram)

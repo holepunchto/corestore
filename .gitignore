@@ -1,3 +1,4 @@
 node_modules
 sandbox
 coverage
+package-lock.json
