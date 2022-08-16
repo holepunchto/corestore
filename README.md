@@ -1,4 +1,4 @@
-# Corestore v6
+# Corestore
 
 Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores.
 
@@ -9,7 +9,7 @@ Corestore provides:
 4. __Namespacing__ - You can share a single Corestore instance between multiple applications or components without worrying about naming collisions by creating "namespaces" (e.g. `corestore.namespace('my-app').get({ name: 'main' }) 
 
 ### Installation
-`npm install corestore@next`
+`npm install corestore`
 
 ### Usage
 A corestore instance can be constructed with a random-access-storage module, a function that returns a random-access-storage module given a path, or a string. If a string is specified, it will be assumed to be a path to a local storage directory:
