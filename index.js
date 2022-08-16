@@ -1,430 +1,105 @@
-const HypercoreProtocol = require('hypercore-protocol')
-const Nanoresource = require('nanoresource/emitter')
-const hypercore = require('hypercore')
-const hypercoreCrypto = require('hypercore-crypto')
-const datEncoding = require('dat-encoding')
-const maybe = require('call-me-maybe')
-
-const RefPool = require('refpool')
-const deriveSeed = require('derive-key')
-const derivedStorage = require('derived-key-storage')
+const { NanoresourcePromise: Nanoresource } = require('nanoresource-promise/emitter')
 const raf = require('random-access-file')
 
-const MASTER_KEY_FILENAME = 'master_key'
-const NAMESPACE = 'corestore'
-const NAMESPACE_SEPERATOR = ':'
+const Replicator = require('./lib/replicator')
+const Index = require('./lib/index')
+const Loader = require('./lib/loader')
+const errors = require('./lib/errors')
 
-class InnerCorestore extends Nanoresource {
+module.exports = class Corestore extends Nanoresource {
   constructor (storage, opts = {}) {
     super()
 
     if (typeof storage === 'string') storage = defaultStorage(storage)
-    if (typeof storage !== 'function') throw new Error('Storage should be a function or string')
+    if (typeof storage !== 'function') throw new errors.InvalidStorageError()
     this.storage = storage
 
-    this.opts = opts
+    this._namespace = opts._namespace || ['default']
+    this._db = opts._db || new Index(this.storage, opts)
+    this._loader = opts._loader || new Loader(this.storage, this._db, opts)
+    this._replicator = opts._replicator || new Replicator(this.loader, opts)
 
-    this._replicationStreams = []
-    this.cache = new RefPool({
-      maxSize: opts.cacheSize || 1000,
-      close: core => {
-        core.close(err => {
-          if (err) this.emit('error', err)
-        })
-      }
+    this._loader.on('core', core => {
+      this._replicator.inject(core)
     })
+    this._loader.on('error', err => this.emit('error', err))
 
-    // Generated in _open
-    this._masterKey = opts.masterKey || null
-    this._id = hypercoreCrypto.randomBytes(8)
-
-    // As discussed in https://github.com/andrewosh/corestore/issues/20
-    this.setMaxListeners(0)
+    // Eagerly open.
+    this.open()
   }
 
   // Nanoresource Methods
 
-  _open (cb) {
-    if (this._masterKey) return cb()
-    const keyStorage = this.storage(MASTER_KEY_FILENAME)
-    keyStorage.stat((err, st) => {
-      if (err && err.code !== 'ENOENT') return cb(err)
-      if (err || st.size < 32) {
-        this._masterKey = hypercoreCrypto.randomBytes(32)
-        return keyStorage.write(0, this._masterKey, err => {
-          if (err) return cb(err)
-          keyStorage.close(cb)
-        })
-      }
-      keyStorage.read(0, 32, (err, key) => {
-        if (err) return cb(err)
-        this._masterKey = key
-        keyStorage.close(cb)
-      })
-    })
+  async _open () {
+    await this._db.open()
+    return this._loader.open()
   }
 
-  _close (cb) {
-    let error = null
-    for (const { stream } of this._replicationStreams) {
-      stream.destroy()
-    }
-    if (!this.cache.size) return process.nextTick(cb, null)
-    let remaining = this.cache.size
-    for (const { value: core } of this.cache.entries.values()) {
-      core.close(err => {
-        if (err) error = err
-        if (!--remaining) {
-          if (error) return cb(error)
-          return cb(null)
-        }
-      })
-    }
+  async _close () {
+    await this._replicator.close()
+    await this._loader.close()
+    return this._db.close()
   }
 
   // Private Methods
 
-  _checkIfExists (dkey, cb) {
-    dkey = encodeKey(dkey)
-    if (this.cache.has(dkey)) return process.nextTick(cb, null, true)
-
-    const coreStorage = this.storage([dkey.slice(0, 2), dkey.slice(2, 4), dkey, 'key'].join('/'))
-
-    coreStorage.read(0, 32, (err, key) => {
-      if (err) return cb(err)
-      coreStorage.close(err => {
-        if (err) return cb(err)
-        if (!key) return cb(null, false)
-        return cb(null, true)
-      })
-    })
-  }
-
-  _injectIntoReplicationStreams (core) {
-    for (const { stream, opts } of this._replicationStreams) {
-      this._replicateCore(false, core, stream, { ...opts })
+  _validateGetOptions (opts) {
+    if (typeof opts === 'object') {
+      if (!Buffer.isBuffer(opts) && !opts.key && !opts.name) throw new errors.InvalidOptionsError()
+      else opts = { key: opts }
+    } else {
+      opts = { key: Buffer.from(opts, 'hex') }
     }
-  }
-
-  _replicateCore (isInitiator, core, mainStream, opts) {
-    if (!core) return
-    core.ready(function (err) {
-      if (err) return
-      core.replicate(isInitiator, {
-        ...opts,
-        stream: mainStream
-      })
-    })
-  }
-
-  _deriveSecret (namespace, name) {
-    return deriveSeed(namespace, this._masterKey, name)
-  }
-
-  _generateKeyPair (name) {
-    if (typeof name === 'string') name = Buffer.from(name)
-    else if (!name) name = hypercoreCrypto.randomBytes(32)
-
-    const seed = this._deriveSecret(NAMESPACE, name)
-
-    const keyPair = hypercoreCrypto.keyPair(seed)
-    const discoveryKey = hypercoreCrypto.discoveryKey(keyPair.publicKey)
-    return { name, publicKey: keyPair.publicKey, secretKey: keyPair.secretKey, discoveryKey }
-  }
-
-  _generateKeys (coreOpts) {
-    if (!coreOpts) coreOpts = {}
-    if (typeof coreOpts === 'string') coreOpts = Buffer.from(coreOpts, 'hex')
-    if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
-
-    if (coreOpts.keyPair) {
-      const publicKey = coreOpts.keyPair.publicKey
-      const secretKey = coreOpts.keyPair.secretKey
-      return {
-        publicKey,
-        secretKey,
-        discoveryKey: hypercoreCrypto.discoveryKey(publicKey),
-        name: null
-      }
-    }
-    if (coreOpts.key) {
-      const publicKey = decodeKey(coreOpts.key)
-      return {
-        publicKey,
-        secretKey: null,
-        discoveryKey: hypercoreCrypto.discoveryKey(publicKey),
-        name: null
-      }
-    }
-    if (coreOpts.default || coreOpts.name) {
-      if (!coreOpts.name) throw new Error('If the default option is set, a name must be specified.')
-      return this._generateKeyPair(coreOpts.name)
-    }
-    if (coreOpts.discoveryKey) {
-      const discoveryKey = decodeKey(coreOpts.discoveryKey)
-      return {
-        publicKey: null,
-        secretKey: null,
-        discoveryKey,
-        name: null
-      }
-    }
-    return this._generateKeyPair(null)
+    if (opts.key && opts.key.length !== 64) throw new errors.InvalidKeyError()
+    return opts
   }
 
   // Public Methods
 
-  isLoaded (coreOpts) {
-    const generatedKeys = this._generateKeys(coreOpts)
-    return this.cache.has(encodeKey(generatedKeys.discoveryKey))
-  }
-
-  isExternal (coreOpts) {
-    const generatedKeys = this._generateKeys(coreOpts)
-    const entry = this._cache.entry(encodeKey(generatedKeys.discoveryKey))
-    if (!entry) return false
-    return entry.refs !== 0
-  }
-
-  get (coreOpts = {}) {
-    if (!this.opened) throw new Error('Corestore.ready must be called before get.')
-
-    const self = this
-
-    const generatedKeys = this._generateKeys(coreOpts)
-    const { publicKey, discoveryKey, secretKey } = generatedKeys
-    const id = encodeKey(discoveryKey)
-
-    const cached = this.cache.get(id)
-    if (cached) return cached
-
-    const storageRoot = [id.slice(0, 2), id.slice(2, 4), id].join('/')
-
-    const keyStorage = derivedStorage(createStorage, (name, cb) => {
-      if (name) {
-        const res = this._generateKeyPair(name)
-        if (discoveryKey && (!discoveryKey.equals((res.discoveryKey)))) {
-          return cb(new Error('Stored an incorrect name.'))
-        }
-        return cb(null, res)
-      }
-      if (secretKey) return cb(null, generatedKeys)
-      if (publicKey) return cb(null, { name: null, publicKey, secretKey: null })
-      const err = new Error('Unknown key pair.')
-      err.unknownKeyPair = true
-      return cb(err)
-    })
-
-    const cacheOpts = { ...this.opts.cache }
-    if (coreOpts.cache) {
-      if (coreOpts.cache.data === false) delete cacheOpts.data
-      if (coreOpts.cache.tree === false) delete cacheOpts.tree
-    }
-    if (cacheOpts.data) cacheOpts.data = cacheOpts.data.namespace()
-    if (cacheOpts.tree) cacheOpts.tree = cacheOpts.tree.namespace()
-
-    const core = hypercore(name => {
-      if (name === 'key') return keyStorage.key
-      if (name === 'secret_key') return keyStorage.secretKey
-      return createStorage(name)
-    }, publicKey, {
-      ...this.opts,
-      ...coreOpts,
-      cache: cacheOpts,
-      createIfMissing: !!publicKey
-    })
-
-    this.cache.set(id, core)
-    core.ifAvailable.wait()
-
-    var errored = false
-    core.once('error', onerror)
-    core.once('ready', onready)
-    core.once('close', onclose)
-
-    return core
-
-    function onready () {
-      if (errored) return
-      self.emit('feed', core, coreOpts)
-      core.removeListener('error', onerror)
-      self._injectIntoReplicationStreams(core)
-      // TODO: nexttick here needed? prob not, just legacy
-      process.nextTick(() => core.ifAvailable.continue())
-    }
-
-    function onerror (err) {
-      errored = true
-      core.ifAvailable.continue()
-      self.cache.delete(id)
-      if (err.unknownKeyPair) {
-        // If an error occurs during creation by discovery key, then that core does not exist on disk.
-        // TODO: This should not throw, but should propagate somehow.
-      }
-    }
-
-    function onclose () {
-      self.cache.delete(id)
-    }
-
-    function createStorage (name) {
-      return self.storage(storageRoot + '/' + name)
-    }
-  }
-
-  replicate (isInitiator, cores, replicationOpts = {}) {
-    const self = this
-
-    const finalOpts = { ...this.opts, ...replicationOpts }
-    const mainStream = replicationOpts.stream || new HypercoreProtocol(isInitiator, { ...finalOpts })
-    var closed = false
-
-    for (const core of cores) {
-      this._replicateCore(isInitiator, core, mainStream, { ...finalOpts })
-    }
-
-    mainStream.on('discovery-key', ondiscoverykey)
-    mainStream.on('finish', onclose)
-    mainStream.on('end', onclose)
-    mainStream.on('close', onclose)
-
-    const streamState = { stream: mainStream, opts: finalOpts }
-    this._replicationStreams.push(streamState)
-
-    return mainStream
-
-    function ondiscoverykey (dkey) {
-      // Get will automatically add the core to all replication streams.
-      self._checkIfExists(dkey, (err, exists) => {
-        if (closed) return
-        if (err || !exists) return mainStream.close(dkey)
-        const passiveCore = self.get({ discoveryKey: dkey })
-        self._replicateCore(false, passiveCore, mainStream, { ...finalOpts })
-      })
-    }
-
-    function onclose () {
-      if (!closed) {
-        self._replicationStreams.splice(self._replicationStreams.indexOf(streamState), 1)
-        closed = true
-      }
-    }
-  }
-}
-
-class Corestore extends Nanoresource {
-  constructor (storage, opts = {}) {
-    super()
-
-    this.storage = storage
-    this.name = opts.name || 'default'
-    this.inner = opts.inner || new InnerCorestore(storage, opts)
-    this.cache = this.inner.cache
-    this.store = this // Backwards-compat for NamespacedCorestore
-
-    this._parent = opts.parent
-    this._isNamespaced = !!opts.name
-    this._openedCores = new Map()
-
-    const onfeed = feed => this.emit('feed', feed)
-    const onerror = err => this.emit('error', err)
-    this.inner.on('feed', onfeed)
-    this.inner.on('error', onerror)
-    this._unlisten = () => {
-      this.inner.removeListener('feed', onfeed)
-      this.inner.removeListener('error', onerror)
-    }
-  }
-
-  ready (cb) {
-    return maybe(cb, new Promise((resolve, reject) => {
-      this.open(err => {
-        if (err) return reject(err)
-        return resolve()
-      })
-    }))
-  }
-
-  // Nanoresource Methods
-
-  _open (cb) {
-    return this.inner.open(cb)
-  }
-
-  _close (cb) {
-    this._unlisten()
-    if (!this._parent) return this.inner.close(cb)
-    for (const dkey of this._openedCores) {
-      this.cache.decrement(dkey)
-    }
-    return process.nextTick(cb, null)
-  }
-
-  // Private Methods
-
-  _maybeIncrement (core) {
-    const id = encodeKey(core.discoveryKey)
-    if (this._openedCores.has(id)) return
-    this._openedCores.set(id, core)
-    this.cache.increment(id)
-  }
-
-  // Public Methods
-
-  get (coreOpts = {}) {
-    if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
-    const core = this.inner.get(coreOpts)
-    this._maybeIncrement(core)
-    return core
-  }
-
-  default (coreOpts = {}) {
-    if (Buffer.isBuffer(coreOpts)) coreOpts = { key: coreOpts }
-    return this.get({ ...coreOpts, name: this.name })
+  get (opts = {}) {
+    opts = this._validateGetOptions(opts)
+    if (!this.opened) this.open().catch(err => this.emit('error', err))
+    return this._loader.get(this._namespace, opts)
   }
 
   namespace (name) {
-    if (!name) name = hypercoreCrypto.randomBytes(32)
+    if (!name) throw new Error('A name must be provided as the first argument.')
     if (Buffer.isBuffer(name)) name = name.toString('hex')
-    name = this._isNamespaced ? this.name + NAMESPACE_SEPERATOR + name : name
     return new Corestore(this.storage, {
-      inner: this.inner,
-      parent: this,
-      name
+      namespace: [...this._namespace, name],
+      _db: this._db,
+      _loader: this._loader,
+      _replicator: this._replicator
     })
   }
 
   replicate (isInitiator, opts) {
-    const cores = !this._parent ? allReferenced(this.cache) : this._openedCores.values()
-    return this.inner.replicate(isInitiator, cores, opts)
+    return this._replicator.replicate(isInitiator, opts)
   }
 
-  isLoaded (coreOpts) {
-    return this.inner.isLoaded(coreOpts)
+  // Backup/Restore
+
+  async backup () {
+    if (!this.opened) await this.open()
+    const allNames = await this._db.getAllNames()
+    return {
+      masterKey: this._masterKey.toString('hex'),
+      names: [...allNames]
+    }
   }
 
-  isExternal (coreOpts) {
-    return this.inner.isExternal(coreOpts)
+  restore (manifest) {
+    return this._db.restore(manifest)
   }
 
-  list () {
-    return new Map([...this._openedCores])
+  static async restore (manifest, target) {
+    if (!manifest || !manifest.masterKey) throw new Error('Malformed manifest.')
+    const store = new this(target, {
+      masterKey: Buffer.from(manifest.masterKey, 'hex')
+    })
+    await store.restore(manifest)
+    return store
   }
-}
-
-function * allReferenced (cache) {
-  for (const entry of cache.entries.values()) {
-    if (entry.refs > 0) yield entry.value
-    continue
-  }
-}
-
-function encodeKey (key) {
-  return Buffer.isBuffer(key) ? datEncoding.encode(key) : key
-}
-
-function decodeKey (key) {
-  return (typeof key === 'string') ? datEncoding.decode(key) : key
 }
 
 function defaultStorage (dir) {
@@ -435,5 +110,3 @@ function defaultStorage (dir) {
     return raf(name, { directory: dir, lock: lock })
   }
 }
-
-module.exports = Corestore
