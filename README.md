@@ -34,14 +34,26 @@ If that Hypercore has previously been loaded, subsequent calls to `get` will ret
 
 All other options besides `name` and `key` will be forwarded to the Hypercore constructor.
 
-#### `const stream = store.replicate(opts)`
+#### `const stream = store.replicate(optsOrStream)`
 Creates a replication stream that's capable of replicating all Hypercores that are managed by the Corestore, assuming the remote peer has the correct capabilities.
 
 `opts` will be forwarded to Hypercore's `replicate` function.
 
 Corestore replicates in an "all-to-all" fashion, meaning that when replication begins, it will attempt to replicate every Hypercore that's currently loaded and in memory. These attempts will fail if the remote side doesn't have a Hypercore's capability -- Corestore replication does not exchange Hypercore keys.
 
-If the remote side dynamically adds a new Hypercore to the replication stream, Corestore will load and replicatethat core if possible.
+If the remote side dynamically adds a new Hypercore to the replication stream, Corestore will load and replicate that core if possible.
+
+Using [Hyperswarm](https://github.com/hyperswarm/hyperswarm) you can easily replicate corestores
+
+``` js
+const swarm = new Hyperswarm()
+
+// join the relevant topic
+swarm.join(...)
+
+// simply pass the connection stream to corestore
+swarm.on('connection', (connection) => store.replicate(connection))
+```
 
 #### `const store = store.namespace(name)`
 Create a new namespaced Corestore. Namespacing is useful if you're going to be sharing a single Corestore instance between many applications or components, as it prevents name collisions.
