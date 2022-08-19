@@ -5,6 +5,7 @@ const sodium = require('sodium-universal')
 const Hypercore = require('hypercore')
 const Xache = require('xache')
 const b4a = require('b4a')
+const Protomux = require('protomux')
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
@@ -255,20 +256,23 @@ module.exports = class Corestore extends EventEmitter {
 
   replicate (isInitiator, opts) {
     const isExternal = isStream(isInitiator) || !!(opts && opts.stream)
-    const stream = Hypercore.createProtocolStream(isInitiator, {
-      ...opts,
-      ondiscoverykey: discoveryKey => {
-        const core = this.get({ _discoveryKey: discoveryKey })
-        return core.ready().catch(safetyCatch)
-      }
-    })
+    const mux = Protomux.isProtomux(isInitiator) && isInitiator
+    const stream =
+      (mux && mux.stream) ||
+      Hypercore.createProtocolStream(isInitiator, {
+        ...opts,
+        ondiscoverykey: discoveryKey => {
+          const core = this.get({ _discoveryKey: discoveryKey })
+          return core.ready().catch(safetyCatch)
+        }
+      })
 
     const sessions = []
     for (const core of this.cores.values()) {
       if (!core.opened) continue // If the core is not opened, it will be replicated in preload.
       const session = core.session()
       sessions.push(session)
-      core.replicate(stream)
+      core.replicate(mux || stream)
     }
 
     const streamRecord = { stream, isExternal }
