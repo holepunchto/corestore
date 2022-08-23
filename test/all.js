@@ -40,6 +40,24 @@ test('basic get with custom keypair', async function (t) {
   t.ok(core2.writable)
 })
 
+test('get with createIfMissing=false throws if new core', async function (t) {
+  const store = new Corestore(ram)
+  const core1a = store.get({ name: 'core-1', createIfMissing: false })
+
+  await t.exception(core1a.ready(), 'No Hypercore is stored here')
+})
+
+test('get with createIfMissing=false works if no new core', async function (t) {
+  const store = new Corestore(ram)
+  const name = 'core-1'
+
+  const core1 = store.get({ name })
+  await core1.ready()
+
+  const core1Too = store.get({ name, createIfMissing: false })
+  await t.execution(core1Too.ready())
+})
+
 test('basic namespaces', async function (t) {
   const store = new Corestore(ram)
   const ns1 = store.namespace('ns1')
