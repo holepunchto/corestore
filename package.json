@@ -21,7 +21,7 @@
   "homepage": "https://github.com/hypercore-protocol/corestore#readme",
   "devDependencies": {
     "brittle": "^3.0.0",
-    "random-access-memory": "^4.0.0",
+    "random-access-memory": "^5.0.1",
     "standardx": "^7.0.0"
   },
   "dependencies": {
