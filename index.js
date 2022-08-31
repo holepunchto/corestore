@@ -179,7 +179,7 @@ module.exports = class Corestore extends EventEmitter {
       userData,
       auth,
       cache: opts.cache,
-      createIfMissing: !opts._discoveryKey,
+      createIfMissing: opts.createIfMissing === false ? false : !opts._discoveryKey,
       keyPair: keyPair && keyPair.publicKey
         ? {
             publicKey: keyPair.publicKey,

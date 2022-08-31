@@ -1,6 +1,6 @@
 {
   "name": "corestore",
-  "version": "6.0.2",
+  "version": "6.0.4",
   "description": "A Hypercore factory that simplifies managing collections of cores.",
   "main": "index.js",
   "scripts": {
@@ -21,7 +21,7 @@
   "homepage": "https://github.com/hypercore-protocol/corestore#readme",
   "devDependencies": {
     "brittle": "^3.0.0",
-    "random-access-memory": "^4.0.0",
+    "random-access-memory": "^5.0.1",
     "standardx": "^7.0.0"
   },
   "dependencies": {
