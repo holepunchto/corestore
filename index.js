@@ -297,14 +297,9 @@ module.exports = class Corestore extends EventEmitter {
 
   async _close () {
     await this._opening
-    if (!b4a.equals(this._namespace, DEFAULT_NAMESPACE)) {
-      // namespaces should not release resources on close
-      // TODO: Refactor the namespace close logic to actually close sessions with ref counting
-      return
-    }
     const closePromises = []
-    for (const core of this.cores.values()) {
-      closePromises.push(core.close())
+    for (const session of this._sessions) {
+      closePromises.push(session.close())
     }
     await Promise.allSettled(closePromises)
     for (const { stream, isExternal } of this._replicationStreams) {

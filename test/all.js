@@ -223,12 +223,16 @@ test('storage locking', async function (t) {
   }
 })
 
-test('closing a namespace does not close cores', async function (t) {
+test('cores close when their last referencing namespace closes', async function (t) {
   const store = new Corestore(ram)
   const ns1 = store.namespace('ns1')
   const core1 = ns1.get({ name: 'core-1' })
   const core2 = ns1.get({ name: 'core-2' })
   await Promise.all([core1.ready(), core2.ready()])
+
+  const core3 = store.get(core1.key)
+  const core4 = store.get(core2.key)
+  await Promise.all([core3.ready(), core4.ready()])
 
   await ns1.close()
 
