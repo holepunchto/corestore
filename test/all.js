@@ -223,12 +223,16 @@ test('storage locking', async function (t) {
   }
 })
 
-test('closing a namespace does not close cores', async function (t) {
+test('cores close when their last referencing namespace closes', async function (t) {
   const store = new Corestore(ram)
   const ns1 = store.namespace('ns1')
   const core1 = ns1.get({ name: 'core-1' })
   const core2 = ns1.get({ name: 'core-2' })
   await Promise.all([core1.ready(), core2.ready()])
+
+  const core3 = store.get(core1.key)
+  const core4 = store.get(core2.key)
+  await Promise.all([core3.ready(), core4.ready()])
 
   await ns1.close()
 
@@ -339,6 +343,61 @@ test('core caching after reopen regression', async function (t) {
   await core2.ready()
 
   t.pass('did not infinite loop')
+})
+
+test('closing a namespace does not close the root corestore', async function (t) {
+  const store = new Corestore(ram)
+  const core1 = store.get({ name: 'core-1' })
+  await core1.ready()
+
+  const ns = store.namespace('test-namespace')
+  const core2 = ns.get(core1.key)
+  await core2.ready()
+
+  await ns.close()
+  t.is(core1.closed, false)
+  t.is(core2.closed, true)
+})
+
+test('open a new session concurrently with a close should throw', async function (t) {
+  const store = new Corestore(ram)
+  const ns = store.namespace('test-namespace')
+
+  const core1 = ns.get({ name: 'core-1' })
+  store.close()
+
+  try {
+    await core1.ready()
+    t.fail('core1 should not have opened')
+  } catch {
+    t.pass('core1 did not open after corestore close')
+  }
+})
+
+test('closing the root corestore closes all sessions', async function (t) {
+  const store = new Corestore(ram)
+  const ns = store.namespace('test-namespace')
+
+  const core1 = store.get({ name: 'core-1' })
+  const core2 = store.get({ name: 'core-2' })
+  await Promise.all([core1.ready(), core2.ready()])
+
+  const core3 = ns.get(core1.key)
+  const core4 = ns.get(core2.key)
+  await Promise.all([core3.ready(), core4.ready()])
+
+  await store.close()
+
+  t.is(core1.closed, true)
+  t.is(core2.closed, true)
+
+  try {
+    const core5 = ns.get({ name: 'core-3' })
+    await core5.ready()
+    t.fail('core5 should not have opened after corestore close')
+  } catch (err) {
+    t.pass('core5 did not open after corestore close')
+  }
 })
 
 function tmpdir () {
