@@ -26,6 +26,8 @@ module.exports = class Corestore extends EventEmitter {
     this._keyStorage = null
     this._primaryKey = opts.primaryKey
     this._namespace = opts.namespace || DEFAULT_NAMESPACE
+
+    this._root = opts._root || this
     this._replicationStreams = opts._streams || []
     this._overwrite = opts.overwrite === true
 
@@ -37,6 +39,7 @@ module.exports = class Corestore extends EventEmitter {
 
     if (this._namespace.byteLength !== 32) throw new Error('Namespace must be a 32-byte Buffer or Uint8Array')
 
+    this._closing = null
     this._opening = opts._opening ? opts._opening.then(() => this._open()) : this._open()
     this._opening.catch(safetyCatch)
     this.ready = () => this._opening
@@ -187,6 +190,7 @@ module.exports = class Corestore extends EventEmitter {
         : null
     })
 
+    if (this._root._closing) throw new Error('The corestore is closed')
     this.cores.set(id, core)
     core.ready().then(() => {
       for (const { stream } of this._replicationStreams) {
@@ -288,6 +292,7 @@ module.exports = class Corestore extends EventEmitter {
       primaryKey: this._opening.then(() => this.primaryKey),
       namespace: generateNamespace(this._namespace, name),
       cache: this.cache,
+      _root: this._root,
       _opening: this._opening,
       _cores: this.cores,
       _streams: this._replicationStreams,
@@ -295,18 +300,25 @@ module.exports = class Corestore extends EventEmitter {
     })
   }
 
-  async _close () {
-    await this._opening
+  _closeNamespace () {
     const closePromises = []
     for (const session of this._sessions) {
       closePromises.push(session.close())
     }
-    await Promise.allSettled(closePromises)
+    return Promise.allSettled(closePromises)
+  }
+
+  async _closePrimaryNamespace () {
+    const closePromises = []
+    // At this point, the primary namespace is closing.
     for (const { stream, isExternal } of this._replicationStreams) {
       // Only close streams that were created by the Corestore
       if (!isExternal) stream.destroy()
     }
-    if (!this._keyStorage) return
+    for (const core of this.cores.values()) {
+      closePromises.push(forceClose(core))
+    }
+    await Promise.allSettled(closePromises)
     await new Promise((resolve, reject) => {
       this._keyStorage.close(err => {
         if (err) return reject(err)
@@ -315,10 +327,17 @@ module.exports = class Corestore extends EventEmitter {
     })
   }
 
+  async _close () {
+    await this._opening
+    await this._closeNamespace()
+    if (this._keyStorage) {
+      await this._closePrimaryNamespace()
+    }
+  }
+
   close () {
     if (this._closing) return this._closing
     this._closing = this._close()
-    this._closing.catch(safetyCatch)
     return this._closing
   }
 }
@@ -365,4 +384,8 @@ function defaultCache () {
 
 function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
+}
+
+function forceClose (core) {
+  return Promise.all(core.sessions.map(s => s.close()))
 }

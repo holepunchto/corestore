@@ -345,6 +345,35 @@ test('core caching after reopen regression', async function (t) {
   t.pass('did not infinite loop')
 })
 
+test('open a new session concurrently with a close should throw', async function (t) {
+  const store = new Corestore(ram)
+  const ns = store.namespace('test-namespace')
+
+  const core1 = ns.get({ name: 'core-1' })
+  store.close()
+
+  try {
+    await core1.ready()
+    t.fail('core1 should not have opened')
+  } catch {
+    t.pass('core1 did not open after corestore close')
+  }
+})
+
+test('closing the root corestore closes all sessions', async function (t) {
+  const store = new Corestore(ram)
+  const ns = store.namespace('test-namespace')
+
+  const core1 = ns.get({ name: 'core-1' })
+  const core2 = ns.get({ name: 'core-2' })
+  await Promise.all([core1.ready(), core2.ready()])
+
+  await store.close()
+
+  t.is(core1.closed, true)
+  t.is(core2.closed, true)
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
 }
