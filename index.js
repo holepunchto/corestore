@@ -230,6 +230,7 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   get (opts = {}) {
+    if (this._root._closing) throw new Error('The corestore is closed')
     opts = validateGetOptions(opts)
 
     if (opts.cache !== false) {

@@ -376,6 +376,14 @@ test('closing the root corestore closes all sessions', async function (t) {
 
   t.is(core1.closed, true)
   t.is(core2.closed, true)
+
+  try {
+    const core5 = ns.get({ name: 'core-3' })
+    await core5.ready()
+    t.fail('core5 should not have opened after corestore close')
+  } catch (err) {
+    t.pass('core5 did not open after corestore close')
+  }
 })
 
 function tmpdir () {
