@@ -364,9 +364,13 @@ test('closing the root corestore closes all sessions', async function (t) {
   const store = new Corestore(ram)
   const ns = store.namespace('test-namespace')
 
-  const core1 = ns.get({ name: 'core-1' })
-  const core2 = ns.get({ name: 'core-2' })
+  const core1 = store.get({ name: 'core-1' })
+  const core2 = store.get({ name: 'core-2' })
   await Promise.all([core1.ready(), core2.ready()])
+
+  const core3 = ns.get(core1.key)
+  const core4 = ns.get(core2.key)
+  await Promise.all([core3.ready(), core4.ready()])
 
   await store.close()
 
