@@ -345,6 +345,20 @@ test('core caching after reopen regression', async function (t) {
   t.pass('did not infinite loop')
 })
 
+test('closing a namespace does not close the root corestore', async function (t) {
+  const store = new Corestore(ram)
+  const core1 = store.get({ name: 'core-1' })
+  await core1.ready()
+
+  const ns = store.namespace('test-namespace')
+  const core2 = ns.get(core1.key)
+  await core2.ready()
+
+  await ns.close()
+  t.is(core1.closed, false)
+  t.is(core2.closed, true)
+})
+
 test('open a new session concurrently with a close should throw', async function (t) {
   const store = new Corestore(ram)
   const ns = store.namespace('test-namespace')
