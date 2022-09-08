@@ -331,7 +331,7 @@ module.exports = class Corestore extends EventEmitter {
   async _close () {
     await this._opening
     await this._closeNamespace()
-    if (this._keyStorage) {
+    if (this._root === this) {
       await this._closePrimaryNamespace()
     }
   }
