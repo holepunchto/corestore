@@ -31,7 +31,6 @@ module.exports = class Corestore extends EventEmitter {
     this._replicationStreams = opts._streams || []
     this._overwrite = opts.overwrite === true
 
-    this._streamSessions = opts._streamSessions || new Map()
     this._sessions = new Set() // sessions for THIS namespace
 
     this._findingPeersCount = 0
@@ -194,10 +193,7 @@ module.exports = class Corestore extends EventEmitter {
     this.cores.set(id, core)
     core.ready().then(() => {
       for (const { stream } of this._replicationStreams) {
-        const sessions = this._streamSessions.get(stream)
-        const session = core.session()
-        sessions.push(session)
-        core.replicate(stream)
+        core.replicate(stream, { session: true })
       }
     }, () => {
       this.cores.delete(id)
@@ -268,23 +264,18 @@ module.exports = class Corestore extends EventEmitter {
       }
     })
 
-    const sessions = []
     for (const core of this.cores.values()) {
       if (!core.opened) continue // If the core is not opened, it will be replicated in preload.
-      const session = core.session()
-      sessions.push(session)
-      core.replicate(stream)
+      core.replicate(stream, { session: true })
     }
 
     const streamRecord = { stream, isExternal }
     this._replicationStreams.push(streamRecord)
-    this._streamSessions.set(stream, sessions)
 
     stream.once('close', () => {
       this._replicationStreams.splice(this._replicationStreams.indexOf(streamRecord), 1)
-      this._streamSessions.delete(stream)
-      Promise.all(sessions.map(s => s.close())).catch(safetyCatch)
     })
+
     return stream
   }
 
@@ -296,8 +287,7 @@ module.exports = class Corestore extends EventEmitter {
       _root: this._root,
       _opening: this._opening,
       _cores: this.cores,
-      _streams: this._replicationStreams,
-      _streamSessions: this._streamSessions
+      _streams: this._replicationStreams
     })
   }
 
