@@ -13,12 +13,13 @@ const CORES_DIR = 'cores'
 const PRIMARY_KEY_FILE_NAME = 'primary-key'
 const USERDATA_NAME_KEY = 'corestore/name'
 const USERDATA_NAMESPACE_KEY = 'corestore/namespace'
+const POOL_SIZE = 512 // how many open fds to aim for before cycling them
 
 module.exports = class Corestore extends EventEmitter {
   constructor (storage, opts = {}) {
     super()
 
-    this.storage = Hypercore.defaultStorage(storage, { lock: PRIMARY_KEY_FILE_NAME })
+    this.storage = Hypercore.defaultStorage(storage, { lock: PRIMARY_KEY_FILE_NAME, poolSize: opts.poolSize || POOL_SIZE })
     this.cores = opts._cores || new Map()
     this.primaryKey = null
     this.cache = !!opts.cache
