@@ -19,17 +19,18 @@ module.exports = class Corestore extends EventEmitter {
   constructor (storage, opts = {}) {
     super()
 
+    const root = opts._root
+
     this.storage = Hypercore.defaultStorage(storage, { lock: PRIMARY_KEY_FILE_NAME, poolSize: opts.poolSize || POOL_SIZE })
-    this.cores = opts._cores || new Map()
-    this.primaryKey = null
+    this.cores = root ? root.cores : new Map()
     this.cache = !!opts.cache
+    this.primaryKey = opts.primaryKey || null
 
     this._keyStorage = null
-    this._primaryKey = opts.primaryKey
     this._namespace = opts.namespace || DEFAULT_NAMESPACE
 
-    this._root = opts._root || this
-    this._replicationStreams = opts._streams || []
+    this._root = root || this
+    this._replicationStreams = root ? root._replicationStreams : []
     this._overwrite = opts.overwrite === true
 
     this._sessions = new Set() // sessions for THIS namespace
@@ -40,9 +41,12 @@ module.exports = class Corestore extends EventEmitter {
     if (this._namespace.byteLength !== 32) throw new Error('Namespace must be a 32-byte Buffer or Uint8Array')
 
     this._closing = null
-    this._opening = opts._opening ? opts._opening.then(() => this._open()) : this._open()
+    this._opening = this._open()
     this._opening.catch(safetyCatch)
-    this.ready = () => this._opening
+  }
+
+  ready () {
+    return this._opening
   }
 
   findingPeers () {
@@ -73,16 +77,19 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   async _open () {
-    if (this._primaryKey) {
-      this.primaryKey = await this._primaryKey
-      return this.primaryKey
+    if (this._root !== this) {
+      await this._root._opening
+      this.primaryKey = this._root.primaryKey
+      return
     }
+
     this._keyStorage = this.storage(PRIMARY_KEY_FILE_NAME)
+
     this.primaryKey = await new Promise((resolve, reject) => {
       this._keyStorage.stat((err, st) => {
         if (err && err.code !== 'ENOENT') return reject(err)
         if (err || st.size < 32 || this._overwrite) {
-          const key = crypto.randomBytes(32)
+          const key = this.primaryKey || crypto.randomBytes(32)
           return this._keyStorage.write(0, key, err => {
             if (err) return reject(err)
             return resolve(key)
@@ -90,11 +97,11 @@ module.exports = class Corestore extends EventEmitter {
         }
         this._keyStorage.read(0, 32, (err, key) => {
           if (err) return reject(err)
+          if (this.primaryKey) return resolve(this.primaryKey)
           return resolve(key)
         })
       })
     })
-    return this.primaryKey
   }
 
   async _generateKeys (opts) {
@@ -150,7 +157,7 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   async _preload (opts) {
-    await this.ready()
+    if (!this.primaryKey) await this._opening
 
     const { discoveryKey, keyPair, auth } = await this._generateKeys(opts)
     const id = b4a.toString(discoveryKey, 'hex')
@@ -282,13 +289,9 @@ module.exports = class Corestore extends EventEmitter {
 
   namespace (name) {
     return new Corestore(this.storage, {
-      primaryKey: this._opening.then(() => this.primaryKey),
       namespace: generateNamespace(this._namespace, name),
       cache: this.cache,
-      _root: this._root,
-      _opening: this._opening,
-      _cores: this.cores,
-      _streams: this._replicationStreams
+      _root: this._root
     })
   }
 
