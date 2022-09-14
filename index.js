@@ -381,6 +381,7 @@ function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
 }
 
-function forceClose (core) {
+async function forceClose (core) {
+  await core.ready()
   return Promise.all(core.sessions.map(s => s.close()))
 }
