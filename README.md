@@ -66,6 +66,19 @@ const core1 = ns1.get({ name: 'main' }) // These will load different Hypercores
 const core2 = ns2.get({ name: 'main' })
 ```
 
+#### `const storeB = storeA.session(opts)`
+Create a new Corestore that shares resources with the original, like cache, cores, replication streams, and storage, while optionally resetting the namespace, overriding `primaryKey`.
+Useful when an application wants to accept an optional Corestore, but needs to maintain a predictable key derivation.
+
+`opts` are the same as the constructor options: 
+
+```js
+{
+  primaryKey, // Overrides the primaryKey for this session
+  namespace, // If set to null it will reset to the DEFAULT_NAMESPACE
+}
+```
+
 ### License
 MIT
 
