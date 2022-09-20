@@ -411,14 +411,14 @@ test('generated namespaces/keys match fixtures', async function (t) {
   await Promise.all([core1.ready(), core2.ready(), core3.ready()])
 
   // Ensure the generated namespaces are correct
-  t.snapshot(store._namespace)
-  t.snapshot(ns1._namespace)
-  t.snapshot(ns2._namespace)
+  t.snapshot(store._namespace, 'store namespace')
+  t.snapshot(ns1._namespace, 'ns1 namespace')
+  t.snapshot(ns2._namespace, 'ns2 namespace')
 
   // Ensure the core keys are correct
-  t.snapshot(core1.key)
-  t.snapshot(core2.key)
-  t.snapshot(core3.key)
+  t.snapshot(core1.key, 'core1 key')
+  t.snapshot(core2.key, 'core2 key')
+  t.snapshot(core3.key, 'core3 key')
 })
 
 function tmpdir () {
