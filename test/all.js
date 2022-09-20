@@ -400,6 +400,27 @@ test('closing the root corestore closes all sessions', async function (t) {
   }
 })
 
+test('generated namespaces/keys match fixtures', async function (t) {
+  const store = new Corestore(ram, { primaryKey: b4a.alloc(32) })
+  const ns1 = store.namespace('hello')
+  const ns2 = ns1.namespace('world')
+
+  const core1 = store.get({ name: 'core-1' })
+  const core2 = ns1.get({ name: 'core-2' })
+  const core3 = ns2.get({ name: 'core-3' })
+  await Promise.all([core1.ready(), core2.ready(), core3.ready()])
+
+  // Ensure the generated namespaces are correct
+  t.snapshot(store._namespace, 'store namespace')
+  t.snapshot(ns1._namespace, 'ns1 namespace')
+  t.snapshot(ns2._namespace, 'ns2 namespace')
+
+  // Ensure the core keys are correct
+  t.snapshot(core1.key, 'core1 key')
+  t.snapshot(core2.key, 'core2 key')
+  t.snapshot(core3.key, 'core3 key')
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
 }
