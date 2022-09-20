@@ -79,7 +79,7 @@ module.exports = class Corestore extends EventEmitter {
   async _open () {
     if (this._root !== this) {
       await this._root._opening
-      this.primaryKey = this.primaryKey || this._root.primaryKey
+      if (!this.primaryKey) this.primaryKey = this._root.primaryKey
       return
     }
 
