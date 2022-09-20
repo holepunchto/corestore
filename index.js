@@ -79,7 +79,7 @@ module.exports = class Corestore extends EventEmitter {
   async _open () {
     if (this._root !== this) {
       await this._root._opening
-      this.primaryKey = this._root.primaryKey
+      if (!this.primaryKey) this.primaryKey = this._root.primaryKey
       return
     }
 
@@ -288,10 +288,15 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   namespace (name) {
+    return this.session({ namespace: generateNamespace(this._namespace, name) })
+  }
+
+  session (opts) {
     return new Corestore(this.storage, {
-      namespace: generateNamespace(this._namespace, name),
+      namespace: this._namespace,
       cache: this.cache,
-      _root: this._root
+      _root: this._root,
+      ...opts
     })
   }
 

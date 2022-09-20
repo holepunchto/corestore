@@ -421,6 +421,43 @@ test('generated namespaces/keys match fixtures', async function (t) {
   t.snapshot(core3.key, 'core3 key')
 })
 
+test('session', async function (t) {
+  const store1 = new Corestore(ram)
+  const store2 = new Corestore(ram, { primaryKey: Buffer.alloc(32).fill('a') })
+
+  await store1.ready()
+  await store2.ready()
+
+  const ns1 = store1.namespace('a')
+  const ns2 = store2.namespace('a')
+  const ns3 = ns1.session({ primaryKey: store2.primaryKey })
+
+  const ns1core = ns1.get({ name: 'main' })
+  const ns2core = ns2.get({ name: 'main' })
+  const ns3core = ns3.get({ name: 'main' })
+  await Promise.all([ns1core.ready(), ns2core.ready(), ns3core.ready()])
+
+  t.unlike(ns3core.key, ns1core.key, 'override primaryKey')
+  t.alike(ns3core.key, ns2core.key, 'Inherit namespace')
+
+  const reset = ns3.session({ primaryKey: store1.primaryKey, namespace: null })
+
+  const core0 = store1.get({ name: 'main' })
+  const core1 = reset.get({ name: 'main' })
+  await Promise.all([core0.ready(), core1.ready()])
+
+  t.alike(core1.key, core0.key, 'reset namespace and primaryKey')
+
+  await core1.append('hello')
+
+  const remote = new Corestore(ram)
+  const s = remote.replicate(true)
+  s.pipe(store1.replicate(false)).pipe(s)
+
+  const clone1 = remote.get({ key: core1.key })
+  t.alike(await clone1.get(0), Buffer.from('hello'), 'share replication streams with a session')
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
 }
