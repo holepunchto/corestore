@@ -200,6 +200,7 @@ module.exports = class Corestore extends EventEmitter {
     if (this._root._closing) throw new Error('The corestore is closed')
     this.cores.set(id, core)
     core.ready().then(() => {
+      if (core.closing) return // extra safety here as ready is a tick after open
       for (const { stream } of this._replicationStreams) {
         core.replicate(stream, { session: true })
       }
@@ -273,7 +274,7 @@ module.exports = class Corestore extends EventEmitter {
     })
 
     for (const core of this.cores.values()) {
-      if (!core.opened) continue // If the core is not opened, it will be replicated in preload.
+      if (!core.opened || core.closing) continue // If the core is not opened, it will be replicated in preload.
       core.replicate(stream, { session: true })
     }
 
