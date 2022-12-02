@@ -210,6 +210,9 @@ module.exports = class Corestore extends EventEmitter {
     core.once('close', () => {
       this.cores.delete(id)
     })
+    core.on('conflict', (len, fork, proof) => {
+      this.emit('conflict', core, len, fork, proof)
+    })
 
     return { from: core, keyPair, auth }
   }
