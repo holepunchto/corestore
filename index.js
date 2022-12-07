@@ -201,6 +201,7 @@ module.exports = class Corestore extends EventEmitter {
     this.cores.set(id, core)
     core.ready().then(() => {
       if (core.closing) return // extra safety here as ready is a tick after open
+      this.emit('core-open', core)
       for (const { stream } of this._replicationStreams) {
         core.replicate(stream, { session: true })
       }
@@ -208,6 +209,7 @@ module.exports = class Corestore extends EventEmitter {
       this.cores.delete(id)
     })
     core.once('close', () => {
+      this.emit('core-close', core)
       this.cores.delete(id)
     })
     core.on('conflict', (len, fork, proof) => {
