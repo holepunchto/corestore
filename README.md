@@ -79,6 +79,14 @@ Useful when an application wants to accept an optional Corestore, but needs to m
 }
 ```
 
+#### `store.on('core-open', core)`
+Emitted when the first session for a core is opened.
+
+*Note: This core may close at any time, so treat it as a weak reference*
+
+#### `store.on('core-close', core)
+Emitted when the last session for a core is closed.
+
 ### License
 MIT
 
