@@ -458,6 +458,30 @@ test('session', async function (t) {
   t.alike(await clone1.get(0), Buffer.from('hello'), 'share replication streams with a session')
 })
 
+test('core-open and core-close events', async function (t) {
+  const store = new Corestore(ram)
+  const expected = [crypto.keyPair(), crypto.keyPair()]
+  let opened = 0
+  let closed = 0
+
+  store.on('core-open', core => {
+    t.alike(core.key, expected[opened++].publicKey)
+  })
+  store.on('core-close', core => {
+    t.alike(core.key, expected[closed++].publicKey)
+  })
+
+  const core1 = store.get(expected[0])
+  const core2 = store.get(expected[1])
+  await Promise.all([core1.ready(), core2.ready()])
+  t.is(opened, 2)
+
+  await core1.close()
+  t.is(closed, 1)
+  await core2.close()
+  t.is(closed, 2)
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
 }
