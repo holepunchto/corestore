@@ -45,7 +45,7 @@ Corestore replicates in an "all-to-all" fashion, meaning that when replication b
 
 If the remote side dynamically adds a new Hypercore to the replication stream, Corestore will load and replicate that core if possible.
 
-Using [Hyperswarm](https://github.com/hyperswarm/hyperswarm) you can easily replicate corestores
+Using [Hyperswarm](https://github.com/holepunchto/hyperswarm) you can easily replicate corestores
 
 ``` js
 const swarm = new Hyperswarm()
