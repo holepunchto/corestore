@@ -8,7 +8,7 @@ Corestore provides:
 1. __Key Derivation__ - All writable Hypercore keys are derived from a single master key and a user-provided name.
 2. __Session Handling__ - If a single Hypercore is loaded multiple times through the `get` method, the underlying resources will only be opened once (using Hypercore 10's new session feature). Once all sessions are closed, the resources will be released.
 3. __Storage Management__ - Hypercores can be stored in any random-access-storage instance, where they will be keyed by their discovery keys.
-4. __Namespacing__ - You can share a single Corestore instance between multiple applications or components without worrying about naming collisions by creating "namespaces" (e.g. `corestore.namespace('my-app').get({ name: 'main' }) 
+4. __Namespacing__ - You can share a single Corestore instance between multiple applications or components without worrying about naming collisions by creating "namespaces" (e.g. `corestore.namespace('my-app').get({ name: 'main' })`)
 
 ### Installation
 `npm install corestore`
@@ -45,7 +45,7 @@ Corestore replicates in an "all-to-all" fashion, meaning that when replication b
 
 If the remote side dynamically adds a new Hypercore to the replication stream, Corestore will load and replicate that core if possible.
 
-Using [Hyperswarm](https://github.com/hyperswarm/hyperswarm) you can easily replicate corestores
+Using [Hyperswarm](https://github.com/holepunchto/hyperswarm) you can easily replicate corestores
 
 ``` js
 const swarm = new Hyperswarm()
