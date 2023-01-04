@@ -5,6 +5,7 @@ const os = require('os')
 const path = require('path')
 const b4a = require('b4a')
 const sodium = require('sodium-universal')
+const fsp = require('fs/promises')
 
 const Corestore = require('..')
 
@@ -480,6 +481,47 @@ test('core-open and core-close events', async function (t) {
   t.is(closed, 1)
   await core2.close()
   t.is(closed, 2)
+})
+
+test('persistent primary key', async function (t) {
+  const dir = tmpdir()
+
+  const store = new Corestore(dir)
+  await store.ready()
+
+  const primaryKeyFile = await fsp.readFile(path.join(dir, 'primary-key'))
+  t.alike(primaryKeyFile, store.primaryKey)
+
+  try {
+    const store2 = new Corestore(dir, { persistentKey: false })
+    await store2.ready()
+    t.fail('should have failed')
+  } catch (error) {
+    t.is(error.code, 'ELOCKED', error.code)
+  }
+})
+
+test('non-persistent primary key', async function (t) {
+  const dir = tmpdir()
+
+  const store = new Corestore(dir, { persistentKey: false })
+  await store.ready()
+
+  const primaryKeyFile = await fsp.readFile(path.join(dir, 'primary-key'))
+  t.alike(primaryKeyFile, b4a.alloc(0))
+
+  try {
+    const store2 = new Corestore(dir, { persistentKey: false })
+    await store2.ready()
+    t.fail('should have failed')
+  } catch (error) {
+    t.is(error.code, 'ELOCKED', error.code)
+  }
+
+  const core = store.get({ name: 'core-1' })
+  await core.ready()
+
+  await fsp.readFile(path.join(dir, 'primary-key'))
 })
 
 function tmpdir () {

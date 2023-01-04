@@ -25,6 +25,7 @@ module.exports = class Corestore extends EventEmitter {
     this.cores = root ? root.cores : new Map()
     this.cache = !!opts.cache
     this.primaryKey = opts.primaryKey || null
+    this.persistentKey = opts.persistentKey !== false
 
     this._keyStorage = null
     this._namespace = opts.namespace || DEFAULT_NAMESPACE
@@ -90,7 +91,7 @@ module.exports = class Corestore extends EventEmitter {
         if (err && err.code !== 'ENOENT') return reject(err)
         if (err || st.size < 32 || this._overwrite) {
           const key = this.primaryKey || crypto.randomBytes(32)
-          return this._keyStorage.write(0, key, err => {
+          return this._keyStorage.write(0, this.persistentKey ? key : b4a.alloc(0), err => {
             if (err) return reject(err)
             return resolve(key)
           })
