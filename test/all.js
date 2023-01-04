@@ -537,6 +537,9 @@ test('re open with non-persistent primary key', async function (t) {
   await store2.ready()
   t.unlike(store2.primaryKey, key)
   await store2.close()
+
+  const primaryKeyFile = await fsp.readFile(path.join(dir, 'primary-key'))
+  t.alike(primaryKeyFile, b4a.alloc(0))
 })
 
 function tmpdir () {
