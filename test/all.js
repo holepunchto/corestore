@@ -499,6 +499,8 @@ test('persistent primary key', async function (t) {
   } catch (error) {
     t.is(error.code, 'ELOCKED', error.code)
   }
+
+  await store.close()
 })
 
 test('non-persistent primary key', async function (t) {
@@ -518,10 +520,22 @@ test('non-persistent primary key', async function (t) {
     t.is(error.code, 'ELOCKED', error.code)
   }
 
-  const core = store.get({ name: 'core-1' })
-  await core.ready()
+  await store.close()
+})
 
-  await fsp.readFile(path.join(dir, 'primary-key'))
+test('re open with non-persistent primary key', async function (t) {
+  const dir = tmpdir()
+
+  const key = randomBytes(32)
+
+  const store = new Corestore(dir, { primaryKey: key, persistentKey: false })
+  await store.ready()
+  t.alike(store.primaryKey, key)
+  await store.close()
+
+  const store2 = new Corestore(dir, { persistentKey: false })
+  await store2.ready()
+  t.alike(store2.primaryKey, b4a.alloc(0))
 })
 
 function tmpdir () {
