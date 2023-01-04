@@ -535,7 +535,8 @@ test('re open with non-persistent primary key', async function (t) {
 
   const store2 = new Corestore(dir, { persistentKey: false })
   await store2.ready()
-  t.alike(store2.primaryKey, b4a.alloc(0))
+  t.unlike(store2.primaryKey, key)
+  await store2.close()
 })
 
 function tmpdir () {
