@@ -509,9 +509,6 @@ test('non-persistent primary key', async function (t) {
   const store = new Corestore(dir, { persistentKey: false })
   await store.ready()
 
-  const primaryKeyFile = await fsp.readFile(path.join(dir, 'primary-key'))
-  t.alike(primaryKeyFile, b4a.alloc(0))
-
   try {
     const store2 = new Corestore(dir, { persistentKey: false })
     await store2.ready()
@@ -521,6 +518,9 @@ test('non-persistent primary key', async function (t) {
   }
 
   await store.close()
+
+  const primaryKeyFile = await fsp.readFile(path.join(dir, 'primary-key'))
+  t.alike(primaryKeyFile, b4a.alloc(0))
 })
 
 test('re open with non-persistent primary key', async function (t) {
