@@ -509,6 +509,9 @@ test('non-persistent primary key', async function (t) {
   const store = new Corestore(dir, { persistentKey: false })
   await store.ready()
 
+  t.is(store.primaryKey.length, 32)
+  t.unlike(store.primaryKey, b4a.alloc(32))
+
   try {
     const store2 = new Corestore(dir, { persistentKey: false })
     await store2.ready()
