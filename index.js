@@ -23,6 +23,8 @@ module.exports = class Corestore extends EventEmitter {
 
     this.storage = Hypercore.defaultStorage(storage, { lock: PRIMARY_KEY_FILE_NAME, poolSize: opts.poolSize || POOL_SIZE })
     this.cores = root ? root.cores : new Map()
+    this.active = root ? root.active : new Set()
+
     this.cache = !!opts.cache
     this.primaryKey = opts.primaryKey || null
 
@@ -202,15 +204,13 @@ module.exports = class Corestore extends EventEmitter {
     core.ready().then(() => {
       if (core.closing) return // extra safety here as ready is a tick after open
       this.emit('core-open', core)
-      for (const { stream } of this._replicationStreams) {
-        core.replicate(stream, { session: true })
-      }
     }, () => {
       this.cores.delete(id)
     })
     core.once('close', () => {
       this.emit('core-close', core)
       this.cores.delete(id)
+      this.active.delete(id)
     })
     core.on('conflict', (len, fork, proof) => {
       this.emit('conflict', core, len, fork, proof)
@@ -258,6 +258,14 @@ module.exports = class Corestore extends EventEmitter {
       this._findingPeers.push(core.findingPeers())
     }
 
+    core.onwait = () => {
+      const id = b4a.toString(core.discoveryKey, 'hex')
+      if (this.active.has(id)) return // The core is already replicating
+      this.active.add(id)
+      for (const { stream } of this._replicationStreams) {
+        core.replicate(stream, { session: true })
+      }
+    }
     core.once('close', () => {
       // technically better to also clear _findingPeers if we added it,
       // but the lifecycle for those are pretty short so prob not worth the complexity
@@ -273,13 +281,21 @@ module.exports = class Corestore extends EventEmitter {
     const stream = Hypercore.createProtocolStream(isInitiator, {
       ...opts,
       ondiscoverykey: discoveryKey => {
+        const id = b4a.toString(discoveryKey, 'hex')
         const core = this.get({ _discoveryKey: discoveryKey })
-        return core.ready().catch(safetyCatch)
+        return core.ready().then(() => {
+          if (this.active.has(id)) return
+          this.active.add(id)
+          for (const { stream } of this._replicationStreams) {
+            core.replicate(stream, { session: true })
+          }
+        },
+        err => safetyCatch(err))
       }
     })
 
-    for (const core of this.cores.values()) {
-      if (!core.opened || core.closing) continue // If the core is not opened, it will be replicated in preload.
+    for (const id of this.active) {
+      const core = this.cores.get(id)
       core.replicate(stream, { session: true })
     }
 
