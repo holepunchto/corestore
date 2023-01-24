@@ -60,6 +60,11 @@ module.exports = class Corestore extends EventEmitter {
     }
   }
 
+  _emitCore (name, core) {
+    this.emit(name, core)
+    if (this !== this._root) this._root.emit(name, core)
+  }
+
   _incFindingPeers () {
     if (++this._findingPeersCount !== 1) return
 
@@ -201,7 +206,7 @@ module.exports = class Corestore extends EventEmitter {
     this.cores.set(id, core)
     core.ready().then(() => {
       if (core.closing) return // extra safety here as ready is a tick after open
-      this.emit('core-open', core)
+      this._emitCore('core-open', core)
       for (const { stream } of this._replicationStreams) {
         core.replicate(stream, { session: true })
       }
@@ -209,7 +214,7 @@ module.exports = class Corestore extends EventEmitter {
       this.cores.delete(id)
     })
     core.once('close', () => {
-      this.emit('core-close', core)
+      this._emitCore('core-close', core)
       this.cores.delete(id)
     })
     core.on('conflict', (len, fork, proof) => {
