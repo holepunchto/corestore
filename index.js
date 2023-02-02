@@ -263,12 +263,15 @@ module.exports = class Corestore extends EventEmitter {
       this._findingPeers.push(core.findingPeers())
     }
 
-    core.once('close', () => {
+    const gc = () => {
       // technically better to also clear _findingPeers if we added it,
       // but the lifecycle for those are pretty short so prob not worth the complexity
       // as _decFindingPeers clear them all.
       this._sessions.delete(core)
-    })
+    }
+
+    core.ready().catch(gc)
+    core.once('close', gc)
 
     return core
   }
