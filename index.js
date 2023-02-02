@@ -32,6 +32,8 @@ module.exports = class Corestore extends EventEmitter {
     this._root = root || this
     this._replicationStreams = root ? root._replicationStreams : []
     this._overwrite = opts.overwrite === true
+    this._autoReplicate = opts._autoReplicate !== false
+    this._ondiscoverykey = opts._ondiscoverykey
 
     this._sessions = new Set() // sessions for THIS namespace
 
@@ -278,14 +280,20 @@ module.exports = class Corestore extends EventEmitter {
     const stream = Hypercore.createProtocolStream(isInitiator, {
       ...opts,
       ondiscoverykey: discoveryKey => {
+        if (this._ondiscoverykey) this._ondiscoverykey(discoveryKey) // Helper to test channels opened by remote.
         const core = this.get({ _discoveryKey: discoveryKey })
-        return core.ready().catch(safetyCatch)
+        return core.ready()
+          // Replicate on demand (this._preload doesn't pass 'passive replication' test)
+          .then(() => !this._autoReplicate && core.replicate(stream))
+          .catch(safetyCatch)
       }
     })
 
-    for (const core of this.cores.values()) {
-      if (!core.opened || core.closing) continue // If the core is not opened, it will be replicated in preload.
-      core.replicate(stream, { session: true })
+    if (this._autoReplicate) {
+      for (const core of this.cores.values()) {
+        if (!core.opened || core.closing) continue // If the core is not opened, it will be replicated in preload.
+        core.replicate(stream, { session: true })
+      }
     }
 
     const streamRecord = { stream, isExternal }

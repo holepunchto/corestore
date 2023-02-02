@@ -482,6 +482,31 @@ test('core-open and core-close events', async function (t) {
   t.is(closed, 2)
 })
 
+test('passive replication', async function (t) {
+  const serverRecieved = new Set()
+  const clientRecieved = new Set()
+
+  const store1 = new Corestore(ram, {
+    _autoReplicate: false,
+    _ondiscoverykey: serverRecieved.add.bind(serverRecieved)
+  })
+  const store2 = new Corestore(ram, {
+    _ondiscoverykey: clientRecieved.add.bind(serverRecieved)
+  })
+
+  const core1 = store1.get({ name: 'core-1' })
+  await core1.append('hello')
+
+  const s = store1.replicate(true)
+  s.pipe(store2.replicate(false)).pipe(s)
+
+  const core2 = store2.get({ key: core1.key })
+  t.alike(await core2.get(0), Buffer.from('hello'))
+
+  t.is(serverRecieved.size, 1, 'server got 1 channel opened by client')
+  t.is(clientRecieved.size, 0, 'client got no channel opened by server')
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
 }
