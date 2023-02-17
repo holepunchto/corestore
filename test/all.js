@@ -5,6 +5,7 @@ const os = require('os')
 const path = require('path')
 const b4a = require('b4a')
 const sodium = require('sodium-universal')
+const fsp = require('fs/promises')
 
 const Corestore = require('..')
 
@@ -480,6 +481,68 @@ test('core-open and core-close events', async function (t) {
   t.is(closed, 1)
   await core2.close()
   t.is(closed, 2)
+})
+
+test('persistent primary key', async function (t) {
+  const dir = tmpdir()
+
+  const store = new Corestore(dir)
+  await store.ready()
+
+  try {
+    const store2 = new Corestore(dir, { persistentKey: false })
+    await store2.ready()
+    t.fail('should have failed')
+  } catch (error) {
+    t.is(error.code, 'ELOCKED', error.code)
+  }
+
+  await store.close()
+
+  const primaryKeyFile = await fsp.readFile(path.join(dir, 'primary-key'))
+  t.alike(primaryKeyFile, store.primaryKey)
+})
+
+test('non-persistent primary key', async function (t) {
+  const dir = tmpdir()
+
+  const store = new Corestore(dir, { persistentKey: false })
+  await store.ready()
+
+  t.is(store.primaryKey.length, 32)
+  t.unlike(store.primaryKey, b4a.alloc(32))
+
+  try {
+    const store2 = new Corestore(dir, { persistentKey: false })
+    await store2.ready()
+    t.fail('should have failed')
+  } catch (error) {
+    t.is(error.code, 'ELOCKED', error.code)
+  }
+
+  await store.close()
+
+  const primaryKeyFile = await fsp.readFile(path.join(dir, 'primary-key'))
+  t.alike(primaryKeyFile, b4a.alloc(0))
+})
+
+test('re open with non-persistent primary key', async function (t) {
+  const dir = tmpdir()
+
+  const key = randomBytes(32)
+
+  const store = new Corestore(dir, { primaryKey: key, persistentKey: false })
+  await store.ready()
+  t.alike(store.primaryKey, key)
+  await store.close()
+
+  const store2 = new Corestore(dir, { persistentKey: false })
+  await store2.ready()
+  t.unlike(store2.primaryKey, key)
+  await store2.close()
+
+  const primaryKeyFile = await fsp.readFile(path.join(dir, 'primary-key'))
+  t.alike(primaryKeyFile, b4a.alloc(0))
 })
 
 function tmpdir () {
