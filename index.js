@@ -27,6 +27,7 @@ module.exports = class Corestore extends EventEmitter {
     this.primaryKey = opts.primaryKey || null
 
     this._keyStorage = null
+    this._bootstrap = opts.bootstrap
     this._namespace = opts.namespace || DEFAULT_NAMESPACE
 
     this._root = root || this
@@ -81,10 +82,17 @@ module.exports = class Corestore extends EventEmitter {
     }
   }
 
+  async _openNamespaceFromBootstrap () {
+    const ns = await this._bootstrap.getUserData(USERDATA_NAMESPACE_KEY)
+    if (!ns) throw new Error('Invalid bootstrap namespace')
+    this._namespace = ns
+  }
+
   async _open () {
     if (this._root !== this) {
       await this._root._opening
       if (!this.primaryKey) this.primaryKey = this._root.primaryKey
+      if (this._bootstrap) await this._openNamespaceFromBootstrap()
       return
     }
 
@@ -107,6 +115,8 @@ module.exports = class Corestore extends EventEmitter {
         })
       })
     })
+
+    if (this._bootstrap) await this._openNamespaceFromBootstrap()
   }
 
   async _generateKeys (opts) {
@@ -302,7 +312,11 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   namespace (name) {
-    return this.session({ namespace: generateNamespace(this._namespace, name) })
+    if (name instanceof Hypercore) {
+      return this.session({ bootstrap: name })
+    } else {
+      return this.session({ namespace: generateNamespace(this._namespace, name) })
+    }
   }
 
   session (opts) {
