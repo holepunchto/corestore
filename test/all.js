@@ -495,7 +495,7 @@ test('opening a namespace from a bootstrap core', async function (t) {
   t.alike(bootstrap1.key, bootstrap2.key)
 })
 
-test('opening a namespace from an invalid bootstrap core', async function (t) {
+test('opening a namespace from an invalid bootstrap core is a no-op', async function (t) {
   const store1 = new Corestore(ram)
   const store2 = new Corestore(ram)
 
@@ -505,8 +505,9 @@ test('opening a namespace from an invalid bootstrap core', async function (t) {
 
   const bootstrap2 = store2.get(bootstrap1.key)
   const ns2 = store2.namespace(bootstrap2)
+  await ns2.ready()
 
-  await t.exception(ns2.ready())
+  t.alike(ns2._namespace, store2._namespace)
 })
 
 function tmpdir () {

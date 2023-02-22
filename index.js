@@ -84,8 +84,9 @@ module.exports = class Corestore extends EventEmitter {
 
   async _openNamespaceFromBootstrap () {
     const ns = await this._bootstrap.getUserData(USERDATA_NAMESPACE_KEY)
-    if (!ns) throw new Error('Invalid bootstrap namespace')
-    this._namespace = ns
+    if (ns) {
+      this._namespace = ns
+    }
   }
 
   async _open () {
