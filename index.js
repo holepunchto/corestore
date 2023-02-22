@@ -315,7 +315,7 @@ module.exports = class Corestore extends EventEmitter {
   namespace (name) {
     if (name instanceof Hypercore) {
       return this.session({ bootstrap: name })
-    } 
+    }
     return this.session({ namespace: generateNamespace(this._namespace, name) })
   }
 
