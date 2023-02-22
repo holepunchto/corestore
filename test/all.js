@@ -482,6 +482,34 @@ test('core-open and core-close events', async function (t) {
   t.is(closed, 2)
 })
 
+test('opening a namespace from a bootstrap core', async function (t) {
+  const store = new Corestore(ram)
+
+  const ns1 = store.namespace(crypto.randomBytes(32))
+  const bootstrap1 = ns1.get({ name: 'bootstrap' })
+
+  const ns2 = store.namespace(bootstrap1)
+  const bootstrap2 = ns2.get({ name: 'bootstrap' })
+
+  await Promise.all([bootstrap1.ready(), bootstrap2.ready()])
+  t.alike(bootstrap1.key, bootstrap2.key)
+})
+
+test('opening a namespace from an invalid bootstrap core is a no-op', async function (t) {
+  const store1 = new Corestore(ram)
+  const store2 = new Corestore(ram)
+
+  const ns1 = store1.namespace(crypto.randomBytes(32))
+  const bootstrap1 = ns1.get({ name: 'bootstrap' })
+  await bootstrap1.ready()
+
+  const bootstrap2 = store2.get(bootstrap1.key)
+  const ns2 = store2.namespace(bootstrap2)
+  await ns2.ready()
+
+  t.alike(ns2._namespace, store2._namespace)
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
 }
