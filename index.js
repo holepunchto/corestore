@@ -27,7 +27,7 @@ module.exports = class Corestore extends EventEmitter {
     this.primaryKey = opts.primaryKey || null
 
     this._keyStorage = null
-    this._bootstrap = opts.bootstrap || null
+    this._bootstrap = opts._bootstrap || null
     this._namespace = opts.namespace || DEFAULT_NAMESPACE
 
     this._root = root || this
@@ -314,7 +314,7 @@ module.exports = class Corestore extends EventEmitter {
 
   namespace (name) {
     if (name instanceof Hypercore) {
-      return this.session({ bootstrap: name })
+      return this.session({ _bootstrap: name })
     }
     return this.session({ namespace: generateNamespace(this._namespace, name) })
   }
