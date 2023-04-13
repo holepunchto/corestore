@@ -35,6 +35,7 @@ module.exports = class Corestore extends EventEmitter {
     this._overwrite = opts.overwrite === true
 
     this._sessions = new Set() // sessions for THIS namespace
+    this._rootStoreSessions = new Set()
 
     this._findingPeersCount = 0
     this._findingPeers = []
@@ -63,6 +64,11 @@ module.exports = class Corestore extends EventEmitter {
 
   _emitCore (name, core) {
     this.emit(name, core)
+    for (const session of this._root._rootStoreSessions) {
+      if (session !== this) {
+        session.emit(name, core)
+      }
+    }
     if (this !== this._root) this._root.emit(name, core)
   }
 
@@ -320,12 +326,14 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   session (opts) {
-    return new Corestore(this.storage, {
+    const session = new Corestore(this.storage, {
       namespace: this._namespace,
       cache: this.cache,
       _root: this._root,
       ...opts
     })
+    if (this === this._root) this._rootStoreSessions.add(session)
+    return session
   }
 
   _closeNamespace () {
@@ -357,6 +365,9 @@ module.exports = class Corestore extends EventEmitter {
 
   async _close () {
     await this._opening
+    if (this._root._rootStoreSessions.has(this)) {
+      this._root._rootStoreSessions.delete(this)
+    }
     await this._closeNamespace()
     if (this._root === this) {
       await this._closePrimaryNamespace()
