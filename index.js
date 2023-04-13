@@ -365,9 +365,7 @@ module.exports = class Corestore extends EventEmitter {
 
   async _close () {
     await this._opening
-    if (this._root._rootStoreSessions.has(this)) {
-      this._root._rootStoreSessions.delete(this)
-    }
+    this._root._rootStoreSessions.delete(this)
     await this._closeNamespace()
     if (this._root === this) {
       await this._closePrimaryNamespace()
