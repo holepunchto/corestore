@@ -482,6 +482,42 @@ test('core-open and core-close events', async function (t) {
   t.is(closed, 2)
 })
 
+test('core-open and core-close are emitted on all root sessions', async function (t) {
+  const root = new Corestore(ram)
+  const session = root.session()
+  const namespace = root.namespace('test-namespace')
+
+  const rootExpected = [crypto.keyPair(), crypto.keyPair()]
+  const sessionExpected = [...rootExpected]
+  const namespaceExpected = [...rootExpected]
+
+  root.on('core-open', core => {
+    t.alike(core.key, rootExpected.shift().publicKey)
+  })
+  session.on('core-open', core => {
+    t.alike(core.key, sessionExpected.shift().publicKey)
+  })
+  namespace.on('core-open', core => {
+    t.alike(core.key, namespaceExpected.shift().publicKey)
+  })
+
+  const core1 = namespace.get(rootExpected[0])
+  const core2 = namespace.get(rootExpected[1])
+  await Promise.all([core1.ready(), core2.ready()])
+
+  t.is(rootExpected.length, 0)
+  t.is(sessionExpected.length, 0)
+  t.is(namespaceExpected.length, 0)
+})
+
+test('root store sessions are cleaned up', async function (t) {
+  const root = new Corestore(ram)
+  const session1 = root.session()
+  t.is(root._rootStoreSessions.size, 1)
+  await session1.close()
+  t.is(root._rootStoreSessions.size, 0)
+})
+
 test('opening a namespace from a bootstrap core', async function (t) {
   const store = new Corestore(ram)
 
