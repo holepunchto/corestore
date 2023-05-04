@@ -90,7 +90,7 @@ module.exports = class Corestore extends ReadyResource {
 
   async _open () {
     if (this._root !== this) {
-      await this._root._opening
+      await this._root.ready()
       if (!this.primaryKey) this.primaryKey = this._root.primaryKey
       if (this._bootstrap) await this._openNamespaceFromBootstrap()
       return
@@ -212,7 +212,7 @@ module.exports = class Corestore extends ReadyResource {
         : null
     })
 
-    if (this._root._closing) throw new Error('The corestore is closed')
+    if (this._root.closing) throw new Error('The corestore is closed')
     this.cores.set(id, core)
     core.ready().then(() => {
       if (core.closing) return // extra safety here as ready is a tick after open
@@ -255,7 +255,7 @@ module.exports = class Corestore extends ReadyResource {
   }
 
   get (opts = {}) {
-    if (this._root._closing) throw new Error('The corestore is closed')
+    if (this._root.closing) throw new Error('The corestore is closed')
     opts = validateGetOptions(opts)
 
     if (opts.cache !== false) {
