@@ -1,10 +1,10 @@
-const { EventEmitter } = require('events')
 const safetyCatch = require('safety-catch')
 const crypto = require('hypercore-crypto')
 const sodium = require('sodium-universal')
 const Hypercore = require('hypercore')
 const Xache = require('xache')
 const b4a = require('b4a')
+const ReadyResource = require('ready-resource')
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
@@ -15,7 +15,7 @@ const USERDATA_NAME_KEY = 'corestore/name'
 const USERDATA_NAMESPACE_KEY = 'corestore/namespace'
 const POOL_SIZE = 512 // how many open fds to aim for before cycling them
 
-module.exports = class Corestore extends EventEmitter {
+module.exports = class Corestore extends ReadyResource {
   constructor (storage, opts = {}) {
     super()
 
@@ -41,14 +41,7 @@ module.exports = class Corestore extends EventEmitter {
     this._findingPeers = []
 
     if (this._namespace.byteLength !== 32) throw new Error('Namespace must be a 32-byte Buffer or Uint8Array')
-
-    this._closing = null
-    this._opening = this._open()
-    this._opening.catch(safetyCatch)
-  }
-
-  ready () {
-    return this._opening
+    this.ready().catch(safetyCatch)
   }
 
   findingPeers () {
@@ -97,7 +90,7 @@ module.exports = class Corestore extends EventEmitter {
 
   async _open () {
     if (this._root !== this) {
-      await this._root._opening
+      await this._root.ready()
       if (!this.primaryKey) this.primaryKey = this._root.primaryKey
       if (this._bootstrap) await this._openNamespaceFromBootstrap()
       return
@@ -179,7 +172,7 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   async _preload (opts) {
-    if (!this.primaryKey) await this._opening
+    if (!this.primaryKey) await this.ready()
 
     const { discoveryKey, keyPair, auth } = await this._generateKeys(opts)
     const id = b4a.toString(discoveryKey, 'hex')
@@ -219,7 +212,7 @@ module.exports = class Corestore extends EventEmitter {
         : null
     })
 
-    if (this._root._closing) throw new Error('The corestore is closed')
+    if (this._root.closing) throw new Error('The corestore is closed')
     this.cores.set(id, core)
     core.ready().then(() => {
       if (core.closing) return // extra safety here as ready is a tick after open
@@ -242,7 +235,7 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   async createKeyPair (name, namespace = this._namespace) {
-    if (!this.primaryKey) await this._opening
+    if (!this.primaryKey) await this.ready()
 
     const keyPair = {
       publicKey: b4a.allocUnsafe(sodium.crypto_sign_PUBLICKEYBYTES),
@@ -262,7 +255,7 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   get (opts = {}) {
-    if (this._root._closing) throw new Error('The corestore is closed')
+    if (this._root.closing) throw new Error('The corestore is closed')
     opts = validateGetOptions(opts)
 
     if (opts.cache !== false) {
@@ -364,18 +357,11 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   async _close () {
-    await this._opening
     this._root._rootStoreSessions.delete(this)
     await this._closeNamespace()
     if (this._root === this) {
       await this._closePrimaryNamespace()
     }
-  }
-
-  close () {
-    if (this._closing) return this._closing
-    this._closing = this._close()
-    return this._closing
   }
 }
 
