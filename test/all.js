@@ -5,6 +5,7 @@ const os = require('os')
 const path = require('path')
 const b4a = require('b4a')
 const sodium = require('sodium-universal')
+const NoiseSecretStream = require('@hyperswarm/secret-stream')
 
 const Corestore = require('..')
 
@@ -131,6 +132,31 @@ test('replicating cores using discovery key hook', async function (t) {
 
   const s = store1.replicate(true, { live: true })
   s.pipe(store2.replicate(false, { live: true })).pipe(s)
+
+  const core2 = store2.get(key)
+  t.alike(await core2.get(0), Buffer.from('hello'))
+})
+
+test('muxing multiple cores and using discovery key hook', async function (t) {
+  const dir = tmpdir()
+  let store1 = new Corestore(dir)
+  const store2 = new Corestore(ram)
+  const storeOther = new Corestore(ram)
+
+  const n1 = new NoiseSecretStream(true)
+  const n2 = new NoiseSecretStream(false)
+  n1.rawStream.pipe(n2.rawStream).pipe(n1.rawStream)
+
+  const core = store1.get({ name: 'main' })
+  await core.append('hello')
+  const key = core.key
+
+  await store1.close()
+  store1 = new Corestore(dir)
+
+  storeOther.replicate(n1)
+  store1.replicate(n1)
+  store2.replicate(n2)
 
   const core2 = store2.get(key)
   t.alike(await core2.get(0), Buffer.from('hello'))
