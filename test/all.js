@@ -6,7 +6,6 @@ const path = require('path')
 const b4a = require('b4a')
 const sodium = require('sodium-universal')
 const fs = require('fs')
-const Path = require('path')
 
 const Corestore = require('..')
 
@@ -556,8 +555,8 @@ test('hypercore purge behaviour interacts correctly with corestore', async funct
   await core.append('block 0')
 
   const key = b4a.toString(core.discoveryKey, 'hex')
-  const coreParentDir = Path.join(dir, 'cores', key.slice(0, 2), key.slice(2, 4))
-  const coreDir = Path.join(coreParentDir, key)
+  const coreParentDir = path.join(dir, 'cores', key.slice(0, 2), key.slice(2, 4))
+  const coreDir = path.join(coreParentDir, key)
 
   t.is(fs.existsSync(coreDir), true) // Sanity check
   await core.purge()
@@ -566,7 +565,7 @@ test('hypercore purge behaviour interacts correctly with corestore', async funct
 
   // The intermediate dirs are removed too, if they are now empty
   t.is(fs.existsSync(coreParentDir), false)
-  t.is(fs.existsSync(Path.dirname(coreParentDir)), false)
+  t.is(fs.existsSync(path.dirname(coreParentDir)), false)
 
   t.is(fs.existsSync(dir), true) // Sanity check: corestore itself not cleaned up
 })
