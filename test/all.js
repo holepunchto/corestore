@@ -5,6 +5,8 @@ const os = require('os')
 const path = require('path')
 const b4a = require('b4a')
 const sodium = require('sodium-universal')
+const fs = require('fs')
+const Path = require('path')
 
 const Corestore = require('..')
 
@@ -544,6 +546,29 @@ test('opening a namespace from an invalid bootstrap core is a no-op', async func
   await ns2.ready()
 
   t.alike(ns2._namespace, store2._namespace)
+})
+
+test('hypercore purge behaviour interacts correctly with corestore', async function (t) {
+  const dir = tmpdir()
+
+  const store = new Corestore(dir)
+  const core = store.get({ name: 'core' })
+  await core.append('block 0')
+
+  const key = b4a.toString(core.discoveryKey, 'hex')
+  const coreParentDir = Path.join(dir, 'cores', key.slice(0, 2), key.slice(2, 4))
+  const coreDir = Path.join(coreParentDir, key)
+
+  t.is(fs.existsSync(coreDir), true) // Sanity check
+  await core.purge()
+
+  t.is(fs.existsSync(coreDir), false)
+
+  // The intermediate dirs are removed too, if they are now empty
+  t.is(fs.existsSync(coreParentDir), false)
+  t.is(fs.existsSync(Path.dirname(coreParentDir)), false)
+
+  t.is(fs.existsSync(dir), true) // Sanity check: corestore itself not cleaned up
 })
 
 function tmpdir () {
