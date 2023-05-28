@@ -90,5 +90,5 @@ Emitted when the first session for a core is opened.
 Emitted when the last session for a core is closed.
 
 ### License
-MIT
+Apache-2.0
 
