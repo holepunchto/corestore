@@ -570,6 +570,20 @@ test('hypercore purge behaviour interacts correctly with corestore', async funct
   t.is(fs.existsSync(dir), true) // Sanity check: corestore itself not cleaned up
 })
 
+test('writable option', async function (t) {
+  t.plan(2)
+
+  const store = new Corestore(ram)
+
+  const b = store.get({ name: 'b', writable: false })
+  await b.ready()
+  t.is(b.writable, false)
+
+  const a = store.get({ name: 'a' })
+  await a.ready()
+  t.is(a.writable, true)
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
 }
