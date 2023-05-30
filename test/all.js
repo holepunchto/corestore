@@ -570,18 +570,57 @@ test('hypercore purge behaviour interacts correctly with corestore', async funct
   t.is(fs.existsSync(dir), true) // Sanity check: corestore itself not cleaned up
 })
 
-test('writable option', async function (t) {
-  t.plan(2)
+test('basic writable option', async function (t) {
+  t.plan(3)
 
   const store = new Corestore(ram)
 
-  const b = store.get({ name: 'b', writable: false })
-  await b.ready()
-  t.is(b.writable, false)
-
-  const a = store.get({ name: 'a' })
+  const a = store.get({ name: 'a', writable: false })
   await a.ready()
-  t.is(a.writable, true)
+  t.is(a.writable, false)
+
+  try {
+    await a.append('abc')
+    t.fail('Should have failed')
+  } catch (err) {
+    t.is(err.code, 'SESSION_NOT_WRITABLE')
+  }
+
+  const b = store.get({ name: 'b' })
+  await b.ready()
+  t.is(b.writable, true)
+  await b.append('abc')
+})
+
+test('core inherits writable option from the session', async function (t) {
+  t.plan(2)
+
+  const store = new Corestore(ram)
+  const s = store.session({ writable: false })
+
+  const core = s.get({ name: 'a' })
+  await core.ready()
+  t.is(core.writable, false)
+
+  try {
+    await core.append('abc')
+    t.fail('Should have failed')
+  } catch (err) {
+    t.is(err.code, 'SESSION_NOT_WRITABLE')
+  }
+})
+
+test('store session inherits writable option from parent session', async function (t) {
+  t.plan(1)
+
+  const store = new Corestore(ram)
+
+  const s = store.session({ writable: false })
+  const s1 = s.session()
+
+  const core = s1.get({ name: 'a' })
+  await core.ready()
+  t.is(core.writable, false)
 })
 
 function tmpdir () {
