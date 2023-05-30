@@ -135,6 +135,8 @@ test('replicating cores using discovery key hook', async function (t) {
 
   const core2 = store2.get(key)
   t.alike(await core2.get(0), Buffer.from('hello'))
+
+  // TODO: store1 needs closing
 })
 
 test('nested namespaces', async function (t) {
@@ -183,6 +185,8 @@ test('writable core loaded from name userData', async function (t) {
   t.is(core.length, 2)
   t.alike(await core.get(0), Buffer.from('hello'))
   t.alike(await core.get(1), Buffer.from('world'))
+
+  // TODO: store needs closing
 })
 
 test('writable core loaded from name and namespace userData', async function (t) {
@@ -207,6 +211,8 @@ test('writable core loaded from name and namespace userData', async function (t)
   t.is(core.length, 2)
   t.alike(await core.get(0), Buffer.from('hello'))
   t.alike(await core.get(1), Buffer.from('world'))
+
+  // TODO: store needs closing
 })
 
 test('storage locking', async function (t) {
@@ -222,6 +228,8 @@ test('storage locking', async function (t) {
   } catch {
     t.pass('dir was locked')
   }
+
+  // TODO: store1 and store2 needs closing
 })
 
 test('cores close when their last referencing namespace closes', async function (t) {
@@ -568,6 +576,8 @@ test('hypercore purge behaviour interacts correctly with corestore', async funct
   t.is(fs.existsSync(path.dirname(coreParentDir)), false)
 
   t.is(fs.existsSync(dir), true) // Sanity check: corestore itself not cleaned up
+
+  // TODO: store needs closing
 })
 
 test('basic writable option', async function (t) {
@@ -624,6 +634,7 @@ test('store session inherits writable option from parent session', async functio
 })
 
 function tmpdir (name) {
+  // TODO: needs teardown
   name = name ? (name + '-') : ''
   return path.join(os.tmpdir(), 'corestore-' + name + Math.random().toString(16).slice(2))
 }
