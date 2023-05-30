@@ -119,7 +119,7 @@ test('replicating cores created after replication begins', async function (t) {
 })
 
 test('replicating cores using discovery key hook', async function (t) {
-  const dir = tmpdir()
+  const dir = tmpdir('a')
   let store1 = new Corestore(dir)
   const store2 = new Corestore(ram)
 
@@ -162,7 +162,7 @@ test('core uncached when all sessions close', async function (t) {
 })
 
 test('writable core loaded from name userData', async function (t) {
-  const dir = tmpdir()
+  const dir = tmpdir('b')
 
   let store = new Corestore(dir)
   let core = store.get({ name: 'main' })
@@ -186,7 +186,7 @@ test('writable core loaded from name userData', async function (t) {
 })
 
 test('writable core loaded from name and namespace userData', async function (t) {
-  const dir = tmpdir()
+  const dir = tmpdir('c')
 
   let store = new Corestore(dir)
   let core = store.namespace('ns1').get({ name: 'main' })
@@ -210,7 +210,7 @@ test('writable core loaded from name and namespace userData', async function (t)
 })
 
 test('storage locking', async function (t) {
-  const dir = tmpdir()
+  const dir = tmpdir('d')
 
   const store1 = new Corestore(dir)
   await store1.ready()
@@ -548,7 +548,7 @@ test('opening a namespace from an invalid bootstrap core is a no-op', async func
 })
 
 test('hypercore purge behaviour interacts correctly with corestore', async function (t) {
-  const dir = tmpdir()
+  const dir = tmpdir('e')
 
   const store = new Corestore(dir)
   const core = store.get({ name: 'core' })
@@ -623,8 +623,9 @@ test('store session inherits writable option from parent session', async functio
   t.is(core.writable, false)
 })
 
-function tmpdir () {
-  return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
+function tmpdir (name) {
+  name = name ? (name + '-') : ''
+  return path.join(os.tmpdir(), 'corestore-' + name + Math.random().toString(16).slice(2))
 }
 
 function randomBytes (n) {
