@@ -33,6 +33,7 @@ module.exports = class Corestore extends ReadyResource {
     this._root = root || this
     this._replicationStreams = root ? root._replicationStreams : []
     this._overwrite = opts.overwrite === true
+    this._readonly = opts.writable === false
 
     this._sessions = new Set() // sessions for THIS namespace
     this._rootStoreSessions = new Set()
@@ -263,6 +264,7 @@ module.exports = class Corestore extends ReadyResource {
     }
 
     const core = new Hypercore(null, {
+      writable: !this._readonly,
       ...opts,
       name: null,
       preload: () => this._preload(opts)
@@ -311,17 +313,18 @@ module.exports = class Corestore extends ReadyResource {
     return stream
   }
 
-  namespace (name) {
+  namespace (name, opts) {
     if (name instanceof Hypercore) {
-      return this.session({ _bootstrap: name })
+      return this.session({ ...opts, _bootstrap: name })
     }
-    return this.session({ namespace: generateNamespace(this._namespace, name) })
+    return this.session({ ...opts, namespace: generateNamespace(this._namespace, name) })
   }
 
   session (opts) {
     const session = new Corestore(this.storage, {
       namespace: this._namespace,
       cache: this.cache,
+      writable: !this._readonly,
       _root: this._root,
       ...opts
     })
