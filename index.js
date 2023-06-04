@@ -191,7 +191,8 @@ module.exports = class Corestore extends ReadyResource {
     const { discoveryKey, keyPair, auth } = await this._generateKeys(opts)
     const id = b4a.toString(discoveryKey, 'hex')
 
-    const rw = (opts && opts.exclusive && opts.writable !== false && keyPair) ? this._getLock(id) : null
+    const readonly = opts.writable === false || this._readonly
+    const rw = (opts && opts.exclusive && !readonly && keyPair) ? this._getLock(id) : null
 
     if (rw) await rw.write.lock()
     const release = () => {
