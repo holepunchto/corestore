@@ -2,7 +2,7 @@ const test = require('brittle')
 const RAM = require('random-access-memory')
 const Corestore = require('../')
 
-test('basic exlusive mode', async function (t) {
+test('basic exclusive mode', async function (t) {
   t.plan(1)
 
   const store = new Corestore(RAM)
@@ -95,6 +95,24 @@ test('exclusive always releases the lock on close', async function (t) {
   a3.ready().then(() => {
     t.pass('a3 got it')
     r.close()
+  })
+
+  await new Promise(resolve => setImmediate(resolve))
+  await a1.close()
+})
+
+test('session on an exclusive mode core', async function (t) {
+  t.plan(1)
+
+  const store = new Corestore(RAM)
+
+  const a1 = store.get({ name: 'a', exclusive: true })
+  const a2 = store.get({ name: 'a', exclusive: true })
+
+  await a1.ready()
+
+  a2.session().ready().then(() => {
+    t.ok(a1.closed, 'waited for other exclusive session')
   })
 
   await new Promise(resolve => setImmediate(resolve))
