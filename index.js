@@ -5,6 +5,7 @@ const Hypercore = require('hypercore')
 const Xache = require('xache')
 const b4a = require('b4a')
 const ReadyResource = require('ready-resource')
+const RW = require('read-write-mutexify')
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
@@ -37,6 +38,7 @@ module.exports = class Corestore extends ReadyResource {
 
     this._sessions = new Set() // sessions for THIS namespace
     this._rootStoreSessions = new Set()
+    this._locks = root ? root._locks : new Map()
 
     this._findingPeersCount = 0
     this._findingPeers = []
@@ -172,20 +174,45 @@ module.exports = class Corestore extends ReadyResource {
     core.writable = true
   }
 
+  _getLock (id) {
+    let rw = this._locks.get(id)
+
+    if (!rw) {
+      rw = new RW()
+      this._locks.set(id, rw)
+    }
+
+    return rw
+  }
+
   async _preload (opts) {
     if (!this.primaryKey) await this.ready()
 
     const { discoveryKey, keyPair, auth } = await this._generateKeys(opts)
     const id = b4a.toString(discoveryKey, 'hex')
 
-    while (this.cores.has(id)) {
-      const existing = this.cores.get(id)
-      if (existing.opened && !existing.closing) return { from: existing, keyPair, auth }
-      if (existing.closing) {
-        await existing.close()
-      } else {
-        await existing.ready().catch(safetyCatch)
+    const rw = (opts && opts.exclusive && opts.writable !== false && keyPair) ? this._getLock(id) : null
+
+    if (rw) await rw.write.lock()
+    const release = () => {
+      if (!rw) return
+      rw.write.unlock()
+      if (rw.write.waiting === 0) this._locks.delete(id)
+    }
+
+    try {
+      while (this.cores.has(id)) {
+        const existing = this.cores.get(id)
+        if (existing.opened && !existing.closing) return { from: existing, keyPair, auth }
+        if (existing.closing) {
+          await existing.close()
+        } else {
+          await existing.ready().catch(safetyCatch)
+        }
       }
+    } catch (err) {
+      release()
+      throw err
     }
 
     const userData = {}
@@ -223,10 +250,12 @@ module.exports = class Corestore extends ReadyResource {
       }
     }, () => {
       this.cores.delete(id)
+      release()
     })
     core.once('close', () => {
       this._emitCore('core-close', core)
       this.cores.delete(id)
+      release()
     })
     core.on('conflict', (len, fork, proof) => {
       this.emit('conflict', core, len, fork, proof)

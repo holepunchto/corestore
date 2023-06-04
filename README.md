@@ -29,12 +29,15 @@ Create a new Corestore instance.
 
 `storage` can be either a random-access-storage module, a string, or a function that takes a path and returns an random-access-storage instance.
 
-#### `const core = store.get(key | { name: 'a-name', ...hypercoreOpts})`
+#### `const core = store.get(key | { name: 'a-name', exclusive, ...hypercoreOpts})`
 Loads a Hypercore, either by name (if the `name` option is provided), or from the provided key (if the first argument is a Buffer, or if the `key` options is set).
 
 If that Hypercore has previously been loaded, subsequent calls to `get` will return a new Hypercore session on the existing core.
 
-All other options besides `name` and `key` will be forwarded to the Hypercore constructor.
+If you set the `exclusive` option and you are opening a writable session it will wait for all other exclusive writable to close before
+opening the Hypercore effectively meaning any op on the core will wait until its exclusive.
+
+All other options besides `name` and `key` and `exclusive` will be forwarded to the Hypercore constructor.
 
 #### `const stream = store.replicate(optsOrStream)`
 Creates a replication stream that's capable of replicating all Hypercores that are managed by the Corestore, assuming the remote peer has the correct capabilities.
