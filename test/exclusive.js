@@ -72,3 +72,31 @@ test('exclusive only for writable sessions', async function (t) {
   await new Promise(resolve => setImmediate(resolve))
   await a1.close()
 })
+
+test('exclusive always releases the lock on close', async function (t) {
+  t.plan(2)
+
+  const store = new Corestore(RAM)
+
+  const a1 = store.get({ name: 'a', exclusive: true })
+  await a1.ready()
+
+  const r = store.get({ key: a1.key, writable: false })
+  await r.ready()
+
+  const a2 = store.get({ key: a1.key, exclusive: true })
+  const a3 = store.get({ key: a1.key, exclusive: true })
+
+  a2.ready().then(() => {
+    t.pass('a2 got it')
+    a2.close()
+  })
+
+  a3.ready().then(() => {
+    t.pass('a3 got it')
+    r.close()
+  })
+
+  await new Promise(resolve => setImmediate(resolve))
+  await a1.close()
+})

@@ -185,35 +185,17 @@ module.exports = class Corestore extends ReadyResource {
     return rw
   }
 
-  async _preload (opts) {
-    if (!this.primaryKey) await this.ready()
+  async _preload (id, keys, opts) {
+    const { keyPair, auth } = keys
 
-    const { discoveryKey, keyPair, auth } = await this._generateKeys(opts)
-    const id = b4a.toString(discoveryKey, 'hex')
-
-    const readonly = opts.writable === false || this._readonly
-    const rw = (opts && opts.exclusive && !readonly && keyPair) ? this._getLock(id) : null
-
-    if (rw) await rw.write.lock()
-    const release = () => {
-      if (!rw) return
-      rw.write.unlock()
-      if (rw.write.waiting === 0) this._locks.delete(id)
-    }
-
-    try {
-      while (this.cores.has(id)) {
-        const existing = this.cores.get(id)
-        if (existing.opened && !existing.closing) return { from: existing, keyPair, auth }
-        if (existing.closing) {
-          await existing.close()
-        } else {
-          await existing.ready().catch(safetyCatch)
-        }
+    while (this.cores.has(id)) {
+      const existing = this.cores.get(id)
+      if (existing.opened && !existing.closing) return { from: existing, keyPair, auth }
+      if (existing.closing) {
+        await existing.close()
+      } else {
+        await existing.ready().catch(safetyCatch)
       }
-    } catch (err) {
-      release()
-      throw err
     }
 
     const userData = {}
@@ -251,12 +233,10 @@ module.exports = class Corestore extends ReadyResource {
       }
     }, () => {
       this.cores.delete(id)
-      release()
     })
     core.once('close', () => {
       this._emitCore('core-close', core)
       this.cores.delete(id)
-      release()
     })
     core.on('conflict', (len, fork, proof) => {
       this.emit('conflict', core, len, fork, proof)
@@ -292,12 +272,27 @@ module.exports = class Corestore extends ReadyResource {
     if (opts.cache !== false) {
       opts.cache = opts.cache === true || (this.cache && !opts.cache) ? defaultCache() : opts.cache
     }
+    if (this._readonly && opts.writable !== false) {
+      opts.writable = false
+    }
+
+    let rw = null
+    let id = null
 
     const core = new Hypercore(null, {
-      writable: !this._readonly,
       ...opts,
       name: null,
-      preload: () => this._preload(opts)
+      preload: async () => {
+        if (!this.primaryKey) await this.ready()
+
+        const keys = await this._generateKeys(opts)
+
+        id = b4a.toString(keys.discoveryKey, 'hex')
+        rw = (opts.exclusive && opts.writable !== false && keys.keyPair) ? this._getLock(id) : null
+
+        if (rw) await rw.write.lock()
+        return await this._preload(id, keys, opts)
+      }
     })
 
     this._sessions.add(core)
@@ -310,6 +305,10 @@ module.exports = class Corestore extends ReadyResource {
       // but the lifecycle for those are pretty short so prob not worth the complexity
       // as _decFindingPeers clear them all.
       this._sessions.delete(core)
+
+      if (!rw) return
+      rw.write.unlock()
+      if (rw.write.waiting === 0) this._locks.delete(id)
     }
 
     core.ready().catch(gc)
