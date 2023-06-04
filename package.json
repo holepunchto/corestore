@@ -1,6 +1,6 @@
 {
   "name": "corestore",
-  "version": "6.8.0",
+  "version": "6.8.1",
   "description": "A Hypercore factory that simplifies managing collections of cores.",
   "main": "index.js",
   "scripts": {
