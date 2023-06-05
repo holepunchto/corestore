@@ -118,3 +118,19 @@ test('session on an exclusive mode core', async function (t) {
   await new Promise(resolve => setImmediate(resolve))
   await a1.close()
 })
+
+test('sessions on exclusive mode do not deadlock', async function (t) {
+  const store = new Corestore(RAM)
+
+  const ex = store.get({ name: 'a', exclusive: true })
+  const s1 = ex.session()
+  const s2 = ex.session()
+
+  await s1.ready()
+  await s2.ready()
+  await ex.ready()
+
+  t.ok(ex.writable)
+  t.ok(s1.writable)
+  t.ok(s2.writable)
+})
