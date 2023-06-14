@@ -623,6 +623,22 @@ test('store session inherits writable option from parent session', async functio
   t.is(core.writable, false)
 })
 
+test('session get after closing it', async function (t) {
+  const store = new Corestore(ram)
+
+  const session = store.session()
+  await session.close()
+
+  try {
+    session.get({ name: 'a' })
+    t.fail('Should have failed')
+  } catch (err) {
+    t.is(err.message, 'The corestore is closed')
+  }
+
+  await store.close()
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
 }

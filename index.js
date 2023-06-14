@@ -266,7 +266,7 @@ module.exports = class Corestore extends ReadyResource {
   }
 
   get (opts = {}) {
-    if (this._root.closing) throw new Error('The corestore is closed')
+    if (this.closing || this._root.closing) throw new Error('The corestore is closed')
     opts = validateGetOptions(opts)
 
     if (opts.cache !== false) {
