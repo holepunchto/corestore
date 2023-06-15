@@ -1,10 +1,11 @@
-const { EventEmitter } = require('events')
 const safetyCatch = require('safety-catch')
 const crypto = require('hypercore-crypto')
 const sodium = require('sodium-universal')
 const Hypercore = require('hypercore')
 const Xache = require('xache')
 const b4a = require('b4a')
+const ReadyResource = require('ready-resource')
+const RW = require('read-write-mutexify')
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
@@ -15,13 +16,13 @@ const USERDATA_NAME_KEY = 'corestore/name'
 const USERDATA_NAMESPACE_KEY = 'corestore/namespace'
 const POOL_SIZE = 512 // how many open fds to aim for before cycling them
 
-module.exports = class Corestore extends EventEmitter {
+module.exports = class Corestore extends ReadyResource {
   constructor (storage, opts = {}) {
     super()
 
     const root = opts._root
 
-    this.storage = Hypercore.defaultStorage(storage, { lock: PRIMARY_KEY_FILE_NAME, poolSize: opts.poolSize || POOL_SIZE })
+    this.storage = Hypercore.defaultStorage(storage, { lock: PRIMARY_KEY_FILE_NAME, poolSize: opts.poolSize || POOL_SIZE, rmdir: true })
     this.cores = root ? root.cores : new Map()
     this.cache = !!opts.cache
     this.primaryKey = opts.primaryKey || null
@@ -33,23 +34,19 @@ module.exports = class Corestore extends EventEmitter {
     this._root = root || this
     this._replicationStreams = root ? root._replicationStreams : []
     this._overwrite = opts.overwrite === true
+    this._readonly = opts.writable === false
     this._autoReplicate = opts._autoReplicate !== false
     this._ondiscoverykey = opts._ondiscoverykey
 
     this._sessions = new Set() // sessions for THIS namespace
+    this._rootStoreSessions = new Set()
+    this._locks = root ? root._locks : new Map()
 
     this._findingPeersCount = 0
     this._findingPeers = []
 
     if (this._namespace.byteLength !== 32) throw new Error('Namespace must be a 32-byte Buffer or Uint8Array')
-
-    this._closing = null
-    this._opening = this._open()
-    this._opening.catch(safetyCatch)
-  }
-
-  ready () {
-    return this._opening
+    this.ready().catch(safetyCatch)
   }
 
   findingPeers () {
@@ -65,6 +62,11 @@ module.exports = class Corestore extends EventEmitter {
 
   _emitCore (name, core) {
     this.emit(name, core)
+    for (const session of this._root._rootStoreSessions) {
+      if (session !== this) {
+        session.emit(name, core)
+      }
+    }
     if (this !== this._root) this._root.emit(name, core)
   }
 
@@ -93,7 +95,7 @@ module.exports = class Corestore extends EventEmitter {
 
   async _open () {
     if (this._root !== this) {
-      await this._root._opening
+      await this._root.ready()
       if (!this.primaryKey) this.primaryKey = this._root.primaryKey
       if (this._bootstrap) await this._openNamespaceFromBootstrap()
       return
@@ -174,11 +176,19 @@ module.exports = class Corestore extends EventEmitter {
     core.writable = true
   }
 
-  async _preload (opts) {
-    if (!this.primaryKey) await this._opening
+  _getLock (id) {
+    let rw = this._locks.get(id)
 
-    const { discoveryKey, keyPair, auth } = await this._generateKeys(opts)
-    const id = b4a.toString(discoveryKey, 'hex')
+    if (!rw) {
+      rw = new RW()
+      this._locks.set(id, rw)
+    }
+
+    return rw
+  }
+
+  async _preload (id, keys, opts) {
+    const { keyPair, auth } = keys
 
     while (this.cores.has(id)) {
       const existing = this.cores.get(id)
@@ -215,7 +225,7 @@ module.exports = class Corestore extends EventEmitter {
         : null
     })
 
-    if (this._root._closing) throw new Error('The corestore is closed')
+    if (this._root.closing) throw new Error('The corestore is closed')
     this.cores.set(id, core)
     core.ready().then(() => {
       if (core.closing) return // extra safety here as ready is a tick after open
@@ -238,7 +248,7 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   async createKeyPair (name, namespace = this._namespace) {
-    if (!this.primaryKey) await this._opening
+    if (!this.primaryKey) await this.ready()
 
     const keyPair = {
       publicKey: b4a.allocUnsafe(sodium.crypto_sign_PUBLICKEYBYTES),
@@ -258,17 +268,33 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   get (opts = {}) {
-    if (this._root._closing) throw new Error('The corestore is closed')
+    if (this.closing || this._root.closing) throw new Error('The corestore is closed')
     opts = validateGetOptions(opts)
 
     if (opts.cache !== false) {
       opts.cache = opts.cache === true || (this.cache && !opts.cache) ? defaultCache() : opts.cache
     }
+    if (this._readonly && opts.writable !== false) {
+      opts.writable = false
+    }
+
+    let rw = null
+    let id = null
 
     const core = new Hypercore(null, {
       ...opts,
       name: null,
-      preload: () => this._preload(opts)
+      preload: async () => {
+        if (!this.primaryKey) await this.ready()
+
+        const keys = await this._generateKeys(opts)
+
+        id = b4a.toString(keys.discoveryKey, 'hex')
+        rw = (opts.exclusive && opts.writable !== false && keys.keyPair) ? this._getLock(id) : null
+
+        if (rw) await rw.write.lock()
+        return await this._preload(id, keys, opts)
+      }
     })
 
     this._sessions.add(core)
@@ -281,6 +307,10 @@ module.exports = class Corestore extends EventEmitter {
       // but the lifecycle for those are pretty short so prob not worth the complexity
       // as _decFindingPeers clear them all.
       this._sessions.delete(core)
+
+      if (!rw) return
+      rw.write.unlock()
+      if (rw.write.waiting === 0) this._locks.delete(id)
     }
 
     core.ready().catch(gc)
@@ -320,20 +350,23 @@ module.exports = class Corestore extends EventEmitter {
     return stream
   }
 
-  namespace (name) {
+  namespace (name, opts) {
     if (name instanceof Hypercore) {
-      return this.session({ _bootstrap: name })
+      return this.session({ ...opts, _bootstrap: name })
     }
-    return this.session({ namespace: generateNamespace(this._namespace, name) })
+    return this.session({ ...opts, namespace: generateNamespace(this._namespace, name) })
   }
 
   session (opts) {
-    return new Corestore(this.storage, {
+    const session = new Corestore(this.storage, {
       namespace: this._namespace,
       cache: this.cache,
+      writable: !this._readonly,
       _root: this._root,
       ...opts
     })
+    if (this === this._root) this._rootStoreSessions.add(session)
+    return session
   }
 
   _closeNamespace () {
@@ -364,17 +397,11 @@ module.exports = class Corestore extends EventEmitter {
   }
 
   async _close () {
-    await this._opening
+    this._root._rootStoreSessions.delete(this)
     await this._closeNamespace()
     if (this._root === this) {
       await this._closePrimaryNamespace()
     }
-  }
-
-  close () {
-    if (this._closing) return this._closing
-    this._closing = this._close()
-    return this._closing
   }
 }
 

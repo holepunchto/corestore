@@ -5,6 +5,7 @@ const os = require('os')
 const path = require('path')
 const b4a = require('b4a')
 const sodium = require('sodium-universal')
+const fs = require('fs')
 
 const Corestore = require('..')
 
@@ -482,6 +483,42 @@ test('core-open and core-close events', async function (t) {
   t.is(closed, 2)
 })
 
+test('core-open and core-close are emitted on all root sessions', async function (t) {
+  const root = new Corestore(ram)
+  const session = root.session()
+  const namespace = root.namespace('test-namespace')
+
+  const rootExpected = [crypto.keyPair(), crypto.keyPair()]
+  const sessionExpected = [...rootExpected]
+  const namespaceExpected = [...rootExpected]
+
+  root.on('core-open', core => {
+    t.alike(core.key, rootExpected.shift().publicKey)
+  })
+  session.on('core-open', core => {
+    t.alike(core.key, sessionExpected.shift().publicKey)
+  })
+  namespace.on('core-open', core => {
+    t.alike(core.key, namespaceExpected.shift().publicKey)
+  })
+
+  const core1 = namespace.get(rootExpected[0])
+  const core2 = namespace.get(rootExpected[1])
+  await Promise.all([core1.ready(), core2.ready()])
+
+  t.is(rootExpected.length, 0)
+  t.is(sessionExpected.length, 0)
+  t.is(namespaceExpected.length, 0)
+})
+
+test('root store sessions are cleaned up', async function (t) {
+  const root = new Corestore(ram)
+  const session1 = root.session()
+  t.is(root._rootStoreSessions.size, 1)
+  await session1.close()
+  t.is(root._rootStoreSessions.size, 0)
+})
+
 test('opening a namespace from a bootstrap core', async function (t) {
   const store = new Corestore(ram)
 
@@ -508,6 +545,98 @@ test('opening a namespace from an invalid bootstrap core is a no-op', async func
   await ns2.ready()
 
   t.alike(ns2._namespace, store2._namespace)
+})
+
+test('hypercore purge behaviour interacts correctly with corestore', async function (t) {
+  const dir = tmpdir()
+
+  const store = new Corestore(dir)
+  const core = store.get({ name: 'core' })
+  await core.append('block 0')
+
+  const key = b4a.toString(core.discoveryKey, 'hex')
+  const coreParentDir = path.join(dir, 'cores', key.slice(0, 2), key.slice(2, 4))
+  const coreDir = path.join(coreParentDir, key)
+
+  t.is(fs.existsSync(coreDir), true) // Sanity check
+  await core.purge()
+
+  t.is(fs.existsSync(coreDir), false)
+
+  // The intermediate dirs are removed too, if they are now empty
+  t.is(fs.existsSync(coreParentDir), false)
+  t.is(fs.existsSync(path.dirname(coreParentDir)), false)
+
+  t.is(fs.existsSync(dir), true) // Sanity check: corestore itself not cleaned up
+})
+
+test('basic writable option', async function (t) {
+  t.plan(3)
+
+  const store = new Corestore(ram)
+
+  const a = store.get({ name: 'a', writable: false })
+  await a.ready()
+  t.is(a.writable, false)
+
+  try {
+    await a.append('abc')
+    t.fail('Should have failed')
+  } catch (err) {
+    t.is(err.code, 'SESSION_NOT_WRITABLE')
+  }
+
+  const b = store.get({ name: 'b' })
+  await b.ready()
+  t.is(b.writable, true)
+  await b.append('abc')
+})
+
+test('core inherits writable option from the session', async function (t) {
+  t.plan(2)
+
+  const store = new Corestore(ram)
+  const s = store.session({ writable: false })
+
+  const core = s.get({ name: 'a' })
+  await core.ready()
+  t.is(core.writable, false)
+
+  try {
+    await core.append('abc')
+    t.fail('Should have failed')
+  } catch (err) {
+    t.is(err.code, 'SESSION_NOT_WRITABLE')
+  }
+})
+
+test('store session inherits writable option from parent session', async function (t) {
+  t.plan(1)
+
+  const store = new Corestore(ram)
+
+  const s = store.session({ writable: false })
+  const s1 = s.session()
+
+  const core = s1.get({ name: 'a' })
+  await core.ready()
+  t.is(core.writable, false)
+})
+
+test('session get after closing it', async function (t) {
+  const store = new Corestore(ram)
+
+  const session = store.session()
+  await session.close()
+
+  try {
+    session.get({ name: 'a' })
+    t.fail('Should have failed')
+  } catch (err) {
+    t.is(err.message, 'The corestore is closed')
+  }
+
+  await store.close()
 })
 
 test('passive replication', async function (t) {
