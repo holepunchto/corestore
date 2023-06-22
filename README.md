@@ -1,6 +1,6 @@
 # Corestore
 
-### [See the full API docs at docs.holepunch.to](https://docs.holepunch.to/building-blocks/corestore)
+### [See the full API docs at docs.holepunch.to](https://docs.holepunch.to/helpers/corestore)
 
 Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores.
 
