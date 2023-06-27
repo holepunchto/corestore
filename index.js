@@ -47,6 +47,37 @@ module.exports = class Corestore extends ReadyResource {
     this.ready().catch(safetyCatch)
   }
 
+  // for now just release the lock...
+  async suspend () {
+    if (this._root !== this) return this._root.suspend()
+
+    await this.ready()
+
+    if (this._keyStorage !== null) {
+      await new Promise((resolve, reject) => {
+        this._keyStorage.suspend((err) => {
+          if (err) return reject(err)
+          resolve()
+        })
+      })
+    }
+  }
+
+  async resume () {
+    if (this._root !== this) return this._root.resume()
+
+    await this.ready()
+
+    if (this._keyStorage !== null) {
+      await new Promise((resolve, reject) => {
+        this._keyStorage.open((err) => {
+          if (err) return reject(err)
+          resolve()
+        })
+      })
+    }
+  }
+
   findingPeers () {
     let done = false
     this._incFindingPeers()
