@@ -2,6 +2,7 @@ const safetyCatch = require('safety-catch')
 const crypto = require('hypercore-crypto')
 const sodium = require('sodium-universal')
 const Hypercore = require('hypercore')
+const hypercoreId = require('hypercore-id-encoding')
 const Xache = require('xache')
 const b4a = require('b4a')
 const ReadyResource = require('ready-resource')
@@ -434,9 +435,11 @@ function sign (keyPair, message) {
 }
 
 function validateGetOptions (opts) {
-  if (b4a.isBuffer(opts)) return { key: opts, publicKey: opts }
+  const key = (b4a.isBuffer(opts) || typeof opts === 'string') ? hypercoreId.decode(opts) : null
+  if (key) return { key, publicKey: key }
+
   if (opts.key) {
-    opts.publicKey = opts.key
+    opts.key = opts.publicKey = hypercoreId.decode(opts.key)
   }
   if (opts.keyPair) {
     opts.publicKey = opts.keyPair.publicKey
