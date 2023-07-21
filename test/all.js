@@ -6,6 +6,7 @@ const path = require('path')
 const b4a = require('b4a')
 const sodium = require('sodium-universal')
 const fs = require('fs')
+const idEncoding = require('hypercore-id-encoding')
 
 const Corestore = require('..')
 
@@ -39,6 +40,35 @@ test('basic get with custom keypair', async function (t) {
   t.alike(core2.key, kp2.publicKey)
   t.ok(core1.writable)
   t.ok(core2.writable)
+})
+
+test('basic get with hex key', async function (t) {
+  const store = new Corestore(ram)
+  const hexKey = 'a'.repeat(64)
+
+  const core = store.get(hexKey)
+  await core.ready()
+  t.is(b4a.toString(core.key, 'hex'), hexKey)
+})
+
+test('basic get with with explicit hex key', async function (t) {
+  const store = new Corestore(ram)
+  const hexKey = 'a'.repeat(64)
+
+  const core = store.get({ key: hexKey })
+  await core.ready()
+  t.is(b4a.toString(core.key, 'hex'), hexKey)
+})
+
+test('basic get with z32 key', async function (t) {
+  const store = new Corestore(ram)
+  const bufKey = b4a.from('a'.repeat(64), 'hex')
+  const z32Key = idEncoding.encode(bufKey)
+  t.is(z32Key.length, 52, 'Sanity check that it is indeed z32')
+
+  const core = store.get(z32Key)
+  await core.ready()
+  t.alike(core.key, bufKey)
 })
 
 test('get with createIfMissing=false throws if new core', async function (t) {
