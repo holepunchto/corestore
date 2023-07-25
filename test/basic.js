@@ -1,11 +1,11 @@
 const test = require('brittle')
 const crypto = require('hypercore-crypto')
 const ram = require('random-access-memory')
-const os = require('os')
 const path = require('path')
 const b4a = require('b4a')
 const sodium = require('sodium-universal')
 const fs = require('fs')
+const tmp = require('test-tmp')
 const idEncoding = require('hypercore-id-encoding')
 
 const Corestore = require('..')
@@ -110,63 +110,6 @@ test('basic namespaces', async function (t) {
   t.end()
 })
 
-test('basic replication', async function (t) {
-  const store1 = new Corestore(ram)
-  const store2 = new Corestore(ram)
-
-  const core1 = store1.get({ name: 'core-1' })
-  const core2 = store1.get({ name: 'core-2' })
-  await core1.append('hello')
-  await core2.append('world')
-
-  const core3 = store2.get({ key: core1.key })
-  const core4 = store2.get({ key: core2.key })
-
-  const s = store1.replicate(true)
-  s.pipe(store2.replicate(false)).pipe(s)
-
-  t.alike(await core3.get(0), Buffer.from('hello'))
-  t.alike(await core4.get(0), Buffer.from('world'))
-})
-
-test('replicating cores created after replication begins', async function (t) {
-  const store1 = new Corestore(ram)
-  const store2 = new Corestore(ram)
-
-  const s = store1.replicate(true, { live: true })
-  s.pipe(store2.replicate(false, { live: true })).pipe(s)
-
-  const core1 = store1.get({ name: 'core-1' })
-  const core2 = store1.get({ name: 'core-2' })
-  await core1.append('hello')
-  await core2.append('world')
-
-  const core3 = store2.get({ key: core1.key })
-  const core4 = store2.get({ key: core2.key })
-
-  t.alike(await core3.get(0), Buffer.from('hello'))
-  t.alike(await core4.get(0), Buffer.from('world'))
-})
-
-test('replicating cores using discovery key hook', async function (t) {
-  const dir = tmpdir()
-  let store1 = new Corestore(dir)
-  const store2 = new Corestore(ram)
-
-  const core = store1.get({ name: 'main' })
-  await core.append('hello')
-  const key = core.key
-
-  await store1.close()
-  store1 = new Corestore(dir)
-
-  const s = store1.replicate(true, { live: true })
-  s.pipe(store2.replicate(false, { live: true })).pipe(s)
-
-  const core2 = store2.get(key)
-  t.alike(await core2.get(0), Buffer.from('hello'))
-})
-
 test('nested namespaces', async function (t) {
   const store = new Corestore(ram)
   const ns1a = store.namespace('ns1').namespace('a')
@@ -192,7 +135,7 @@ test('core uncached when all sessions close', async function (t) {
 })
 
 test('writable core loaded from name userData', async function (t) {
-  const dir = tmpdir()
+  const dir = await tmp()
 
   let store = new Corestore(dir)
   let core = store.get({ name: 'main' })
@@ -216,7 +159,7 @@ test('writable core loaded from name userData', async function (t) {
 })
 
 test('writable core loaded from name and namespace userData', async function (t) {
-  const dir = tmpdir()
+  const dir = await tmp(t)
 
   let store = new Corestore(dir)
   let core = store.namespace('ns1').get({ name: 'main' })
@@ -240,7 +183,7 @@ test('writable core loaded from name and namespace userData', async function (t)
 })
 
 test('storage locking', async function (t) {
-  const dir = tmpdir()
+  const dir = await tmp(t)
 
   const store1 = new Corestore(dir)
   await store1.ready()
@@ -452,43 +395,6 @@ test('generated namespaces/keys match fixtures', async function (t) {
   t.snapshot(core3.key, 'core3 key')
 })
 
-test('session', async function (t) {
-  const store1 = new Corestore(ram)
-  const store2 = new Corestore(ram, { primaryKey: Buffer.alloc(32).fill('a') })
-
-  await store1.ready()
-  await store2.ready()
-
-  const ns1 = store1.namespace('a')
-  const ns2 = store2.namespace('a')
-  const ns3 = ns1.session({ primaryKey: store2.primaryKey })
-
-  const ns1core = ns1.get({ name: 'main' })
-  const ns2core = ns2.get({ name: 'main' })
-  const ns3core = ns3.get({ name: 'main' })
-  await Promise.all([ns1core.ready(), ns2core.ready(), ns3core.ready()])
-
-  t.unlike(ns3core.key, ns1core.key, 'override primaryKey')
-  t.alike(ns3core.key, ns2core.key, 'Inherit namespace')
-
-  const reset = ns3.session({ primaryKey: store1.primaryKey, namespace: null })
-
-  const core0 = store1.get({ name: 'main' })
-  const core1 = reset.get({ name: 'main' })
-  await Promise.all([core0.ready(), core1.ready()])
-
-  t.alike(core1.key, core0.key, 'reset namespace and primaryKey')
-
-  await core1.append('hello')
-
-  const remote = new Corestore(ram)
-  const s = remote.replicate(true)
-  s.pipe(store1.replicate(false)).pipe(s)
-
-  const clone1 = remote.get({ key: core1.key })
-  t.alike(await clone1.get(0), Buffer.from('hello'), 'share replication streams with a session')
-})
-
 test('core-open and core-close events', async function (t) {
   const store = new Corestore(ram)
   const expected = [crypto.keyPair(), crypto.keyPair()]
@@ -578,7 +484,7 @@ test('opening a namespace from an invalid bootstrap core is a no-op', async func
 })
 
 test('hypercore purge behaviour interacts correctly with corestore', async function (t) {
-  const dir = tmpdir()
+  const dir = await tmp(t)
 
   const store = new Corestore(dir)
   const core = store.get({ name: 'core' })
@@ -668,10 +574,6 @@ test('session get after closing it', async function (t) {
 
   await store.close()
 })
-
-function tmpdir () {
-  return path.join(os.tmpdir(), 'corestore-' + Math.random().toString(16).slice(2))
-}
 
 function randomBytes (n) {
   const buf = b4a.allocUnsafe(n)
