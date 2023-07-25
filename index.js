@@ -2,6 +2,7 @@ const safetyCatch = require('safety-catch')
 const crypto = require('hypercore-crypto')
 const sodium = require('sodium-universal')
 const Hypercore = require('hypercore')
+const hypercoreId = require('hypercore-id-encoding')
 const Xache = require('xache')
 const b4a = require('b4a')
 const ReadyResource = require('ready-resource')
@@ -54,6 +55,37 @@ module.exports = class Corestore extends ReadyResource {
 
   static from (storage, opts) {
     return this.isCorestore(storage) ? storage : new this(storage, opts)
+  }
+
+  // for now just release the lock...
+  async suspend () {
+    if (this._root !== this) return this._root.suspend()
+
+    await this.ready()
+
+    if (this._keyStorage !== null) {
+      await new Promise((resolve, reject) => {
+        this._keyStorage.suspend((err) => {
+          if (err) return reject(err)
+          resolve()
+        })
+      })
+    }
+  }
+
+  async resume () {
+    if (this._root !== this) return this._root.resume()
+
+    await this.ready()
+
+    if (this._keyStorage !== null) {
+      await new Promise((resolve, reject) => {
+        this._keyStorage.open((err) => {
+          if (err) return reject(err)
+          resolve()
+        })
+      })
+    }
   }
 
   findingPeers () {
@@ -275,7 +307,7 @@ module.exports = class Corestore extends ReadyResource {
   }
 
   get (opts = {}) {
-    if (this._root.closing) throw new Error('The corestore is closed')
+    if (this.closing || this._root.closing) throw new Error('The corestore is closed')
     opts = validateGetOptions(opts)
 
     if (opts.cache !== false) {
@@ -412,9 +444,11 @@ function sign (keyPair, message) {
 }
 
 function validateGetOptions (opts) {
-  if (b4a.isBuffer(opts)) return { key: opts, publicKey: opts }
+  const key = (b4a.isBuffer(opts) || typeof opts === 'string') ? hypercoreId.decode(opts) : null
+  if (key) return { key, publicKey: key }
+
   if (opts.key) {
-    opts.publicKey = opts.key
+    opts.key = opts.publicKey = hypercoreId.decode(opts.key)
   }
   if (opts.keyPair) {
     opts.publicKey = opts.keyPair.publicKey

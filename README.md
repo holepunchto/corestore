@@ -1,6 +1,6 @@
 # Corestore
 
-### [See the full API docs at docs.holepunch.to](https://docs.holepunch.to/building-blocks/corestore)
+### [See the full API docs at docs.holepunch.to](https://docs.holepunch.to/helpers/corestore)
 
 Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores.
 
@@ -30,7 +30,7 @@ Create a new Corestore instance.
 `storage` can be either a random-access-storage module, a string, or a function that takes a path and returns an random-access-storage instance.
 
 #### `const core = store.get(key | { name: 'a-name', exclusive, ...hypercoreOpts})`
-Loads a Hypercore, either by name (if the `name` option is provided), or from the provided key (if the first argument is a Buffer, or if the `key` options is set).
+Loads a Hypercore, either by name (if the `name` option is provided), or from the provided key (if the first argument is a Buffer or String with hex/z32 key, or if the `key` options is set).
 
 If that Hypercore has previously been loaded, subsequent calls to `get` will return a new Hypercore session on the existing core.
 
