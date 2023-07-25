@@ -52,10 +52,16 @@ test('replicating cores using discovery key hook', async function (t) {
   await store1.close()
   store1 = new Corestore(dir)
 
-  replicate(t, store1, store2)
+  const [s1, s2] = replicate(t, store1, store2)
 
   const core2 = store2.get(key)
   t.alike(await core2.get(0), Buffer.from('hello'))
+
+  // teardown streams so replication sessions are freed
+  s1.destroy()
+  s2.destroy()
+
+  await store1.close()
 })
 
 test('session replication', async function (t) {
@@ -125,23 +131,26 @@ function replicate (t, store1, store2) {
 
   s1.pipe(s2).pipe(s1)
 
-  t.teardown(() => {
-    return new Promise(resolve => {
-      let missing = 2
+  const wait = new Promise(resolve => {
+    let missing = 2
 
-      s1.on('error', noop)
-      s2.on('error', noop)
-      s1.on('close', done)
-      s2.on('close', done)
+    s1.on('error', noop)
+    s2.on('error', noop)
+    s1.on('close', done)
+    s2.on('close', done)
 
-      s1.destroy()
-      s2.destroy()
-
-      function done () {
-        if (--missing === 0) resolve()
-      }
-    })
+    function done () {
+      if (--missing === 0) resolve()
+    }
   })
+
+  t.teardown(() => {
+    s1.destroy()
+    s2.destroy()
+    return wait
+  })
+
+  return [s1, s2]
 }
 
 function noop () {}
