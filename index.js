@@ -43,9 +43,18 @@ module.exports = class Corestore extends ReadyResource {
 
     this._findingPeersCount = 0
     this._findingPeers = []
+    this._isCorestore = true
 
     if (this._namespace.byteLength !== 32) throw new Error('Namespace must be a 32-byte Buffer or Uint8Array')
     this.ready().catch(safetyCatch)
+  }
+
+  static isCorestore (obj) {
+    return !!(typeof obj === 'object' && obj && obj._isCorestore)
+  }
+
+  static from (storage, opts) {
+    return this.isCorestore(storage) ? storage : new this(storage, opts)
   }
 
   // for now just release the lock...
