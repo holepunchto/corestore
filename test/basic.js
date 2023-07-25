@@ -156,6 +156,8 @@ test('writable core loaded from name userData', async function (t) {
   t.is(core.length, 2)
   t.alike(await core.get(0), Buffer.from('hello'))
   t.alike(await core.get(1), Buffer.from('world'))
+
+  await store.close()
 })
 
 test('writable core loaded from name and namespace userData', async function (t) {
@@ -180,6 +182,8 @@ test('writable core loaded from name and namespace userData', async function (t)
   t.is(core.length, 2)
   t.alike(await core.get(0), Buffer.from('hello'))
   t.alike(await core.get(1), Buffer.from('world'))
+
+  await store.close()
 })
 
 test('storage locking', async function (t) {
@@ -195,6 +199,8 @@ test('storage locking', async function (t) {
   } catch {
     t.pass('dir was locked')
   }
+
+  await store1.close()
 })
 
 test('cores close when their last referencing namespace closes', async function (t) {
@@ -504,6 +510,8 @@ test('hypercore purge behaviour interacts correctly with corestore', async funct
   t.is(fs.existsSync(path.dirname(coreParentDir)), false)
 
   t.is(fs.existsSync(dir), true) // Sanity check: corestore itself not cleaned up
+
+  await store.close()
 })
 
 test('basic writable option', async function (t) {
