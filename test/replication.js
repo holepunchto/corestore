@@ -101,7 +101,7 @@ test('session replication', async function (t) {
   t.alike(await clone1.get(0), Buffer.from('hello'), 'share replication streams with a session')
 })
 
-test.skip('on-off replication', async function (t) {
+test('on-off replication', async function (t) {
   const store1 = new Corestore(ram.reusable())
   const store2 = new Corestore(ram.reusable())
 
