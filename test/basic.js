@@ -583,6 +583,24 @@ test('session get after closing it', async function (t) {
   await store.close()
 })
 
+test('close timing regression', async function (t) {
+  const store = new Corestore(ram.reusable())
+
+  const a1 = store.get({ name: 'a' })
+
+  await a1.ready()
+
+  const a2 = store.get({ name: 'a' })
+
+  await Promise.resolve()
+  await Promise.resolve()
+
+  a1.close()
+
+  await t.execution(a2.append('foo'), 'can append')
+  await store.close()
+})
+
 function randomBytes (n) {
   const buf = b4a.allocUnsafe(n)
   sodium.randombytes_buf(buf)
