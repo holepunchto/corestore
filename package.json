@@ -24,16 +24,16 @@
     "lib/**.js"
   ],
   "devDependencies": {
-    "brittle": "^3.0.0",
-    "random-access-memory": "^6.0.0",
-    "standard": "^17.0.0",
+    "brittle": "^3.2.2",
+    "random-access-memory": "^6.2.0",
+    "standard": "^17.1.0",
     "test-tmp": "^1.0.2"
   },
   "dependencies": {
-    "b4a": "^1.3.1",
-    "hypercore": "^10.12.0",
-    "hypercore-crypto": "^3.2.1",
-    "hypercore-id-encoding": "^1.1.0",
+    "b4a": "^1.6.4",
+    "hypercore": "^10.18.2",
+    "hypercore-crypto": "^3.4.0",
+    "hypercore-id-encoding": "^1.2.0",
     "read-write-mutexify": "^2.1.0",
     "ready-resource": "^1.0.0",
     "safety-catch": "^1.0.1",
