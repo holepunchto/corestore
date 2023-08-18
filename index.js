@@ -36,6 +36,7 @@ module.exports = class Corestore extends ReadyResource {
     this._replicationStreams = root ? root._replicationStreams : []
     this._overwrite = opts.overwrite === true
     this._readonly = opts.writable === false
+    this._detached = opts._detached || null
 
     this._sessions = new Set() // sessions for THIS namespace
     this._rootStoreSessions = new Set()
@@ -395,6 +396,7 @@ module.exports = class Corestore extends ReadyResource {
       namespace: this._namespace,
       cache: this.cache,
       writable: !this._readonly,
+      _detached: opts && opts.overtake ? this : null,
       _root: this._root,
       ...opts
     })
@@ -431,9 +433,13 @@ module.exports = class Corestore extends ReadyResource {
 
   async _close () {
     this._root._rootStoreSessions.delete(this)
+
     await this._closeNamespace()
+
     if (this._root === this) {
       await this._closePrimaryNamespace()
+    } else if (this._detached) {
+      await this._detached.close()
     }
   }
 }
