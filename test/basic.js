@@ -609,7 +609,7 @@ test('session that overtakes', async function (t) {
 
   t.is(store.closed, false)
 
-  const newStore = store.session({ overtake: true })
+  const newStore = store.session({ detach: false })
   await newStore.close()
 
   t.is(store.closed, true)
