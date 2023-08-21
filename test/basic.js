@@ -601,6 +601,20 @@ test('close timing regression', async function (t) {
   await store.close()
 })
 
+test('session that overtakes', async function (t) {
+  const store = new Corestore(ram)
+
+  const session = store.session()
+  await session.close()
+
+  t.is(store.closed, false)
+
+  const newStore = store.session({ detach: false })
+  await newStore.close()
+
+  t.is(store.closed, true)
+})
+
 function randomBytes (n) {
   const buf = b4a.allocUnsafe(n)
   sodium.randombytes_buf(buf)

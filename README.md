@@ -81,6 +81,7 @@ Useful when an application wants to accept an optional Corestore, but needs to m
 {
   primaryKey, // Overrides the primaryKey for this session
   namespace, // If set to null it will reset to the DEFAULT_NAMESPACE
+  detach: true // By disabling this, closing the session will also close the store that created the session
 }
 ```
 
