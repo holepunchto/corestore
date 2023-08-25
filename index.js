@@ -27,6 +27,7 @@ module.exports = class Corestore extends ReadyResource {
     this.cores = root ? root.cores : new Map()
     this.cache = !!opts.cache
     this.primaryKey = opts.primaryKey || null
+    this.passive = !!opts.passive
 
     this._keyStorage = null
     this._bootstrap = opts._bootstrap || null
@@ -363,15 +364,24 @@ module.exports = class Corestore extends ReadyResource {
     const isExternal = isStream(isInitiator) || !!(opts && opts.stream)
     const stream = Hypercore.createProtocolStream(isInitiator, {
       ...opts,
-      ondiscoverykey: discoveryKey => {
+      ondiscoverykey: async discoveryKey => {
         const core = this.get({ _discoveryKey: discoveryKey })
-        return core.ready().catch(safetyCatch)
+
+        try {
+          await core.ready()
+        } catch {
+          return
+        }
+
+        if (core.opened && !core.closing && this.passive) core.replicate(stream, { session: true })
       }
     })
 
-    for (const core of this.cores.values()) {
-      if (!core.opened || core.closing) continue // If the core is not opened, it will be replicated in preload.
-      core.replicate(stream, { session: true })
+    if (!this.passive) {
+      for (const core of this.cores.values()) {
+        if (!core.opened || core.closing) continue // If the core is not opened, it will be replicated in preload.
+        core.replicate(stream, { session: true })
+      }
     }
 
     const streamRecord = { stream, isExternal }
