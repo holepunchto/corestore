@@ -125,6 +125,55 @@ test('on-off replication', async function (t) {
   t.ok(!!(await clone.get(0)), 'replicated')
 })
 
+test('active replication', async function (t) {
+  const store1 = new Corestore(ram)
+  const store2 = new Corestore(ram)
+
+  const a = store1.get({ name: 'a' })
+  const b = store1.get({ name: 'b' })
+
+  await a.append('hello')
+  await b.append('world')
+
+  const sessionsInitial = a.sessions.length + b.sessions.length
+
+  const s1 = store1.replicate(true)
+  const s2 = store2.replicate(false)
+  s1.pipe(s2).pipe(s1)
+
+  const sessionsAfter = a.sessions.length + b.sessions.length
+  t.ok(sessionsAfter > sessionsInitial)
+})
+
+test('passive replication', async function (t) {
+  const store1 = new Corestore(ram, { passive: true })
+  const store2 = new Corestore(ram)
+
+  const a = store1.get({ name: 'a' })
+  const b = store1.get({ name: 'b' })
+
+  await a.append('hello')
+  await b.append('world')
+
+  const sessionsInitial = a.sessions.length + b.sessions.length
+
+  const s1 = store1.replicate(true)
+  const s2 = store2.replicate(false)
+  s1.pipe(s2).pipe(s1)
+
+  const sessionsAfter = a.sessions.length + b.sessions.length
+  t.is(sessionsInitial, sessionsAfter)
+
+  const c = store2.get({ key: a.key })
+  const d = store2.get({ key: b.key })
+
+  t.alike(await c.get(0), Buffer.from('hello'))
+  t.alike(await d.get(0), Buffer.from('world'))
+
+  const sessionsFinal = a.sessions.length + b.sessions.length
+  t.ok(sessionsFinal > sessionsAfter)
+})
+
 function replicate (t, store1, store2) {
   const s1 = store1.replicate(true)
   const s2 = store2.replicate(false)

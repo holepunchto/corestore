@@ -373,7 +373,7 @@ module.exports = class Corestore extends ReadyResource {
           return
         }
 
-        if (core.opened && !core.closing && this.passive) core.replicate(stream, { session: true })
+        if (this.passive && !core.closing) core.replicate(stream, { session: true })
       }
     })
 
