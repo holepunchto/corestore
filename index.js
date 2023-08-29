@@ -165,7 +165,7 @@ module.exports = class Corestore extends ReadyResource {
     if (this._bootstrap) await this._openNamespaceFromBootstrap()
   }
 
-  _generateKeys (opts) {
+  async _generateKeys (opts) {
     if (opts._discoveryKey) {
       return {
         keyPair: null,
@@ -181,7 +181,6 @@ module.exports = class Corestore extends ReadyResource {
         discoveryKey: crypto.discoveryKey(opts.publicKey)
       }
     }
-
     const { publicKey, secretKey } = await this.createKeyPair(opts.name)
 
     return {
@@ -193,7 +192,15 @@ module.exports = class Corestore extends ReadyResource {
     }
   }
 
-  _preready (core) {
+  _getPrereadyUserData (core, key) {
+    // Need to manually read the header values before the Hypercore is ready, hence the ugliness.
+    for (const { key: savedKey, value } of core.core.header.userData) {
+      if (key === savedKey) return value
+    }
+    return null
+  }
+
+  async _preready (core) {
     const name = this._getPrereadyUserData(core, USERDATA_NAME_KEY)
     if (!name) return
 
@@ -310,7 +317,8 @@ module.exports = class Corestore extends ReadyResource {
       name: null,
       preload: async () => {
         if (!this.primaryKey) await this.ready()
-        const keys = this._generateKeys(opts)
+
+        const keys = await this._generateKeys(opts)
 
         id = b4a.toString(keys.discoveryKey, 'hex')
         rw = (opts.exclusive && opts.writable !== false && keys.keyPair) ? this._getLock(id) : null
