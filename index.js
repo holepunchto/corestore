@@ -169,7 +169,6 @@ module.exports = class Corestore extends ReadyResource {
     if (opts._discoveryKey) {
       return {
         keyPair: null,
-        auth: null,
         discoveryKey: opts._discoveryKey
       }
     }
@@ -179,18 +178,16 @@ module.exports = class Corestore extends ReadyResource {
           publicKey: opts.publicKey,
           secretKey: opts.secretKey
         },
-        sign: opts.sign,
-        auth: opts.auth,
         discoveryKey: crypto.discoveryKey(opts.publicKey)
       }
     }
-    const { publicKey, auth } = await this.createKeyPair(opts.name)
+    const { publicKey, secretKey } = await this.createKeyPair(opts.name)
+
     return {
       keyPair: {
         publicKey,
-        secretKey: null
+        secretKey
       },
-      auth,
       discoveryKey: crypto.discoveryKey(publicKey)
     }
   }
@@ -208,13 +205,9 @@ module.exports = class Corestore extends ReadyResource {
     if (!name) return
 
     const namespace = this._getPrereadyUserData(core, USERDATA_NAMESPACE_KEY)
-    const { publicKey, auth } = await this.createKeyPair(b4a.toString(name), namespace)
-    if (!b4a.equals(publicKey, core.key)) throw new Error('Stored core key does not match the provided name')
+    const keyPair = await this.createKeyPair(b4a.toString(name), namespace)
 
-    // TODO: Should Hypercore expose a helper for this, or should preready return keypair/auth?
-    core.auth = auth
-    core.key = publicKey
-    core.writable = true
+    core.setKeyPair(keyPair)
   }
 
   _getLock (id) {
@@ -293,13 +286,7 @@ module.exports = class Corestore extends ReadyResource {
 
     const keyPair = {
       publicKey: b4a.allocUnsafe(sodium.crypto_sign_PUBLICKEYBYTES),
-      secretKey: b4a.alloc(sodium.crypto_sign_SECRETKEYBYTES),
-      auth: {
-        sign: (msg) => sign(keyPair, msg),
-        verify: (signable, signature) => {
-          return crypto.verify(signable, signature, keyPair.publicKey)
-        }
-      }
+      secretKey: b4a.alloc(sodium.crypto_sign_SECRETKEYBYTES)
     }
 
     const seed = deriveSeed(this.primaryKey, namespace, name)
@@ -452,11 +439,6 @@ module.exports = class Corestore extends ReadyResource {
       await this._attached.close()
     }
   }
-}
-
-function sign (keyPair, message) {
-  if (!keyPair.secretKey) throw new Error('Invalid key pair')
-  return crypto.sign(message, keyPair.secretKey)
 }
 
 function validateGetOptions (opts) {
