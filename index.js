@@ -192,19 +192,11 @@ module.exports = class Corestore extends ReadyResource {
     }
   }
 
-  _getPrereadyUserData (core, key) {
-    // Need to manually read the header values before the Hypercore is ready, hence the ugliness.
-    for (const { key: savedKey, value } of core.core.header.userData) {
-      if (key === savedKey) return value
-    }
-    return null
-  }
-
   async _preready (core) {
-    const name = this._getPrereadyUserData(core, USERDATA_NAME_KEY)
+    const name = await core.getUserData(USERDATA_NAME_KEY, { force: true })
     if (!name) return
 
-    const namespace = this._getPrereadyUserData(core, USERDATA_NAMESPACE_KEY)
+    const namespace = await core.getUserData(USERDATA_NAMESPACE_KEY, { force: true })
     const keyPair = await this.createKeyPair(b4a.toString(name), namespace)
 
     core.setKeyPair(keyPair)
