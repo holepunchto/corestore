@@ -92,9 +92,12 @@ test('exclusive always releases the lock on close', async function (t) {
     a2.close()
   })
 
-  a3.ready().then(() => {
+  a3.ready().then(async () => {
     t.pass('a3 got it')
     r.close()
+    const a4 = store.get({ key: a1.key, exclusive: true })
+    await a4.ready()
+    t.fail('should not acquire lock')
   })
 
   await new Promise(resolve => setImmediate(resolve))
