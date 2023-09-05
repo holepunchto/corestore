@@ -361,6 +361,7 @@ module.exports = class Corestore extends ReadyResource {
         }
 
         if (this.passive && !core.closing) core.replicate(stream, { session: true })
+        await core.close()
       }
     })
 
