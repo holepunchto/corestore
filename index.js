@@ -338,7 +338,7 @@ module.exports = class Corestore extends ReadyResource {
 
       if (!rw) return
       rw.write.unlock()
-      if (rw.write.waiting === 0) this._locks.delete(id)
+      if (!rw.write.locked) this._locks.delete(id)
     }
 
     core.ready().catch(gc)
