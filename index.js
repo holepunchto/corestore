@@ -172,7 +172,7 @@ module.exports = class Corestore extends ReadyResource {
         discoveryKey: opts._discoveryKey
       }
     }
-    if (!opts.name) {
+    if (!opts.name && !opts.manifest && !opts.key) {
       return {
         keyPair: {
           publicKey: opts.publicKey,
@@ -181,6 +181,21 @@ module.exports = class Corestore extends ReadyResource {
         discoveryKey: crypto.discoveryKey(opts.publicKey)
       }
     }
+
+    if (opts.manifest) {
+      return {
+        manifest: opts.manifest,
+        discoveryKey: crypto.discoveryKey(Hypercore.keyFromManifest(opts.manifest))
+      }
+    }
+
+    if (opts.key) {
+      return {
+        key: opts.key,
+        discoveryKey: crypto.discoveryKey(opts.key)
+      }
+    }
+
     const { publicKey, secretKey } = await this.createKeyPair(opts.name)
 
     return {
@@ -207,7 +222,7 @@ module.exports = class Corestore extends ReadyResource {
     const namespace = this._getPrereadyUserData(core, USERDATA_NAMESPACE_KEY)
     const keyPair = await this.createKeyPair(b4a.toString(name), namespace)
 
-    core.setKeyPair(keyPair)
+    core.keyPair = keyPair
   }
 
   _getLock (id) {
@@ -222,11 +237,11 @@ module.exports = class Corestore extends ReadyResource {
   }
 
   async _preload (id, keys, opts) {
-    const { keyPair, auth } = keys
+    const { keyPair, manifest, key } = keys
 
     while (this.cores.has(id)) {
       const existing = this.cores.get(id)
-      if (existing.opened && !existing.closing) return { from: existing, keyPair, auth }
+      if (existing.opened && !existing.closing) return { from: existing, keyPair, manifest }
       if (existing.closing) {
         await existing.close()
       } else {
@@ -248,15 +263,12 @@ module.exports = class Corestore extends ReadyResource {
       autoClose: true,
       encryptionKey: opts.encryptionKey || null,
       userData,
-      auth,
+      manifest,
+      key,
+      compat: opts.compat,
       cache: opts.cache,
       createIfMissing: opts.createIfMissing === false ? false : !opts._discoveryKey,
-      keyPair: keyPair && keyPair.publicKey
-        ? {
-            publicKey: keyPair.publicKey,
-            secretKey: null
-          }
-        : null
+      keyPair: keyPair || null
     })
 
     if (this._root.closing) throw new Error('The corestore is closed')
@@ -278,7 +290,7 @@ module.exports = class Corestore extends ReadyResource {
       this.emit('conflict', core, len, fork, proof)
     })
 
-    return { from: core, keyPair, auth }
+    return { from: core, keyPair, manifest }
   }
 
   async createKeyPair (name, namespace = this._namespace) {
@@ -446,7 +458,8 @@ function validateGetOptions (opts) {
   if (key) return { key, publicKey: key }
 
   if (opts.key) {
-    opts.key = opts.publicKey = hypercoreId.decode(opts.key)
+    opts.key = hypercoreId.decode(opts.key)
+    if (opts.compat) opts.publicKey = opts.key
   }
   if (opts.keyPair) {
     opts.publicKey = opts.keyPair.publicKey
@@ -456,7 +469,7 @@ function validateGetOptions (opts) {
   if (opts.name && opts.secretKey) throw new Error('Cannot provide both a name and a secret key')
   if (opts.publicKey && !b4a.isBuffer(opts.publicKey)) throw new Error('publicKey option must be a Buffer or Uint8Array')
   if (opts.secretKey && !b4a.isBuffer(opts.secretKey)) throw new Error('secretKey option must be a Buffer or Uint8Array')
-  if (!opts._discoveryKey && (!opts.name && !opts.publicKey)) throw new Error('Must provide either a name or a publicKey')
+  if (!opts._discoveryKey && (!opts.name && !opts.publicKey && !opts.manifest && !opts.key)) throw new Error('Must provide either a name or a publicKey')
   return opts
 }
 
