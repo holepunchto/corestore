@@ -172,7 +172,7 @@ module.exports = class Corestore extends ReadyResource {
         discoveryKey: opts._discoveryKey
       }
     }
-    if (!opts.name && !opts.manifest && !opts.key) {
+    if (!opts.name && !opts.manifest && !(opts.key && !opts.compat)) {
       return {
         keyPair: {
           publicKey: opts.publicKey,
@@ -456,6 +456,7 @@ module.exports = class Corestore extends ReadyResource {
 function validateGetOptions (opts) {
   const key = (b4a.isBuffer(opts) || typeof opts === 'string') ? hypercoreId.decode(opts) : null
   if (key) return { key, publicKey: key }
+  opts.compat = opts.compat !== false
 
   if (opts.key) {
     opts.key = hypercoreId.decode(opts.key)
