@@ -1,6 +1,6 @@
 {
   "name": "corestore",
-  "version": "6.13.0",
+  "version": "6.14.0",
   "description": "A Hypercore factory that simplifies managing collections of cores.",
   "main": "index.js",
   "scripts": {
@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "b4a": "^1.6.4",
-    "hypercore": "^10.21.0",
+    "hypercore": "^10.22.2",
     "hypercore-crypto": "^3.4.0",
     "hypercore-id-encoding": "^1.2.0",
     "read-write-mutexify": "^2.1.0",
