@@ -262,6 +262,7 @@ module.exports = class Corestore extends ReadyResource {
     this.cores.set(id, core)
     core.ready().then(() => {
       if (core.closing) return // extra safety here as ready is a tick after open
+      if (keyPair && keyPair.secretKey) core.setKeyPair(keyPair)
       this._emitCore('core-open', core)
       for (const { stream } of this._replicationStreams) {
         core.replicate(stream, { session: true })
