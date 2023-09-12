@@ -168,26 +168,45 @@ module.exports = class Corestore extends ReadyResource {
   async _generateKeys (opts) {
     if (opts._discoveryKey) {
       return {
+        manifest: null,
         keyPair: null,
+        key: null,
         discoveryKey: opts._discoveryKey
       }
     }
-    if (!opts.name) {
+
+    const keyPair = opts.name
+      ? await this.createKeyPair(opts.name)
+      : (opts.secretKey)
+          ? { secretKey: opts.secretKey, publicKey: opts.publicKey }
+          : null
+
+    if (opts.manifest) {
+      const key = Hypercore.key(opts.manifest)
+
       return {
-        keyPair: {
-          publicKey: opts.publicKey,
-          secretKey: opts.secretKey
-        },
-        discoveryKey: crypto.discoveryKey(opts.publicKey)
+        manifest: opts.manifest,
+        keyPair,
+        key,
+        discoveryKey: crypto.discoveryKey(key)
       }
     }
-    const { publicKey, secretKey } = await this.createKeyPair(opts.name)
+
+    if (opts.key) {
+      return {
+        manifest: null,
+        keyPair,
+        key: opts.key,
+        discoveryKey: crypto.discoveryKey(opts.key)
+      }
+    }
+
+    const publicKey = opts.publicKey || keyPair.publicKey
 
     return {
-      keyPair: {
-        publicKey,
-        secretKey
-      },
+      manifest: null,
+      keyPair,
+      key: publicKey,
       discoveryKey: crypto.discoveryKey(publicKey)
     }
   }
@@ -221,11 +240,11 @@ module.exports = class Corestore extends ReadyResource {
   }
 
   async _preload (id, keys, opts) {
-    const { keyPair, auth } = keys
+    const { manifest, keyPair, key } = keys
 
     while (this.cores.has(id)) {
       const existing = this.cores.get(id)
-      if (existing.opened && !existing.closing) return { from: existing, keyPair, auth }
+      if (existing.opened && !existing.closing) return { from: existing, keyPair, manifest }
       if (existing.closing) {
         await existing.close()
       } else {
@@ -233,6 +252,7 @@ module.exports = class Corestore extends ReadyResource {
       }
     }
 
+    const hasKeyPair = !!(keyPair && keyPair.secretKey)
     const userData = {}
     if (opts.name) {
       userData[USERDATA_NAME_KEY] = b4a.from(opts.name)
@@ -247,22 +267,19 @@ module.exports = class Corestore extends ReadyResource {
       autoClose: true,
       encryptionKey: opts.encryptionKey || null,
       userData,
-      auth,
+      manifest,
+      key,
+      compat: opts.compat,
       cache: opts.cache,
       createIfMissing: opts.createIfMissing === false ? false : !opts._discoveryKey,
-      keyPair: keyPair && keyPair.publicKey
-        ? {
-            publicKey: keyPair.publicKey,
-            secretKey: null
-          }
-        : null
+      keyPair: hasKeyPair ? keyPair : null
     })
 
     if (this._root.closing) throw new Error('The corestore is closed')
     this.cores.set(id, core)
     core.ready().then(() => {
       if (core.closing) return // extra safety here as ready is a tick after open
-      if (keyPair && keyPair.secretKey) core.setKeyPair(keyPair)
+      if (hasKeyPair) core.setKeyPair(keyPair)
       this._emitCore('core-open', core)
       for (const { stream } of this._replicationStreams) {
         core.replicate(stream, { session: true })
@@ -278,7 +295,7 @@ module.exports = class Corestore extends ReadyResource {
       this.emit('conflict', core, len, fork, proof)
     })
 
-    return { from: core, keyPair, auth }
+    return { from: core, keyPair, manifest }
   }
 
   async createKeyPair (name, namespace = this._namespace) {
@@ -318,7 +335,7 @@ module.exports = class Corestore extends ReadyResource {
         const keys = await this._generateKeys(opts)
 
         id = b4a.toString(keys.discoveryKey, 'hex')
-        rw = (opts.exclusive && opts.writable !== false && keys.keyPair) ? this._getLock(id) : null
+        rw = (opts.exclusive && opts.writable !== false) ? this._getLock(id) : null
 
         if (rw) await rw.write.lock()
         return await this._preload(id, keys, opts)
@@ -452,20 +469,21 @@ module.exports = class Corestore extends ReadyResource {
 
 function validateGetOptions (opts) {
   const key = (b4a.isBuffer(opts) || typeof opts === 'string') ? hypercoreId.decode(opts) : null
-  if (key) return { key, publicKey: key }
+  if (key) return { key }
 
   if (opts.key) {
-    opts.key = opts.publicKey = hypercoreId.decode(opts.key)
+    opts.key = hypercoreId.decode(opts.key)
   }
   if (opts.keyPair) {
     opts.publicKey = opts.keyPair.publicKey
     opts.secretKey = opts.keyPair.secretKey
   }
+
   if (opts.name && typeof opts.name !== 'string') throw new Error('name option must be a String')
   if (opts.name && opts.secretKey) throw new Error('Cannot provide both a name and a secret key')
   if (opts.publicKey && !b4a.isBuffer(opts.publicKey)) throw new Error('publicKey option must be a Buffer or Uint8Array')
   if (opts.secretKey && !b4a.isBuffer(opts.secretKey)) throw new Error('secretKey option must be a Buffer or Uint8Array')
-  if (!opts._discoveryKey && (!opts.name && !opts.publicKey)) throw new Error('Must provide either a name or a publicKey')
+  if (!opts._discoveryKey && (!opts.name && !opts.publicKey && !opts.manifest && !opts.key)) throw new Error('Must provide either a name or a publicKey')
   return opts
 }
 
