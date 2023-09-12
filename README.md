@@ -21,6 +21,10 @@ const Corestore = require('corestore')
 const store = new Corestore('./my-storage')
 const core1 = store.get({ name: 'core-1' })
 const core2 = store.get({ name: 'core-2' })
+
+// ...
+
+await store.close() // Closes all cores opened from it
 ```
 
 ### API
@@ -84,6 +88,12 @@ Useful when an application wants to accept an optional Corestore, but needs to m
   detach: true // By disabling this, closing the session will also close the store that created the session
 }
 ```
+
+#### `store.close()`
+
+Close the corestore, and all the hypercores it manages.
+
+When called on the root store (so not a namespace), it will also clean up the other resources like replication streams and the lock on the corestore files.
 
 #### `store.on('core-open', core)`
 Emitted when the first session for a core is opened.
