@@ -242,7 +242,7 @@ test('replication sessions auto close when inactive', async function (t) {
   t.alike(await d.get(2), Buffer.from('testing 3'), 're-replication still works')
 })
 
-test.solo('remotely open a core', async function (t) {
+test('remotely open a core', async function (t) {
   t.plan(3)
 
   const store1 = new Corestore(ram.reusable())
@@ -250,7 +250,7 @@ test.solo('remotely open a core', async function (t) {
 
   const core = store1.get({ name: 'core-1' })
   await core.append('a')
-  // await core.close()
+  await core.close()
 
   store1.on('core-open', function (core) {
     t.pass('Core opened')
