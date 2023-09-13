@@ -311,7 +311,7 @@ module.exports = class Corestore extends ReadyResource {
   }
 
   async createKeyPair (name, namespace = this._namespace) {
-    if (!this.primaryKey) await this.ready()
+    if (!this.opened) await this.ready()
 
     const keyPair = {
       publicKey: b4a.allocUnsafe(sodium.crypto_sign_PUBLICKEYBYTES),
@@ -342,7 +342,7 @@ module.exports = class Corestore extends ReadyResource {
       ...opts,
       name: null,
       preload: async () => {
-        if (!this.primaryKey) await this.ready()
+        if (!this.opened) await this.ready()
 
         const keys = await this._generateKeys(opts)
 
