@@ -203,6 +203,18 @@ module.exports = class Corestore extends ReadyResource {
 
     const publicKey = opts.publicKey || keyPair.publicKey
 
+    if (opts.compat === false) {
+      const manifest = { signer: { publicKey } } // default manifest
+      const key = Hypercore.key(manifest)
+
+      return {
+        manifest,
+        keyPair,
+        key,
+        discoveryKey: crypto.discoveryKey(key)
+      }
+    }
+
     return {
       manifest: null,
       keyPair,
