@@ -277,6 +277,7 @@ module.exports = class Corestore extends ReadyResource {
     const core = new Hypercore(p => this.storage(storageRoot + '/' + p), {
       _preready: this._preready.bind(this),
       autoClose: true,
+      active: false,
       encryptionKey: opts.encryptionKey || null,
       userData,
       manifest,
@@ -359,26 +360,18 @@ module.exports = class Corestore extends ReadyResource {
       this._findingPeers.push(core.findingPeers())
     }
 
-    const updateReplication = () => {
-      if (core.replicator !== null) {
-        // if the only session left is the internal session + replication sessions, tell the replicator so it can gc
-        core.replicator.setDownloading(core.replicator.sessions + 1 !== core.sessions.length)
-      }
-    }
-
     const gc = () => {
       // technically better to also clear _findingPeers if we added it,
       // but the lifecycle for those are pretty short so prob not worth the complexity
       // as _decFindingPeers clear them all.
       this._sessions.delete(core)
-      updateReplication()
 
       if (!rw) return
       rw.write.unlock()
       if (!rw.write.locked) this._locks.delete(id)
     }
 
-    core.ready().then(updateReplication, gc)
+    core.ready().catch(gc)
     core.once('close', gc)
 
     return core
