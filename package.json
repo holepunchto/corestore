@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "b4a": "^1.6.4",
-    "hypercore": "^10.24.2",
+    "hypercore": "^10.24.10",
     "hypercore-crypto": "^3.4.0",
     "hypercore-id-encoding": "^1.2.0",
     "read-write-mutexify": "^2.1.0",
