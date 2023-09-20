@@ -294,9 +294,16 @@ module.exports = class Corestore extends ReadyResource {
       if (core.closing) return // extra safety here as ready is a tick after open
       if (hasKeyPair) core.setKeyPair(keyPair)
       this._emitCore('core-open', core)
-      for (const { stream } of this._replicationStreams) {
-        core.replicate(stream, { session: true })
+
+      const ondownloading = () => {
+        for (const { stream } of this._replicationStreams) {
+          core.replicate(stream, { session: true })
+        }
       }
+      // when the replicator says we are downloading, answer the call
+      core.replicator.ondownloading = ondownloading
+      // trigger once if the condition is already true
+      if (core.replicator.downloading) ondownloading()
     }, () => {
       this.cores.delete(id)
     })
@@ -382,7 +389,7 @@ module.exports = class Corestore extends ReadyResource {
     const stream = Hypercore.createProtocolStream(isInitiator, {
       ...opts,
       ondiscoverykey: async discoveryKey => {
-        const core = this.get({ _discoveryKey: discoveryKey })
+        const core = this.get({ _discoveryKey: discoveryKey, active: false })
 
         try {
           await core.ready()
@@ -390,14 +397,16 @@ module.exports = class Corestore extends ReadyResource {
           return
         }
 
-        if (this.passive && !core.closing) core.replicate(stream, { session: true })
+        // remote is asking for the core so we HAVE to answer even if not downloading
+        if (!core.closing) core.replicate(stream, { session: true })
         await core.close()
       }
     })
 
     if (!this.passive) {
       for (const core of this.cores.values()) {
-        if (!core.opened || core.closing) continue // If the core is not opened, it will be replicated in preload.
+        // If the core is not opened, it will be replicated in preload.
+        if (!core.opened || core.closing || !core.replicator.downloading) continue
         core.replicate(stream, { session: true })
       }
     }
