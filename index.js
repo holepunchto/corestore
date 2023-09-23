@@ -350,6 +350,7 @@ module.exports = class Corestore extends ReadyResource {
       ...opts,
       name: null,
       preload: async () => {
+        if (opts.preload) opts = { ...opts, ...(await opts.preload()) }
         if (!this.opened) await this.ready()
 
         const keys = await this._generateKeys(opts)
@@ -497,7 +498,7 @@ function validateGetOptions (opts) {
   if (opts.name && opts.secretKey) throw new Error('Cannot provide both a name and a secret key')
   if (opts.publicKey && !b4a.isBuffer(opts.publicKey)) throw new Error('publicKey option must be a Buffer or Uint8Array')
   if (opts.secretKey && !b4a.isBuffer(opts.secretKey)) throw new Error('secretKey option must be a Buffer or Uint8Array')
-  if (!opts._discoveryKey && (!opts.name && !opts.publicKey && !opts.manifest && !opts.key)) throw new Error('Must provide either a name or a publicKey')
+  if (!opts._discoveryKey && (!opts.name && !opts.publicKey && !opts.manifest && !opts.key && !opts.preload)) throw new Error('Must provide either a name or a publicKey')
   return opts
 }
 
