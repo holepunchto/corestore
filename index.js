@@ -279,6 +279,7 @@ module.exports = class Corestore extends ReadyResource {
       autoClose: true,
       active: false,
       encryptionKey: opts.encryptionKey || null,
+      isBlockKey: !!opts.isBlockKey,
       userData,
       manifest,
       key,
