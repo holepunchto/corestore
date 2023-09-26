@@ -316,7 +316,7 @@ module.exports = class Corestore extends ReadyResource {
       this.emit('conflict', core, len, fork, proof)
     })
 
-    return { from: core, keyPair, manifest }
+    return { from: core, keyPair, manifest, cache: !!opts.cache }
   }
 
   async createKeyPair (name, namespace = this._namespace) {
