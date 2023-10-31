@@ -256,7 +256,7 @@ module.exports = class Corestore extends ReadyResource {
 
     while (this.cores.has(id)) {
       const existing = this.cores.get(id)
-      if (existing.opened && !existing.closing) return { from: existing, keyPair, manifest }
+      if (existing.opened && !existing.closing) return { from: existing, keyPair, manifest, cache: !!opts.cache }
       if (existing.closing) {
         await existing.close()
       } else {
