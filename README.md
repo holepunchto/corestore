@@ -85,6 +85,9 @@ Useful when an application wants to accept an optional Corestore, but needs to m
 }
 ```
 
+#### `await store.close()`
+Fully close this Corestore instance.
+
 #### `store.on('core-open', core)`
 Emitted when the first session for a core is opened.
 
