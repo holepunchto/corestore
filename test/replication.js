@@ -205,8 +205,8 @@ test('passive replication does not leak any sessions', async function (t) {
 })
 
 test('replication sessions auto close when inactive', async function (t) {
-  const store1 = new Corestore(ram.reusable())
-  const store2 = new Corestore(ram.reusable())
+  const store1 = new Corestore(ram.reusable(), { notDownloadingLinger: 0 })
+  const store2 = new Corestore(ram.reusable(), { notDownloadingLinger: 0 })
 
   const a = store1.get({ name: 'a' })
 
@@ -227,6 +227,44 @@ test('replication sessions auto close when inactive', async function (t) {
   await b.close()
 
   await new Promise(resolve => setImmediate(resolve))
+
+  t.is(store1.cores.size, 0, 'gced all')
+  t.is(store2.cores.size, 0, 'gced all')
+
+  const c = store2.get({ key: a.key })
+
+  t.alike(await c.get(1), Buffer.from('testing 2'), 're-replication still works')
+
+  await c.close()
+
+  const d = store2.get({ key: a.key })
+
+  t.alike(await d.get(2), Buffer.from('testing 3'), 're-replication still works')
+})
+
+test('replication sessions auto close when inactive with linger', async function (t) {
+  const store1 = new Corestore(ram.reusable(), { notDownloadingLinger: 50 })
+  const store2 = new Corestore(ram.reusable(), { notDownloadingLinger: 50 })
+
+  const a = store1.get({ name: 'a' })
+
+  await a.append('testing 1')
+  await a.append('testing 2')
+  await a.append('testing 3')
+
+  const s1 = store1.replicate(true)
+  const s2 = store2.replicate(false)
+  s1.pipe(s2).pipe(s1)
+
+  await a.ready()
+  const b = store2.get({ key: a.key })
+
+  t.alike(await b.get(0), Buffer.from('testing 1'))
+
+  await a.close()
+  await b.close()
+
+  await new Promise(resolve => setTimeout(resolve, 200))
 
   t.is(store1.cores.size, 0, 'gced all')
   t.is(store2.cores.size, 0, 'gced all')

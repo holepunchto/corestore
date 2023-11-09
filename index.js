@@ -38,6 +38,7 @@ module.exports = class Corestore extends ReadyResource {
     this._overwrite = opts.overwrite === true
     this._readonly = opts.writable === false
     this._attached = opts._attached || null
+    this._notDownloadingLinger = opts.notDownloadingLinger
 
     this._sessions = new Set() // sessions for THIS namespace
     this._rootStoreSessions = new Set()
@@ -276,6 +277,7 @@ module.exports = class Corestore extends ReadyResource {
     const storageRoot = [CORES_DIR, id.slice(0, 2), id.slice(2, 4), id].join('/')
     const core = new Hypercore(p => this.storage(storageRoot + '/' + p), {
       _preready: this._preready.bind(this),
+      notDownloadingLinger: this._notDownloadingLinger,
       autoClose: true,
       active: false,
       encryptionKey: opts.encryptionKey || null,
