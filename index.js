@@ -32,6 +32,7 @@ module.exports = class Corestore extends ReadyResource {
     this._keyStorage = null
     this._bootstrap = opts._bootstrap || null
     this._namespace = opts.namespace || DEFAULT_NAMESPACE
+    this._noCoreCache = root ? root._noCoreCache : new Xache({ maxSize: 65536 })
 
     this._root = root || this
     this._replicationStreams = root ? root._replicationStreams : []
@@ -293,6 +294,7 @@ module.exports = class Corestore extends ReadyResource {
 
     if (this._root.closing) throw new Error('The corestore is closed')
     this.cores.set(id, core)
+    this._noCoreCache.delete(id)
     core.ready().then(() => {
       if (core.closing) return // extra safety here as ready is a tick after open
       if (hasKeyPair) core.setKeyPair(keyPair)
@@ -308,6 +310,7 @@ module.exports = class Corestore extends ReadyResource {
       // trigger once if the condition is already true
       if (core.replicator.downloading) ondownloading()
     }, () => {
+      this._noCoreCache.set(id, true)
       this.cores.delete(id)
     })
     core.once('close', () => {
@@ -393,6 +396,9 @@ module.exports = class Corestore extends ReadyResource {
     const stream = Hypercore.createProtocolStream(isInitiator, {
       ...opts,
       ondiscoverykey: async discoveryKey => {
+        const id = b4a.toString(discoveryKey, 'hex')
+        if (this._noCoreCache.get(id)) return
+
         const core = this.get({ _discoveryKey: discoveryKey, active: false })
 
         try {
