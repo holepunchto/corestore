@@ -299,6 +299,7 @@ module.exports = class Corestore extends ReadyResource {
       if (core.closing) return // extra safety here as ready is a tick after open
       if (hasKeyPair) core.setKeyPair(keyPair)
       this._emitCore('core-open', core)
+      if (this.passive) return
 
       const ondownloading = () => {
         for (const { stream } of this._replicationStreams) {
