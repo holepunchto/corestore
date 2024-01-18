@@ -292,7 +292,13 @@ module.exports = class Corestore extends ReadyResource {
       keyPair: hasKeyPair ? keyPair : null
     })
 
-    if (this._root.closing) throw new Error('The corestore is closed')
+    if (this._root.closing) {
+      try {
+        await core.close()
+      } catch {}
+      throw new Error('The corestore is closed')
+    }
+
     this.cores.set(id, core)
     this._noCoreCache.delete(id)
     core.ready().then(() => {
