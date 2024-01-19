@@ -28,6 +28,7 @@ module.exports = class Corestore extends ReadyResource {
     this.cache = !!opts.cache
     this.primaryKey = opts.primaryKey || null
     this.passive = !!opts.passive
+    this.manifestVersion = typeof opts.manifestVersion === 'number' ? opts.manifestVersion : (root ? root.manifestVersion : 1)
 
     this._keyStorage = null
     this._bootstrap = opts._bootstrap || null
@@ -167,6 +168,18 @@ module.exports = class Corestore extends ReadyResource {
     if (this._bootstrap) await this._openNamespaceFromBootstrap()
   }
 
+  async _exists (discoveryKey) {
+    const id = b4a.toString(discoveryKey, 'hex')
+    const storageRoot = getStorageRoot(id)
+
+    const st = this.storage(storageRoot + '/oplog')
+
+    const exists = await new Promise((resolve) => st.stat((err, st) => resolve(!err && st.size > 0)))
+    await new Promise(resolve => st.close(resolve))
+
+    return exists
+  }
+
   async _generateKeys (opts) {
     if (opts._discoveryKey) {
       return {
@@ -206,14 +219,27 @@ module.exports = class Corestore extends ReadyResource {
     const publicKey = opts.publicKey || keyPair.publicKey
 
     if (opts.compat === false) {
-      const manifest = { signer: { publicKey } } // default manifest
-      const key = Hypercore.key(manifest)
+      let manifest = { version: this.manifestVersion, signers: [{ publicKey }] } // default manifest
+      let key = Hypercore.key(manifest)
+      let discoveryKey = crypto.discoveryKey(key)
+
+      if (!(await this._exists(discoveryKey)) && manifest.version !== 0) {
+        const manifestV0 = { version: 0, signers: [{ publicKey }] }
+        const keyV0 = Hypercore.key(manifestV0)
+        const discoveryKeyV0 = crypto.discoveryKey(keyV0)
+
+        if (await this._exists(discoveryKeyV0)) {
+          manifest = manifestV0
+          key = keyV0
+          discoveryKey = discoveryKeyV0
+        }
+      }
 
       return {
         manifest,
         keyPair,
         key,
-        discoveryKey: crypto.discoveryKey(key)
+        discoveryKey
       }
     }
 
@@ -275,7 +301,7 @@ module.exports = class Corestore extends ReadyResource {
 
     // No more async ticks allowed after this point -- necessary for caching
 
-    const storageRoot = [CORES_DIR, id.slice(0, 2), id.slice(2, 4), id].join('/')
+    const storageRoot = getStorageRoot(id)
     const core = new Hypercore(p => this.storage(storageRoot + '/' + p), {
       _preready: this._preready.bind(this),
       notDownloadingLinger: this._notDownloadingLinger,
@@ -543,4 +569,8 @@ function isStream (s) {
 async function forceClose (core) {
   await core.ready()
   return Promise.all(core.sessions.map(s => s.close()))
+}
+
+function getStorageRoot (id) {
+  return CORES_DIR + '/' + id.slice(0, 2) + '/' + id.slice(2, 4) + '/' + id
 }

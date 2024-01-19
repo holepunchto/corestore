@@ -591,6 +591,28 @@ test('session that overtakes', async function (t) {
   t.is(store.closed, true)
 })
 
+test('compat prefers manifest 1 but supports 0 if its there', async function (t) {
+  const store = new Corestore(ram.reusable(), { manifestVersion: 0 })
+
+  const core = store.get({ name: 'test', compat: false })
+  await core.ready()
+
+  t.is(core.manifest.version, 0)
+
+  store.manifestVersion = 1
+
+  const core2 = store.get({ name: 'test', compat: false })
+  await core2.ready()
+
+  t.alike(core2.id, core.id)
+  t.is(core2.manifest.version, 0)
+
+  const core3 = store.get({ name: 'test2', compat: false })
+  await core3.ready()
+
+  t.is(core3.manifest.version, 1)
+})
+
 function randomBytes (n) {
   const buf = b4a.allocUnsafe(n)
   sodium.randombytes_buf(buf)
