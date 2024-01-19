@@ -16,6 +16,7 @@ const PRIMARY_KEY_FILE_NAME = 'primary-key'
 const USERDATA_NAME_KEY = 'corestore/name'
 const USERDATA_NAMESPACE_KEY = 'corestore/namespace'
 const POOL_SIZE = 512 // how many open fds to aim for before cycling them
+const DEFAULT_MANIFEST = 0 // bump to 1 when this is more widely deployed
 
 module.exports = class Corestore extends ReadyResource {
   constructor (storage, opts = {}) {
@@ -28,7 +29,7 @@ module.exports = class Corestore extends ReadyResource {
     this.cache = !!opts.cache
     this.primaryKey = opts.primaryKey || null
     this.passive = !!opts.passive
-    this.manifestVersion = typeof opts.manifestVersion === 'number' ? opts.manifestVersion : (root ? root.manifestVersion : 1)
+    this.manifestVersion = typeof opts.manifestVersion === 'number' ? opts.manifestVersion : (root ? root.manifestVersion : DEFAULT_MANIFEST)
 
     this._keyStorage = null
     this._bootstrap = opts._bootstrap || null
