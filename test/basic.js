@@ -598,6 +598,8 @@ test('compat prefers manifest 1 but supports 0 if its there', async function (t)
   await core.ready()
 
   t.is(core.manifest.version, 0)
+  t.is(core.manifest.signers.length, 1)
+  t.is(core.manifest.quorum, 1)
 
   store.manifestVersion = 1
 
@@ -606,11 +608,15 @@ test('compat prefers manifest 1 but supports 0 if its there', async function (t)
 
   t.alike(core2.id, core.id)
   t.is(core2.manifest.version, 0)
+  t.is(core2.manifest.signers.length, 1)
+  t.is(core2.manifest.quorum, 1)
 
   const core3 = store.get({ name: 'test2', compat: false })
   await core3.ready()
 
   t.is(core3.manifest.version, 1)
+  t.is(core3.manifest.signers.length, 1)
+  t.is(core3.manifest.quorum, 1)
 })
 
 function randomBytes (n) {
