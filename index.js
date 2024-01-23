@@ -430,6 +430,8 @@ module.exports = class Corestore extends ReadyResource {
     const stream = Hypercore.createProtocolStream(isInitiator, {
       ...opts,
       ondiscoverykey: async discoveryKey => {
+        if (this.closing) return
+
         const id = b4a.toString(discoveryKey, 'hex')
         if (this._noCoreCache.get(id)) return
 
