@@ -375,6 +375,10 @@ test('replication -- opening a core only affects direct replications', async fun
   const reopened1 = store1.get({ key })
   await reopened1.ready()
   t.is(store1.cores.size, 1, 'Sanity check: store1 has 1 core again')
+
+  // Allow the failure to trigger if present, before the test ends
+  // (avoids assertion-after-end errors)
+  await new Promise(resolve => setImmediate(resolve))
 })
 
 function replicate (t, store1, store2) {
