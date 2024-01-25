@@ -309,6 +309,74 @@ test('remotely open a core', async function (t) {
   await store2.close()
 })
 
+test('replication -- opening a core only affects direct replications', async function (t) {
+  // DEVNOTE: this test ensures that one peer in a swarm opening a core
+  //  doesn't force all other peers to open it too.
+  //  The expected behaviour is that all directly connected peers do so
+  //  but indirectly connected peers do not
+
+  const storage1 = ram.reusable()
+  const storage2 = ram.reusable()
+  const storage3 = ram.reusable()
+
+  let key = null
+
+  // Preparation: ensure all stores replicated the core
+  {
+    const store1 = new Corestore(storage1)
+    const store2 = new Corestore(storage2)
+    const store3 = new Corestore(storage3)
+
+    replicate(t, store1, store2)
+    replicate(t, store1, store3)
+
+    const core1 = store1.get({ name: 'core-1' })
+    await core1.append('hello')
+    key = core1.key
+
+    const core2 = store2.get({ key })
+    await core2.get(0)
+
+    const core3 = store3.get({ key })
+    await core3.get(0)
+
+    t.is(store1.cores.size, 1, 'Sanity check: 1 core initially')
+    t.is(store2.cores.size, 1, 'Sanity check: 1 core initially')
+    t.is(store3.cores.size, 1, 'Sanity check: 1 core initially')
+
+    await Promise.all([store1.close(), store2.close(), store3.close()])
+  }
+
+  // Actual test starts here
+
+  const store1 = new Corestore(storage1)
+  const store2 = new Corestore(storage2)
+  const store3 = new Corestore(storage3)
+
+  const tStore1 = t.test('Store 1 opens a core')
+  tStore1.plan(1)
+  const tStore2 = t.test('Store 2 opens a core')
+  tStore2.plan(1)
+
+  store1.on('core-open', () => { tStore1.pass('Store 1 opened a core') })
+  store2.on('core-open', () => { tStore2.pass('Store 2 opened a core') })
+  store3.on('core-open', () => {
+    t.fail('Store 3 should not open any cores if not directly replicating with another core opening it')
+  })
+
+  t.is(store1.cores.size, 0, 'Sanity check: 0 cores initially')
+  t.is(store2.cores.size, 0, 'Sanity check: 0 cores initially')
+  t.is(store3.cores.size, 0, 'Sanity check: 0 cores initially')
+
+  replicate(t, store1, store2)
+  replicate(t, store2, store3)
+  // No replication between 1 and 3
+
+  const reopened1 = store1.get({ key })
+  await reopened1.ready()
+  t.is(store1.cores.size, 1, 'Sanity check: store1 has 1 core again')
+})
+
 function replicate (t, store1, store2) {
   const s1 = store1.replicate(true)
   const s2 = store2.replicate(false)
