@@ -17,6 +17,7 @@ const USERDATA_NAME_KEY = 'corestore/name'
 const USERDATA_NAMESPACE_KEY = 'corestore/namespace'
 const POOL_SIZE = 512 // how many open fds to aim for before cycling them
 const DEFAULT_MANIFEST = 0 // bump to 1 when this is more widely deployed
+const DEFAULT_COMPAT = true
 
 module.exports = class Corestore extends ReadyResource {
   constructor (storage, opts = {}) {
@@ -30,6 +31,7 @@ module.exports = class Corestore extends ReadyResource {
     this.primaryKey = opts.primaryKey || null
     this.passive = !!opts.passive
     this.manifestVersion = typeof opts.manifestVersion === 'number' ? opts.manifestVersion : (root ? root.manifestVersion : DEFAULT_MANIFEST)
+    this.compat = typeof opts.compat === 'boolean' ? opts.compat : (root ? root.compat : DEFAULT_COMPAT)
 
     this._keyStorage = null
     this._bootstrap = opts._bootstrap || null
@@ -219,7 +221,7 @@ module.exports = class Corestore extends ReadyResource {
 
     const publicKey = opts.publicKey || keyPair.publicKey
 
-    if (opts.compat === false) {
+    if (opts.compat === false || (opts.compat !== true && !this.compat)) {
       let manifest = { version: this.manifestVersion, signers: [{ publicKey }] } // default manifest
       let key = Hypercore.key(manifest)
       let discoveryKey = crypto.discoveryKey(key)
