@@ -492,7 +492,7 @@ module.exports = class Corestore extends ReadyResource {
     return session
   }
 
-  async _closeNamespace () {
+  _closeNamespace () {
     const closePromises = []
     for (const session of this._sessions) {
       const id = session.discoveryKey.toString('hex')
