@@ -619,6 +619,22 @@ test('compat prefers manifest 1 but supports 0 if its there', async function (t)
   t.is(core3.manifest.quorum, 1)
 })
 
+test('get after close', async function (t) {
+  const store = new Corestore(ram)
+  const session = store.session()
+
+  const core = session.get({ name: 'test' })
+
+  await core.ready()
+  const sess = core.session()
+
+  const p = sess.get(0) // never resolves
+
+  session.close()
+
+  await t.exception(p, /SESSION_CLOSED/)
+})
+
 function randomBytes (n) {
   const buf = b4a.allocUnsafe(n)
   sodium.randombytes_buf(buf)

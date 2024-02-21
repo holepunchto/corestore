@@ -46,6 +46,7 @@ module.exports = class Corestore extends ReadyResource {
     this._sessions = new Set() // sessions for THIS namespace
     this._rootStoreSessions = new Set()
     this._locks = root ? root._locks : new Map()
+    this._refs = root ? root._refs : new Map()
 
     this._findingPeersCount = 0
     this._findingPeers = []
@@ -285,7 +286,11 @@ module.exports = class Corestore extends ReadyResource {
 
     while (this.cores.has(id)) {
       const existing = this.cores.get(id)
-      if (existing.opened && !existing.closing) return { from: existing, keyPair, manifest, cache: !!opts.cache }
+      if (existing.opened && !existing.closing) {
+        const count = this._refs.get(id)
+        this._refs.set(id, count + 1)
+        return { from: existing, keyPair, manifest, cache: !!opts.cache }
+      }
       if (existing.closing) {
         await existing.close()
       } else {
@@ -327,6 +332,8 @@ module.exports = class Corestore extends ReadyResource {
     }
 
     this.cores.set(id, core)
+    this._refs.set(id, 1)
+
     this._noCoreCache.delete(id)
     core.ready().then(() => {
       if (core.closing) return // extra safety here as ready is a tick after open
@@ -485,10 +492,18 @@ module.exports = class Corestore extends ReadyResource {
     return session
   }
 
-  _closeNamespace () {
+  async _closeNamespace () {
     const closePromises = []
     for (const session of this._sessions) {
-      closePromises.push(session.close())
+      const id = session.discoveryKey.toString('hex')
+      const count = this._refs.get(id)
+      if (count === 1) {
+        closePromises.push(forceClose(session))
+        this._refs.delete(id)
+      } else {
+        closePromises.push(session.close())
+        this._refs.set(id, count - 1)
+      }
     }
     return Promise.allSettled(closePromises)
   }
