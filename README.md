@@ -24,10 +24,17 @@ const core2 = store.get({ name: 'core-2' })
 ```
 
 ### API
-#### `const store = new Corestore(storage)`
+#### `const store = new Corestore(storage, opts = {})`
 Create a new Corestore instance.
 
 `storage` can be either a random-access-storage module, a string, or a function that takes a path and returns an random-access-storage instance.
+
+Opts include:
+```js
+{
+  inflightRange: null // Advanced option. Forwarded to the Hypercores created by corestore.get(...)
+}
+```
 
 #### `const core = store.get(key | { name: 'a-name', exclusive, ...hypercoreOpts})`
 Loads a Hypercore, either by name (if the `name` option is provided), or from the provided key (if the first argument is a Buffer or String with hex/z32 key, or if the `key` options is set).
@@ -81,7 +88,8 @@ Useful when an application wants to accept an optional Corestore, but needs to m
 {
   primaryKey, // Overrides the primaryKey for this session
   namespace, // If set to null it will reset to the DEFAULT_NAMESPACE
-  detach: true // By disabling this, closing the session will also close the store that created the session
+  detach: true, // By disabling this, closing the session will also close the store that created the session
+  inflightRange: null // Advanced option. Forwarded to the Hypercores created by `session.get(...)
 }
 ```
 
