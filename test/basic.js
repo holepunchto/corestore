@@ -535,27 +535,8 @@ test('inflightRange option in constructor', async function (t) {
   t.alike(store.inflightRange, [123, 123], 'inflightRange set on the corestore')
 
   const a = store.get({ name: 'a' })
-  t.alike(a.inflightRange, [123, 123], 'inflightRange set on core')
-
-  const session = store.session()
-  const b = session.get({ name: 'b' })
-  t.alike(b.inflightRange, [123, 123], 'inflightRange option passed on to session')
-})
-
-test('inflightRange option in session', async function (t) {
-  const store = new Corestore(ram)
-  t.is(store.inflightRange, null, 'Default null inflightRange')
-
-  const a = store.get({ name: 'a' })
-  t.is(a.inflightRange, null, 'inflightRange by default not set when creating a core')
-
-  const session = store.session({ inflightRange: [123, 123] })
-  t.alike(session.inflightRange, [123, 123], 'inflightRange set on the session')
-  const b = session.get({ name: 'b' })
-  t.alike(b.inflightRange, [123, 123], 'inflightRange option set on core created with the session')
-
-  const otherSession = session.session({ inflightRange: [456, 456] })
-  t.alike(otherSession.inflightRange, [456, 456], 'Can specify another inflightRange on a new session')
+  await a.ready()
+  t.alike(a.replicator.inflightRange, [123, 123], 'inflightRange set on core')
 })
 
 test('store session inherits writable option from parent session', async function (t) {

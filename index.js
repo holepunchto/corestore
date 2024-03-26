@@ -309,6 +309,7 @@ module.exports = class Corestore extends ReadyResource {
     const core = new Hypercore(p => this.storage(storageRoot + '/' + p), {
       _preready: this._preready.bind(this),
       notDownloadingLinger: this._notDownloadingLinger,
+      inflightRange: this.inflightRange,
       autoClose: true,
       active: false,
       encryptionKey: opts.encryptionKey || null,
@@ -384,9 +385,6 @@ module.exports = class Corestore extends ReadyResource {
     }
     if (this._readonly && opts.writable !== false) {
       opts.writable = false
-    }
-    if (!opts.inflightRange && this.inflightRange) {
-      opts.inflightRange = this.inflightRange
     }
 
     let rw = null
