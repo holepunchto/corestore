@@ -32,6 +32,7 @@ module.exports = class Corestore extends ReadyResource {
     this.passive = !!opts.passive
     this.manifestVersion = typeof opts.manifestVersion === 'number' ? opts.manifestVersion : (root ? root.manifestVersion : DEFAULT_MANIFEST)
     this.compat = typeof opts.compat === 'boolean' ? opts.compat : (root ? root.compat : DEFAULT_COMPAT)
+    this.inflightRange = opts.inflightRange || null
 
     this._keyStorage = null
     this._bootstrap = opts._bootstrap || null
@@ -384,6 +385,9 @@ module.exports = class Corestore extends ReadyResource {
     if (this._readonly && opts.writable !== false) {
       opts.writable = false
     }
+    if (!opts.inflightRange && this.inflightRange) {
+      opts.inflightRange = this.inflightRange
+    }
 
     let rw = null
     let id = null
@@ -483,6 +487,7 @@ module.exports = class Corestore extends ReadyResource {
       writable: !this._readonly,
       _attached: opts && opts.detach === false ? this : null,
       _root: this._root,
+      inflightRange: this.inflightRange,
       ...opts
     })
     if (this === this._root) this._rootStoreSessions.add(session)
