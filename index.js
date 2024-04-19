@@ -454,11 +454,14 @@ module.exports = class Corestore extends ReadyResource {
     })
 
     if (!this.passive) {
+      const muxer = stream.noiseStream.userData
+      muxer.cork()
       for (const core of this.cores.values()) {
         // If the core is not opened, it will be replicated in preload.
         if (!core.opened || core.closing || !core.replicator.downloading) continue
         core.replicate(stream, { session: true })
       }
+      stream.noiseStream.opened.then(() => muxer.uncork())
     }
 
     const streamRecord = { stream, isExternal }
