@@ -135,13 +135,13 @@ test('active replication', async function (t) {
   await a.append('hello')
   await b.append('world')
 
-  const sessionsInitial = a.sessions.length + b.sessions.length
+  const sessionsInitial = a.core.active + b.core.active
 
   const s1 = store1.replicate(true)
   const s2 = store2.replicate(false)
   s1.pipe(s2).pipe(s1)
 
-  const sessionsAfter = a.sessions.length + b.sessions.length
+  const sessionsAfter = a.core.active + b.core.active
   t.ok(sessionsAfter > sessionsInitial)
 })
 
@@ -155,13 +155,13 @@ test('passive replication', async function (t) {
   await a.append('hello')
   await b.append('world')
 
-  const sessionsInitial = a.sessions.length + b.sessions.length
+  const sessionsInitial = a.core.active + b.core.active
 
   const s1 = store1.replicate(true)
   const s2 = store2.replicate(false)
   s1.pipe(s2).pipe(s1)
 
-  const sessionsAfter = a.sessions.length + b.sessions.length
+  const sessionsAfter = a.core.active + b.core.active
   t.is(sessionsInitial, sessionsAfter)
 
   const c = store2.get({ key: a.key })
@@ -170,7 +170,7 @@ test('passive replication', async function (t) {
   t.alike(await c.get(0), Buffer.from('hello'))
   t.alike(await d.get(0), Buffer.from('world'))
 
-  const sessionsFinal = a.sessions.length + b.sessions.length
+  const sessionsFinal = a.core.active + b.core.active
   t.ok(sessionsFinal > sessionsAfter)
 })
 
