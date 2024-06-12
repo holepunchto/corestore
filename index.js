@@ -16,7 +16,7 @@ const PRIMARY_KEY_FILE_NAME = 'primary-key'
 const USERDATA_NAME_KEY = 'corestore/name'
 const USERDATA_NAMESPACE_KEY = 'corestore/namespace'
 const POOL_SIZE = 512 // how many open fds to aim for before cycling them
-const DEFAULT_MANIFEST = 0 // bump to 1 when this is more widely deployed
+const DEFAULT_MANIFEST = 1
 const DEFAULT_COMPAT = true
 
 module.exports = class Corestore extends ReadyResource {
