@@ -381,6 +381,24 @@ test('replication -- opening a core only affects direct replications', async fun
   await new Promise(resolve => setImmediate(resolve))
 })
 
+test('basic replication', async function (t) {
+  t.plan(1)
+
+  const store1 = new Corestore(ram)
+  const store2 = new Corestore(ram)
+
+  const core1 = store1.get({ name: 'core-1' })
+  const core2 = store1.get({ name: 'core-2' })
+  await core1.append('hello')
+  await core2.append('world')
+
+  store2.get({ key: core1.key })
+
+  replicate(t, store1, store2)
+
+  store1.on('no-remote', () => t.pass())
+})
+
 function replicate (t, store1, store2) {
   const s1 = store1.replicate(true)
   const s2 = store2.replicate(false)

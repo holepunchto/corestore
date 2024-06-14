@@ -338,6 +338,8 @@ module.exports = class Corestore extends ReadyResource {
       this._emitCore('core-open', core)
       if (this.passive) return
 
+      core.on('no-remote', peer => { this.emit('no-remote', core, peer) })
+
       const ondownloading = () => {
         for (const { stream } of this._replicationStreams) {
           core.replicate(stream, { session: true })
