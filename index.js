@@ -33,6 +33,7 @@ module.exports = class Corestore extends ReadyResource {
     this.manifestVersion = typeof opts.manifestVersion === 'number' ? opts.manifestVersion : (root ? root.manifestVersion : DEFAULT_MANIFEST)
     this.compat = typeof opts.compat === 'boolean' ? opts.compat : (root ? root.compat : DEFAULT_COMPAT)
     this.inflightRange = opts.inflightRange || null
+    this.globalCache = opts.globalCache || null
 
     this._keyStorage = null
     this._bootstrap = opts._bootstrap || null
@@ -319,6 +320,7 @@ module.exports = class Corestore extends ReadyResource {
       key,
       compat: opts.compat,
       cache: opts.cache,
+      globalCache: this.globalCache,
       createIfMissing: opts.createIfMissing === false ? false : !opts._discoveryKey,
       keyPair: hasKeyPair ? keyPair : null
     })
@@ -392,6 +394,7 @@ module.exports = class Corestore extends ReadyResource {
 
     const core = new Hypercore(null, {
       ...opts,
+      globalCache: this.globalCache,
       name: null,
       preload: async () => {
         if (opts.preload) opts = { ...opts, ...(await opts.preload()) }
