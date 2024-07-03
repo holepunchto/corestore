@@ -492,6 +492,7 @@ module.exports = class Corestore extends ReadyResource {
       _attached: opts && opts.detach === false ? this : null,
       _root: this._root,
       inflightRange: this.inflightRange,
+      globalCache: this.globalCache,
       ...opts
     })
     if (this === this._root) this._rootStoreSessions.add(session)
