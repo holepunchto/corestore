@@ -51,7 +51,9 @@ test('global cache used by all derived cores', async t => {
   const store = new Corestore(RAM, { globalCache })
 
   const core = store.get({ name: 'core' })
+  await core.ready()
   const core2 = store.get({ name: 'core2' })
+  await core2.ready()
 
   t.is(core.globalCache, globalCache, 'passed to generated core')
   t.is(core.globalCache, core2.globalCache, 'sanity check')
