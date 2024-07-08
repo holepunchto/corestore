@@ -1,5 +1,6 @@
 const test = require('brittle')
 const RAM = require('random-access-memory')
+const Rache = require('rache')
 
 const Corestore = require('..')
 
@@ -43,4 +44,17 @@ test('core cache on namespace', async function (t) {
 
   t.ok(c1.cache)
   t.ok(c2.cache)
+})
+
+test('global cache used by all derived cores', async t => {
+  const globalCache = new Rache()
+  const store = new Corestore(RAM, { globalCache })
+
+  const core = store.get({ name: 'core' })
+  await core.ready()
+  const core2 = store.get({ name: 'core2' })
+  await core2.ready()
+
+  t.is(core.globalCache, globalCache, 'passed to generated core')
+  t.is(core.globalCache, core2.globalCache, 'sanity check')
 })
