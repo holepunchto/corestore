@@ -33,7 +33,7 @@ module.exports = class Corestore extends ReadyResource {
     this.manifestVersion = typeof opts.manifestVersion === 'number' ? opts.manifestVersion : (root ? root.manifestVersion : DEFAULT_MANIFEST)
     this.compat = typeof opts.compat === 'boolean' ? opts.compat : (root ? root.compat : DEFAULT_COMPAT)
     this.inflightRange = opts.inflightRange || null
-    this.globalCache = opts.globalCache || null // Unofficial option, only use if you know what you are doing (no semver guarantees)
+    this.globalCache = opts.globalCache || null
 
     this._keyStorage = null
     this._bootstrap = opts._bootstrap || null
