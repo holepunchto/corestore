@@ -368,7 +368,7 @@ module.exports = class Corestore extends ReadyResource {
     if (!this.opened) await this.ready()
 
     const keyPair = {
-      publicKey: b4a.allocUnsafe(sodium.crypto_sign_PUBLICKEYBYTES),
+      publicKey: b4a.allocUnsafeSlow(sodium.crypto_sign_PUBLICKEYBYTES),
       secretKey: b4a.alloc(sodium.crypto_sign_SECRETKEYBYTES)
     }
 
@@ -561,7 +561,7 @@ function validateGetOptions (opts) {
 
 function generateNamespace (namespace, name) {
   if (!b4a.isBuffer(name)) name = b4a.from(name)
-  const out = b4a.allocUnsafe(32)
+  const out = b4a.allocUnsafeSlow(32)
   sodium.crypto_generichash_batch(out, [namespace, name])
   return out
 }
