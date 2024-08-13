@@ -7,7 +7,6 @@ const Xache = require('xache')
 const b4a = require('b4a')
 const ReadyResource = require('ready-resource')
 const RW = require('read-write-mutexify')
-const unslab = require('unslab')
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
@@ -301,7 +300,7 @@ module.exports = class Corestore extends ReadyResource {
     const hasKeyPair = !!(keyPair && keyPair.secretKey)
     const userData = {}
     if (opts.name) {
-      userData[USERDATA_NAME_KEY] = unslab(b4a.from(opts.name))
+      userData[USERDATA_NAME_KEY] = b4a.from(opts.name)
       userData[USERDATA_NAMESPACE_KEY] = this._namespace
     }
 
