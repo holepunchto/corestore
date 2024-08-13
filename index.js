@@ -7,6 +7,7 @@ const Xache = require('xache')
 const b4a = require('b4a')
 const ReadyResource = require('ready-resource')
 const RW = require('read-write-mutexify')
+const unslab = require('unslab')
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
@@ -300,7 +301,7 @@ module.exports = class Corestore extends ReadyResource {
     const hasKeyPair = !!(keyPair && keyPair.secretKey)
     const userData = {}
     if (opts.name) {
-      userData[USERDATA_NAME_KEY] = b4a.from(opts.name)
+      userData[USERDATA_NAME_KEY] = unslab(b4a.from(opts.name))
       userData[USERDATA_NAMESPACE_KEY] = this._namespace
     }
 
@@ -368,7 +369,7 @@ module.exports = class Corestore extends ReadyResource {
     if (!this.opened) await this.ready()
 
     const keyPair = {
-      publicKey: b4a.allocUnsafe(sodium.crypto_sign_PUBLICKEYBYTES),
+      publicKey: b4a.allocUnsafeSlow(sodium.crypto_sign_PUBLICKEYBYTES),
       secretKey: b4a.alloc(sodium.crypto_sign_SECRETKEYBYTES)
     }
 
@@ -561,7 +562,7 @@ function validateGetOptions (opts) {
 
 function generateNamespace (namespace, name) {
   if (!b4a.isBuffer(name)) name = b4a.from(name)
-  const out = b4a.allocUnsafe(32)
+  const out = b4a.allocUnsafeSlow(32)
   sodium.crypto_generichash_batch(out, [namespace, name])
   return out
 }
