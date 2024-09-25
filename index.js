@@ -390,6 +390,8 @@ module.exports = class Corestore extends ReadyResource {
         rw = (opts.exclusive && opts.writable !== false) ? this._getLock(id) : null
 
         if (rw) await rw.write.lock()
+        if (this._root.closing) throw new Error('The corestore is closed')
+
         return await this._preload(id, keys, opts)
       }
     })
