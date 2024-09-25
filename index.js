@@ -245,7 +245,11 @@ module.exports = class Corestore extends ReadyResource {
 
   _getPrereadyUserData (core, key) {
     // Need to manually read the header values before the Hypercore is ready, hence the ugliness.
-    return core.state.storage.getUserData(key)
+    const batch = core.state.storage.createReadBatch()
+    const p = batch.getUserData(key)
+    batch.tryFlush()
+
+    return p
   }
 
   async _preready (core) {
