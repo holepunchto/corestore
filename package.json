@@ -35,7 +35,7 @@
     "hypercore": "github:holepunchto/hypercore#rocksdb",
     "hypercore-crypto": "^3.4.0",
     "hypercore-id-encoding": "^1.2.0",
-    "hypercore-on-the-rocks": "0.0.18",
+    "hypercore-on-the-rocks": "^0.0.17",
     "read-write-mutexify": "^2.1.0",
     "ready-resource": "^1.0.0",
     "safety-catch": "^1.0.1",
