@@ -296,6 +296,7 @@ module.exports = class Corestore extends ReadyResource {
       inflightRange: this.inflightRange,
       autoClose: true,
       active: false,
+      discoveryKey: keys.discoveryKey,
       encryptionKey: opts.encryptionKey || null,
       isBlockKey: !!opts.isBlockKey,
       userData,
