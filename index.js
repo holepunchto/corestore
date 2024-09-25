@@ -24,7 +24,7 @@ module.exports = class Corestore extends ReadyResource {
 
     const root = opts._root
 
-    this.storage = Hypercore.defaultStorage(storage, { lock: PRIMARY_KEY_FILE_NAME, poolSize: opts.poolSize || POOL_SIZE, rmdir: true })
+    this.storage = Hypercore.defaultStorage(storage, { autoClose: false, lock: PRIMARY_KEY_FILE_NAME, poolSize: opts.poolSize || POOL_SIZE, rmdir: true })
     this.cores = root ? root.cores : new Map()
     this.cache = !!opts.cache
     this.primaryKey = opts.primaryKey || null
