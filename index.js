@@ -11,7 +11,6 @@ const RW = require('read-write-mutexify')
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
 
-const CORES_DIR = 'cores'
 const PRIMARY_KEY_FILE_NAME = 'primary-key'
 const USERDATA_NAME_KEY = 'corestore/name'
 const USERDATA_NAMESPACE_KEY = 'corestore/namespace'
@@ -150,39 +149,27 @@ module.exports = class Corestore extends ReadyResource {
       return
     }
 
-    this._keyStorage = this.storage(PRIMARY_KEY_FILE_NAME)
+    if (this.primaryKey) {
+      if (!(await this.storage.setLocalSeed(this.primaryKey, this._overwrite))) {
+        throw new Error('Another primary key is stored here')
+      }
+    }
 
-    this.primaryKey = await new Promise((resolve, reject) => {
-      this._keyStorage.stat((err, st) => {
-        if (err && err.code !== 'ENOENT') return reject(err)
-        if (err || st.size < 32 || this._overwrite) {
-          const key = this.primaryKey || crypto.randomBytes(32)
-          return this._keyStorage.write(0, key, err => {
-            if (err) return reject(err)
-            return resolve(key)
-          })
-        }
-        this._keyStorage.read(0, 32, (err, key) => {
-          if (err) return reject(err)
-          if (this.primaryKey) return resolve(this.primaryKey)
-          return resolve(key)
-        })
-      })
-    })
+    if (!this.primaryKey) {
+      const key = await this.storage.getLocalSeed()
+      if (key) {
+        this.primaryKey = key
+      } else {
+        this.primaryKey = crypto.randomBytes(32)
+        await this.storage.setLocalSeed(this.primaryKey)
+      }
+    }
 
     if (this._bootstrap) await this._openNamespaceFromBootstrap()
   }
 
   async _exists (discoveryKey) {
-    const id = b4a.toString(discoveryKey, 'hex')
-    const storageRoot = getStorageRoot(id)
-
-    const st = this.storage(storageRoot + '/oplog')
-
-    const exists = await new Promise((resolve) => st.stat((err, st) => resolve(!err && st.size > 0)))
-    await new Promise(resolve => st.close(resolve))
-
-    return exists
+    return this.storage.has(discoveryKey)
   }
 
   async _generateKeys (opts) {
@@ -258,17 +245,14 @@ module.exports = class Corestore extends ReadyResource {
 
   _getPrereadyUserData (core, key) {
     // Need to manually read the header values before the Hypercore is ready, hence the ugliness.
-    for (const { key: savedKey, value } of core.core.header.userData) {
-      if (key === savedKey) return value
-    }
-    return null
+    return core.state.storage.getUserData(key)
   }
 
   async _preready (core) {
-    const name = this._getPrereadyUserData(core, USERDATA_NAME_KEY)
+    const name = await this._getPrereadyUserData(core, USERDATA_NAME_KEY)
     if (!name) return
 
-    const namespace = this._getPrereadyUserData(core, USERDATA_NAMESPACE_KEY)
+    const namespace = await this._getPrereadyUserData(core, USERDATA_NAMESPACE_KEY)
     const keyPair = await this.createKeyPair(b4a.toString(name), namespace)
     core.setKeyPair(keyPair)
   }
@@ -306,8 +290,7 @@ module.exports = class Corestore extends ReadyResource {
 
     // No more async ticks allowed after this point -- necessary for caching
 
-    const storageRoot = getStorageRoot(id)
-    const core = new Hypercore(p => this.storage(storageRoot + '/' + p), {
+    const core = new Hypercore(this.storage, {
       _preready: this._preready.bind(this),
       notDownloadingLinger: this._notDownloadingLinger,
       inflightRange: this.inflightRange,
@@ -518,12 +501,7 @@ module.exports = class Corestore extends ReadyResource {
       closePromises.push(forceClose(core))
     }
     await Promise.allSettled(closePromises)
-    await new Promise((resolve, reject) => {
-      this._keyStorage.close(err => {
-        if (err) return reject(err)
-        return resolve(null)
-      })
-    })
+    await this.storage.close()
   }
 
   async _close () {
@@ -583,9 +561,5 @@ function isStream (s) {
 
 async function forceClose (core) {
   await core.ready()
-  return Promise.all(core.sessions.map(s => s.close()))
-}
-
-function getStorageRoot (id) {
-  return CORES_DIR + '/' + id.slice(0, 2) + '/' + id.slice(2, 4) + '/' + id
+  return core.close({ force: true })
 }
