@@ -7,6 +7,7 @@ const Xache = require('xache')
 const b4a = require('b4a')
 const ReadyResource = require('ready-resource')
 const RW = require('read-write-mutexify')
+const { crypto_pwhash_OPSLIMIT_MODERATE, crypto_pwhash_MEMLIMIT_MODERATE, crypto_pwhash_ALG_DEFAULT, crypto_pwhash_SALTBYTES } = require('sodium-universal') // eslint-disable-line
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
@@ -34,6 +35,11 @@ module.exports = class Corestore extends ReadyResource {
     this.compat = typeof opts.compat === 'boolean' ? opts.compat : (root ? root.compat : DEFAULT_COMPAT)
     this.inflightRange = opts.inflightRange || null
     this.globalCache = opts.globalCache || null
+    this.useEncryptedPrimaryKey = opts.useEncryptedPrimaryKey === true
+    this.password = opts.password || null
+    if (this.password === null && this.useEncryptedPrimaryKey) {
+      throw new Error('A password must be specified when useEncryptedPrimaryKey is true')
+    }
 
     this._keyStorage = null
     this._bootstrap = opts._bootstrap || null
@@ -155,18 +161,50 @@ module.exports = class Corestore extends ReadyResource {
     this.primaryKey = await new Promise((resolve, reject) => {
       this._keyStorage.stat((err, st) => {
         if (err && err.code !== 'ENOENT') return reject(err)
-        if (err || st.size < 32 || this._overwrite) {
-          const key = this.primaryKey || crypto.randomBytes(32)
-          return this._keyStorage.write(0, key, err => {
+        if (this.useEncryptedPrimaryKey) {
+          if (st !== undefined) {
+            const expectedSize = 16 + sodium.crypto_generichash_BYTES
+            if (st.size !== expectedSize) {
+              reject(new Error('Encrypted-primary-key mode expects a 16-byte salt followed by a checksum'))
+            }
+            this._keyStorage.read(0, expectedSize, (err, saltAndCheckSum) => {
+              if (err) return reject(err)
+              // TODO: figure out why the following line exists for the other path
+              // if (this.primaryKey) return resolve(this.primaryKey)
+              const salt = b4a.alloc(16)
+              const checkSum = b4a.alloc(sodium.crypto_generichash_BYTES)
+              b4a.copy(saltAndCheckSum, salt, 0, 0, 16)
+              b4a.copy(saltAndCheckSum, checkSum, 0, 16, 16 + sodium.crypto_generichash_BYTES)
+
+              const primaryKey = getPrimaryKeyFromPassword(this.password, salt)
+              verifyAgainstChecksum(primaryKey, checkSum)
+
+              return resolve(primaryKey)
+            })
+          } else {
+            const salt = crypto.randomBytes(16)
+            const primaryKey = getPrimaryKeyFromPassword(this.password, salt)
+            const checkSum = deriveChecksum(primaryKey)
+            const saltWithChecksum = b4a.concat([salt, checkSum])
+            this._keyStorage.write(0, saltWithChecksum, err => {
+              if (err) return reject(err)
+              return resolve(primaryKey)
+            })
+          }
+        } else {
+          if (err || st.size < 32 || this._overwrite) {
+            const key = this.primaryKey || crypto.randomBytes(32)
+            return this._keyStorage.write(0, key, err => {
+              if (err) return reject(err)
+              return resolve(key)
+            })
+          }
+          this._keyStorage.read(0, 32, (err, key) => {
             if (err) return reject(err)
+            if (this.primaryKey) return resolve(this.primaryKey)
             return resolve(key)
           })
         }
-        this._keyStorage.read(0, 32, (err, key) => {
-          if (err) return reject(err)
-          if (this.primaryKey) return resolve(this.primaryKey)
-          return resolve(key)
-        })
       })
     })
 
@@ -381,6 +419,9 @@ module.exports = class Corestore extends ReadyResource {
   get (opts = {}) {
     if (this.closing || this._root.closing) throw new Error('The corestore is closed')
     opts = validateGetOptions(opts)
+    if (this.useEncryptedPrimaryKey && !opts.encryptionKey) {
+      throw new Error('You must create encrypted hypercores when the corestore operates with an encrypted primary key')
+    }
 
     if (opts.cache !== false) {
       opts.cache = opts.cache === true || (this.cache && !opts.cache) ? defaultCache() : opts.cache
@@ -588,4 +629,23 @@ async function forceClose (core) {
 
 function getStorageRoot (id) {
   return CORES_DIR + '/' + id.slice(0, 2) + '/' + id.slice(2, 4) + '/' + id
+}
+
+function getPrimaryKeyFromPassword (passwd, salt, expectedChecksum) {
+  const primaryKey = b4a.alloc(32)
+  sodium.crypto_pwhash(primaryKey, passwd, salt, crypto_pwhash_OPSLIMIT_MODERATE, crypto_pwhash_MEMLIMIT_MODERATE, crypto_pwhash_ALG_DEFAULT)
+
+  return primaryKey
+}
+
+function deriveChecksum (buffer) {
+  const checkSum = b4a.alloc(sodium.crypto_generichash_BYTES)
+  sodium.crypto_generichash(checkSum, buffer)
+  return checkSum
+}
+
+function verifyAgainstChecksum (buffer, expectedChecksum) {
+  const checkSum = deriveChecksum(buffer)
+  if (b4a.equals(checkSum, expectedChecksum)) return true
+  throw new Error('Checksum mismatch (invalid password?)')
 }
