@@ -199,6 +199,7 @@ class Corestore extends ReadyResource {
 
     return {
       active: opts.active !== false,
+      encryptionKey: opts.encryptionKey,
       valueEncoding: opts.valueEncoding || null,
       exclusive: !!opts.exclusive,
       manifest: opts.manifest || null,
