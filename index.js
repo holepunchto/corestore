@@ -48,6 +48,10 @@ class CoreTracker extends EventEmitter {
     this.map = new Map()
   }
 
+  get size () {
+    return this.map.size
+  }
+
   get (id) {
     return this.map.get(id) || null
   }
@@ -132,7 +136,8 @@ class Corestore extends ReadyResource {
       const uncork = muxer.uncork.bind(muxer)
       muxer.cork()
 
-      for (const core of this.cores.values()) {
+      for (const core of this.cores) {
+
         if (!core.replicator.downloading || core.replicator.attached(muxer) || !core.opened) continue
         core.replicator.attachTo(muxer)
       }
