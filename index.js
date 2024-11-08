@@ -104,6 +104,12 @@ class Corestore extends ReadyResource {
       this.bootstrap = null
     }
 
+    if (this.root !== null) {
+      if (this.root.opened === false) await this.root.ready()
+      this.primaryKey = this.root.primaryKey
+      return
+    }
+
     if (this.primaryKey) return
 
     let primaryKey = await this.storage.getLocalSeed()
