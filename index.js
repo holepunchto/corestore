@@ -154,7 +154,7 @@ class Corestore extends ReadyResource {
     if (b4a.isBuffer(opts)) opts = { key: opts }
     if (!opts) opts = {}
 
-    const sopts = this.opened === false
+    const sopts = this.opened === false || opts.preload
       ? { preload: this._preload(opts) }
       : this._getSessionOptions(opts)
 
