@@ -21,6 +21,29 @@ test('basic', async function (t) {
   await core2.close()
 })
 
+test('session from a core', async function (t) {
+  const store = await create(t)
+
+  const ns = store.namespace('yo')
+  const core = ns.get({ name: 'test' })
+
+  const session = store.namespace(core)
+
+  const core2 = session.get({ name: 'test' })
+
+  await core.ready()
+  await core2.ready()
+
+  t.is(core.id, core2.id)
+
+  await core.close()
+  await core2.close()
+
+  await session.close()
+  await ns.close()
+  await store.close()
+})
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)

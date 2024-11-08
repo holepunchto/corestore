@@ -76,7 +76,8 @@ class Corestore extends ReadyResource {
     super()
 
     this.root = opts.root || null
-    this.storage = Hypercore.defaultStorage(storage)
+    this.bootstrap = opts.bootstrap || null
+    this.storage = this.root ? this.root.storage : Hypercore.defaultStorage(storage)
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.primaryKey = this.root ? this.root.primaryKey : null
@@ -86,7 +87,23 @@ class Corestore extends ReadyResource {
     this.ready().catch(noop)
   }
 
+  session (opts) {
+    const root = this.root || this
+    return new Corestore(null, { ...opts, root })
+  }
+
+  namespace (name, opts) {
+    if (name instanceof Hypercore) return this.session({ ...opts, bootstrap: name })
+    return this.session({ ...opts, namespace: generateNamespace(this.ns, name) })
+  }
+
   async _open () {
+    if (this.bootstrap) {
+      const ns = await this.bootstrap.getUserData('corestore/namespace')
+      this.ns = ns || DEFAULT_NAMESPACE
+      this.bootstrap = null
+    }
+
     if (this.primaryKey) return
 
     let primaryKey = await this.storage.getLocalSeed()
@@ -110,7 +127,7 @@ class Corestore extends ReadyResource {
     if (this.opened === false) await this.ready()
     if (this.cores.get(toHex(discoveryKey)) === null && !(await this.storage.has(discoveryKey))) return
 
-    const core = this._getCore({ discoveryKey })
+    const core = this._getCore({ discoveryKey, createIfMissing: false })
 
     if (!core) return
     if (!core.opened) await core.ready()
@@ -137,7 +154,6 @@ class Corestore extends ReadyResource {
       muxer.cork()
 
       for (const core of this.cores) {
-
         if (!core.replicator.downloading || core.replicator.attached(muxer) || !core.opened) continue
         core.replicator.attachTo(muxer)
       }
@@ -235,6 +251,11 @@ class Corestore extends ReadyResource {
     const existing = this.cores.get(id)
     if (existing) return existing
 
+    const userData = []
+
+    if (opts.name) userData.push({ key: 'corestore/name', value: b4a.from(opts.name) })
+    if (this.ns) userData.push({ key: 'corestore/namespace', value: this.ns })
+
     const core = Hypercore.createCore(this.storage, {
       eagerUpgrade: true,
       notDownloadingLinger: opts.notDownloadingLinger,
@@ -249,7 +270,8 @@ class Corestore extends ReadyResource {
       keyPair: auth.keyPair,
       legacy: opts.legacy,
       manifest: auth.manifest,
-      globalCache: opts.globalCache || null
+      globalCache: opts.globalCache || null,
+      userData
     })
 
     core.onidle = () => {
@@ -270,6 +292,13 @@ module.exports = Corestore
 
 function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
+}
+
+function generateNamespace (namespace, name) {
+  if (!b4a.isBuffer(name)) name = b4a.from(name)
+  const out = b4a.allocUnsafeSlow(32)
+  sodium.crypto_generichash_batch(out, [namespace, name])
+  return out
 }
 
 function deriveSeed (primaryKey, namespace, name) {
