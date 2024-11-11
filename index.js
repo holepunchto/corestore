@@ -126,10 +126,15 @@ class Corestore extends ReadyResource {
   }
 
   async _close () {
-    const all = []
-    for (const core of this.sessions) all.push(core.close())
-    await Promise.all(all)
-    if (this.root === null) await this.storage.close()
+    const sessions = []
+    for (const sess of this.sessions) sessions.push(sess.close())
+    await Promise.all(sessions)
+    if (this.root !== null) return
+
+    const cores = []
+    for (const core of this.cores) cores.push(core.close())
+    await Promise.all(cores)
+    await this.storage.close()
   }
 
   async _attachMaybe (muxer, discoveryKey) {
