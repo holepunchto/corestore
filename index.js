@@ -4,6 +4,7 @@ const ReadyResource = require('ready-resource')
 const EventEmitter = require('events')
 const sodium = require('sodium-universal')
 const crypto = require('hypercore-crypto')
+const ID = require('hypercore-id-encoding')
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
@@ -173,7 +174,7 @@ class Corestore extends ReadyResource {
   }
 
   get (opts) {
-    if (b4a.isBuffer(opts)) opts = { key: opts }
+    if (b4a.isBuffer(opts) || typeof opts === 'string') opts = { key: opts }
     if (!opts) opts = {}
 
     const sopts = this.opened === false || opts.preload
@@ -238,7 +239,7 @@ class Corestore extends ReadyResource {
       result.manifest = { version: 1, signers: [{ publicKey: result.keyPair.publicKey }] }
     }
 
-    if (opts.key) result.key = opts.key
+    if (opts.key) result.key = ID.decode(opts.key)
     else if (result.manifest) result.key = Hypercore.key(result.manifest)
 
     if (opts.discoveryKey) result.discoveryKey = opts.discoveryKey
