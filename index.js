@@ -85,6 +85,8 @@ class Corestore extends ReadyResource {
     this.ns = opts.namespace || DEFAULT_NAMESPACE
     this.sessions = new Set() // active hypercores - should move to a session manager eventually
 
+    this.manifestVersion = 1 // just compat
+
     this.ready().catch(noop)
   }
 
