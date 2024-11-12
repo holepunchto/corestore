@@ -9,7 +9,7 @@
   "dependencies": {
     "b4a": "^1.6.7",
     "bare-events": "^2.5.0",
-    "hypercore": "github:holepunchto/hypercore#sync-constructor",
+    "hypercore": "github:holepunchto/hypercore#rocksdb",
     "hypercore-crypto": "^3.4.2",
     "ready-resource": "^1.1.1",
     "sodium-universal": "^4.0.1"
