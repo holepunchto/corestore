@@ -1,5 +1,5 @@
 {
-  "name": "corestore2",
+  "name": "corestore",
   "version": "0.0.0",
   "description": "A Hypercore factory that simplifies managing collections of cores.",
   "main": "index.js",
@@ -11,6 +11,7 @@
     "bare-events": "^2.5.0",
     "hypercore": "github:holepunchto/hypercore#rocksdb",
     "hypercore-crypto": "^3.4.2",
+    "hypercore-id-encoding": "^1.3.0",
     "ready-resource": "^1.1.1",
     "sodium-universal": "^4.0.1"
   },
