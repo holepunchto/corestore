@@ -9,7 +9,7 @@
   "dependencies": {
     "b4a": "^1.6.7",
     "bare-events": "^2.5.0",
-    "hypercore": "github:holepunchto/hypercore#rocksdb",
+    "hypercore": "github:holepunchto/hypercore#rocksdb-memory-view",
     "hypercore-crypto": "^3.4.2",
     "hypercore-id-encoding": "^1.3.0",
     "ready-resource": "^1.1.1",
