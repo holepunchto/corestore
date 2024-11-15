@@ -81,7 +81,7 @@ class Corestore extends ReadyResource {
     this.storage = this.root ? this.root.storage : Hypercore.defaultStorage(storage)
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
-    this.primaryKey = this.root ? this.root.primaryKey : null
+    this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
     this.ns = opts.namespace || DEFAULT_NAMESPACE
     this.sessions = new Set() // active hypercores - should move to a session manager eventually
 
@@ -113,16 +113,25 @@ class Corestore extends ReadyResource {
       return
     }
 
-    if (this.primaryKey) return
+    const primaryKey = await this.storage.getLocalSeed()
 
-    let primaryKey = await this.storage.getLocalSeed()
-
-    if (primaryKey === null) {
-      primaryKey = crypto.randomBytes(32)
-      await this.storage.setLocalSeed(primaryKey, true)
+    if (primaryKey && this.primaryKey === null) {
+      this.primaryKey = primaryKey
+      return
     }
 
-    this.primaryKey = primaryKey
+    if (this.primaryKey === null) {
+      this.primaryKey = crypto.randomBytes(32)
+    }
+
+    if (primaryKey === null) {
+      await this.storage.setLocalSeed(this.primaryKey, true)
+      return
+    }
+
+    if (b4a.equals(primaryKey, this.primaryKey)) {
+      throw new Error('Another corestore is stored here')
+    }
   }
 
   async _close () {

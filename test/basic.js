@@ -1,4 +1,5 @@
 const test = require('brittle')
+const b4a = require('b4a')
 const tmp = require('test-tmp')
 const Corestore = require('../')
 
@@ -42,6 +43,47 @@ test('session from a core', async function (t) {
   await session.close()
   await ns.close()
   await store.close()
+})
+
+test('pass primary key', async function (t) {
+  const primaryKey = b4a.alloc(32, 1)
+  let key = null
+
+  {
+    const dir = await tmp(t)
+    const store = new Corestore(dir, { primaryKey })
+
+    t.alike(store.primaryKey, primaryKey)
+
+    const core = store.get({ name: 'test' })
+    await core.ready()
+
+    key = core.key
+
+    await core.close()
+    await store.close()
+
+    const store2 = new Corestore(dir)
+    await store2.ready()
+
+    t.alike(store2.primaryKey, primaryKey)
+
+    await store2.close()
+  }
+
+  {
+    const dir = await tmp(t)
+
+    const store = new Corestore(dir, { primaryKey })
+
+    const core = store.get({ name: 'test' })
+    await core.ready()
+
+    t.alike(core.key, key)
+
+    await core.close()
+    await store.close()
+  }
 })
 
 async function create (t) {
