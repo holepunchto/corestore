@@ -81,6 +81,7 @@ class Corestore extends ReadyResource {
     this.storage = this.root ? this.root.storage : Hypercore.defaultStorage(storage)
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
+    this.globalCache = this.root ? this.root.globalCache : (opts.globalCache || null)
     this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
     this.ns = opts.namespace || DEFAULT_NAMESPACE
     this.sessions = new Set() // active hypercores - should move to a session manager eventually
@@ -294,7 +295,7 @@ class Corestore extends ReadyResource {
       keyPair: auth.keyPair,
       legacy: opts.legacy,
       manifest: auth.manifest,
-      globalCache: opts.globalCache || null,
+      globalCache: opts.globalCache || this.globalCache || null,
       userData
     })
 

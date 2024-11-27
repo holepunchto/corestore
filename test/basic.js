@@ -1,6 +1,7 @@
 const test = require('brittle')
 const b4a = require('b4a')
 const tmp = require('test-tmp')
+const Rache = require('rache')
 const Corestore = require('../')
 
 test('basic', async function (t) {
@@ -84,6 +85,21 @@ test('pass primary key', async function (t) {
     await core.close()
     await store.close()
   }
+})
+
+test('global cache is passed down', async function (t) {
+  const dir = await tmp(t)
+  const store = new Corestore(dir, { globalCache: new Rache({ maxSize: 4 }) })
+
+  t.ok(store.globalCache)
+
+  const core = store.get({ name: 'hello' })
+  await core.ready()
+
+  t.ok(core.globalCache)
+
+  await core.close()
+  await store.close()
 })
 
 async function create (t) {
