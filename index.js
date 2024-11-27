@@ -101,12 +101,14 @@ class Corestore extends ReadyResource {
     return this.session({ ...opts, namespace: generateNamespace(this.ns, name) })
   }
 
+  setNamespace (ns) {
+    if (ns instanceof Hypercore) this.bootstrap = ns
+    else if (ns instanceof Corestore) this.ns = ns.ns
+    else this.ns = ns
+  }
+
   async _open () {
-    if (this.bootstrap) {
-      const ns = await this.bootstrap.getUserData('corestore/namespace')
-      this.ns = ns || DEFAULT_NAMESPACE
-      this.bootstrap = null
-    }
+    if (this.bootstrap !== null) await this._setBootstrapNamespace()
 
     if (this.root !== null) {
       if (this.root.opened === false) await this.root.ready()
@@ -145,6 +147,13 @@ class Corestore extends ReadyResource {
     for (const core of this.cores) cores.push(core.close())
     await Promise.all(cores)
     await this.storage.close()
+  }
+
+  async _setBootstrapNamespace () {
+    const ns = await this.bootstrap.getUserData('corestore/namespace')
+    if (this.bootstrap === null) return // someone did in parallel, nbd, just return
+    this.ns = ns || DEFAULT_NAMESPACE
+    this.bootstrap = null
   }
 
   async _attachMaybe (muxer, discoveryKey) {
@@ -194,7 +203,7 @@ class Corestore extends ReadyResource {
     if (b4a.isBuffer(opts) || typeof opts === 'string') opts = { key: opts }
     if (!opts) opts = {}
 
-    const sopts = this.opened === false || opts.preload
+    const sopts = this.opened === false || this.bootstrap !== null || opts.preload
       ? { preload: this._preload(opts) }
       : this._getSessionOptions(opts)
 
@@ -208,12 +217,14 @@ class Corestore extends ReadyResource {
 
   async createKeyPair (name, ns = this.ns) {
     if (this.opened === false) await this.ready()
+    if (this.bootstrap !== null) await this._setBootstrapNamespace()
     return createKeyPair(this.primaryKey, ns, name)
   }
 
   async _preload (opts) {
     if (opts.preload) opts = { ...opts, ...(await opts.preload) }
     await this.ready()
+    if (this.bootstrap !== null) await this._setBootstrapNamespace()
     return this._getSessionOptions(opts)
   }
 
