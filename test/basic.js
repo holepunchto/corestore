@@ -2,6 +2,7 @@ const test = require('brittle')
 const b4a = require('b4a')
 const tmp = require('test-tmp')
 const Rache = require('rache')
+const Hypercore = require('hypercore')
 const Corestore = require('../')
 
 test('basic', async function (t) {
@@ -146,6 +147,30 @@ test('setNamespace before ready', async function (t) {
   await core.close()
   await core2.close()
   await store.close()
+})
+
+test('weak ref to react to cores opening', async function (t) {
+  t.plan(2)
+
+  const dir = await tmp(t)
+  const store = new Corestore(dir)
+
+  t.teardown(() => store.close())
+
+  store.cores.on('add', function (core) {
+    const s = new Hypercore({ core, weak: true })
+
+    t.pass('weak ref opened passively')
+
+    s.on('close', function () {
+      t.pass('weak ref closed passively')
+    })
+  })
+
+  const core = store.get({ name: 'hello' })
+
+  await core.ready()
+  await core.close()
 })
 
 async function create (t) {
