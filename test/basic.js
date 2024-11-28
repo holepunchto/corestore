@@ -128,6 +128,26 @@ test('setNamespace', async function (t) {
   await store.close()
 })
 
+test('setNamespace before ready', async function (t) {
+  const dir = await tmp(t)
+  const store = new Corestore(dir)
+
+  const core = store.get({ name: 'cool burger' })
+
+  store.setNamespace(core)
+
+  const core2 = store.get({ name: 'cool burger' })
+
+  await core.ready()
+  await core2.ready()
+
+  t.is(core.id, core2.id)
+
+  await core.close()
+  await core2.close()
+  await store.close()
+})
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)
