@@ -222,9 +222,10 @@ class Corestore extends ReadyResource {
   }
 
   async _preload (opts) {
+    const bootstrapping = this.bootstrap !== null // to avoid deadlock where we are waiting on ourself
     if (opts.preload) opts = { ...opts, ...(await opts.preload) }
     await this.ready()
-    if (this.bootstrap !== null) await this._setBootstrapNamespace()
+    if (bootstrapping === true && this.bootstrap !== null) await this._setBootstrapNamespace()
     return this._getSessionOptions(opts)
   }
 
