@@ -173,6 +173,21 @@ test('weak ref to react to cores opening', async function (t) {
   await core.close()
 })
 
+test('session on core before store ready', async function (t) {
+  const dir = await tmp(t)
+  const store = new Corestore(dir)
+
+  t.teardown(() => store.close())
+
+  const core = store.get({ name: 'core' })
+  const sess = core.session()
+
+  await sess.ready()
+  await core.ready()
+
+  await sess.close()
+})
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)
