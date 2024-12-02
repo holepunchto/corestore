@@ -30,7 +30,8 @@ test('session from a core', async function (t) {
   const ns = store.namespace('yo')
   const core = ns.get({ name: 'test' })
 
-  const session = store.namespace(core)
+  await core.ready()
+  const session = store.session({ from: core.key })
 
   const core2 = session.get({ name: 'test' })
 
@@ -110,10 +111,11 @@ test('setNamespace', async function (t) {
   const ns = store.namespace('hello world')
 
   const core = ns.get({ name: 'cool burger' })
+  await core.ready()
 
   const session = store.session()
 
-  session.setNamespace(core)
+  session.setNamespace({ from: core.key })
 
   const core2 = session.get({ name: 'cool burger' })
 
@@ -126,26 +128,6 @@ test('setNamespace', async function (t) {
   await core2.close()
   await session.close()
   await ns.close()
-  await store.close()
-})
-
-test('setNamespace before ready', async function (t) {
-  const dir = await tmp(t)
-  const store = new Corestore(dir)
-
-  const core = store.get({ name: 'cool burger' })
-
-  store.setNamespace(core)
-
-  const core2 = store.get({ name: 'cool burger' })
-
-  await core.ready()
-  await core2.ready()
-
-  t.is(core.id, core2.id)
-
-  await core.close()
-  await core2.close()
   await store.close()
 })
 

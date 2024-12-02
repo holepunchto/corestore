@@ -77,12 +77,12 @@ class Corestore extends ReadyResource {
     super()
 
     this.root = opts.root || null
-    this.bootstrap = opts.bootstrap || null
     this.storage = this.root ? this.root.storage : Hypercore.defaultStorage(storage)
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.globalCache = this.root ? this.root.globalCache : (opts.globalCache || null)
     this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
+    this.from = opts.from || null
     this.ns = opts.namespace || DEFAULT_NAMESPACE
     this.sessions = new Set() // active hypercores - should move to a session manager eventually
 
@@ -97,18 +97,27 @@ class Corestore extends ReadyResource {
   }
 
   namespace (name, opts) {
-    if (name instanceof Hypercore) return this.session({ ...opts, bootstrap: name })
     return this.session({ ...opts, namespace: generateNamespace(this.ns, name) })
   }
 
-  setNamespace (ns) {
-    if (ns instanceof Hypercore) this.bootstrap = ns
-    else if (ns instanceof Corestore) this.ns = ns.ns
-    else this.ns = ns
+  setNamespace (opts) {
+    if (b4a.isBuffer(opts)) opts = { namespace: opts }
+
+    if (opts.from) {
+      this.from = opts.from
+      return
+    }
+
+    if (opts.ns) {
+      this.ns = ns
+      return
+    }
+
+    throw new Error('Unknown namespace')
   }
 
   async _open () {
-    if (this.bootstrap !== null) await this._setBootstrapNamespace()
+    if (this.from !== null) await this._setNamespaceFrom()
 
     if (this.root !== null) {
       if (this.root.opened === false) await this.root.ready()
@@ -149,11 +158,23 @@ class Corestore extends ReadyResource {
     await this.storage.close()
   }
 
-  async _setBootstrapNamespace () {
-    const ns = await this.bootstrap.getUserData('corestore/namespace')
-    if (this.bootstrap === null) return // someone did in parallel, nbd, just return
-    this.ns = ns || DEFAULT_NAMESPACE
-    this.bootstrap = null
+  async _setNamespaceFrom () {
+    const s = await this.storage.resume(crypto.discoveryKey(this.from))
+    if (!s) throw new Error('Cannot set namespace, unknown from')
+
+    const r = s.createReadBatch()
+    const promise = r.getUserData('corestore/namespace')
+
+    r.tryFlush()
+
+    const ns = (await promise) || DEFAULT_NAMESPACE
+
+    if (this.from !== null) {
+      this.ns = ns
+      this.from = null
+    }
+
+    s.destroy()
   }
 
   async _attachMaybe (muxer, discoveryKey) {
@@ -217,15 +238,14 @@ class Corestore extends ReadyResource {
 
   async createKeyPair (name, ns = this.ns) {
     if (this.opened === false) await this.ready()
-    if (this.bootstrap !== null) await this._setBootstrapNamespace()
+    if (this.from !== null) await this._setNamespaceFrom()
     return createKeyPair(this.primaryKey, ns, name)
   }
 
   async _preload (opts) {
-    const bootstrapping = this.bootstrap !== null // to avoid deadlock where we are waiting on ourself
     if (opts.preload) opts = { ...opts, ...(await opts.preload) }
     await this.ready()
-    if (bootstrapping === true && this.bootstrap !== null) await this._setBootstrapNamespace()
+    if (this.from !== null) await this._setNamespaceFrom()
     return this._getSessionOptions(opts)
   }
 
