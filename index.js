@@ -100,22 +100,6 @@ class Corestore extends ReadyResource {
     return this.session({ ...opts, namespace: generateNamespace(this.ns, name) })
   }
 
-  setNamespace (opts) {
-    if (b4a.isBuffer(opts)) opts = { namespace: opts }
-
-    if (opts.from) {
-      this.from = opts.from
-      return
-    }
-
-    if (opts.ns) {
-      this.ns = ns
-      return
-    }
-
-    throw new Error('Unknown namespace')
-  }
-
   async _open () {
     if (this.from !== null) await this._setNamespaceFrom()
 
@@ -160,21 +144,22 @@ class Corestore extends ReadyResource {
 
   async _setNamespaceFrom () {
     const s = await this.storage.resume(crypto.discoveryKey(this.from))
-    if (!s) throw new Error('Cannot set namespace, unknown from')
 
-    const r = s.createReadBatch()
-    const promise = r.getUserData('corestore/namespace')
+    let ns = DEFAULT_NAMESPACE
 
-    r.tryFlush()
-
-    const ns = (await promise) || DEFAULT_NAMESPACE
+    if (s) {
+      const r = s.createReadBatch()
+      const promise = r.getUserData('corestore/namespace')
+      r.tryFlush()
+      const value = await promise
+      if (value) ns = value
+      s.destroy()
+    }
 
     if (this.from !== null) {
       this.ns = ns
       this.from = null
     }
-
-    s.destroy()
   }
 
   async _attachMaybe (muxer, discoveryKey) {
@@ -224,7 +209,7 @@ class Corestore extends ReadyResource {
     if (b4a.isBuffer(opts) || typeof opts === 'string') opts = { key: opts }
     if (!opts) opts = {}
 
-    const sopts = this.opened === false || this.bootstrap !== null || opts.preload
+    const sopts = this.opened === false || opts.preload
       ? { preload: this._preload(opts) }
       : this._getSessionOptions(opts)
 
@@ -238,14 +223,12 @@ class Corestore extends ReadyResource {
 
   async createKeyPair (name, ns = this.ns) {
     if (this.opened === false) await this.ready()
-    if (this.from !== null) await this._setNamespaceFrom()
     return createKeyPair(this.primaryKey, ns, name)
   }
 
   async _preload (opts) {
     if (opts.preload) opts = { ...opts, ...(await opts.preload) }
     await this.ready()
-    if (this.from !== null) await this._setNamespaceFrom()
     return this._getSessionOptions(opts)
   }
 

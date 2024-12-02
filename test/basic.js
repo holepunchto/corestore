@@ -104,33 +104,6 @@ test('global cache is passed down', async function (t) {
   await store.close()
 })
 
-test('setNamespace', async function (t) {
-  const dir = await tmp(t)
-  const store = new Corestore(dir)
-
-  const ns = store.namespace('hello world')
-
-  const core = ns.get({ name: 'cool burger' })
-  await core.ready()
-
-  const session = store.session()
-
-  session.setNamespace({ from: core.key })
-
-  const core2 = session.get({ name: 'cool burger' })
-
-  await core.ready()
-  await core2.ready()
-
-  t.is(core.id, core2.id)
-
-  await core.close()
-  await core2.close()
-  await session.close()
-  await ns.close()
-  await store.close()
-})
-
 test('weak ref to react to cores opening', async function (t) {
   t.plan(2)
 
