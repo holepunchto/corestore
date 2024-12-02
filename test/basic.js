@@ -118,6 +118,31 @@ test('weak ref to react to cores opening', async function (t) {
   await core.close()
 })
 
+test('session of hypercore sessions are tracked in corestore sessions', async function (t) {
+  const dir = await tmp(t)
+  const store = new Corestore(dir)
+
+  const session = store.session()
+
+  const closed = t.test('session')
+  closed.plan(2)
+
+  const a = session.get({ name: 'test' })
+  await a.ready()
+  const b = a.session()
+
+  a.on('close', () => closed.pass('a closed (explicit)'))
+  b.on('close', () => closed.pass('b closed (implicit)'))
+
+  await b.ready()
+
+  await session.close()
+
+  await closed
+
+  await store.close()
+})
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)

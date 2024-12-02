@@ -43,6 +43,38 @@ class StreamTracker {
   }
 }
 
+class SessionTracker {
+  constructor () {
+    this.map = new Map()
+  }
+
+  get size () {
+    return this.map.size
+  }
+
+  get (id) {
+    const existing = this.map.get(id)
+    if (existing !== undefined) return existing
+    const fresh = []
+    this.map.set(id, fresh)
+    return fresh
+  }
+
+  gc (id) {
+    this.map.delete(id)
+  }
+
+  list (id) {
+    return id ? (this.map.get(id) || []) : [...this]
+  }
+
+  * [Symbol.iterator] () {
+    for (const sessions of this.map.values()) {
+      yield * sessions[Symbol.iterator]()
+    }
+  }
+}
+
 class CoreTracker extends EventEmitter {
   constructor () {
     super()
@@ -80,12 +112,14 @@ class Corestore extends ReadyResource {
     this.storage = this.root ? this.root.storage : Hypercore.defaultStorage(storage)
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
+    this.sessions = new SessionTracker()
     this.globalCache = this.root ? this.root.globalCache : (opts.globalCache || null)
     this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
     this.ns = opts.namespace || DEFAULT_NAMESPACE
-    this.sessions = new Set() // active hypercores - should move to a session manager eventually
 
     this.manifestVersion = 1 // just compat
+
+    this._ongcBound = this._ongc.bind(this)
 
     this.ready().catch(noop)
   }
@@ -97,6 +131,10 @@ class Corestore extends ReadyResource {
 
   namespace (name, opts) {
     return this.session({ ...opts, namespace: generateNamespace(this.ns, name) })
+  }
+
+  _ongc (session) {
+    if (session.sessions.length === 0) this.sessions.gc(session.id)
   }
 
   async _open () {
@@ -190,12 +228,7 @@ class Corestore extends ReadyResource {
       ? { preload: this._preload(opts) }
       : this._getSessionOptions(opts)
 
-    const core = new Hypercore(null, null, sopts)
-
-    this.sessions.add(core)
-    core.on('close', () => this.sessions.delete(core))
-
-    return core
+    return new Hypercore(null, null, sopts)
   }
 
   async createKeyPair (name, ns = this.ns) {
@@ -214,6 +247,8 @@ class Corestore extends ReadyResource {
     if (core === null) return null
 
     return {
+      sessions: this.sessions.get(core),
+      ongc: this._ongcBound,
       active: opts.active !== false,
       encryptionKey: opts.encryptionKey || null,
       valueEncoding: opts.valueEncoding || null,
