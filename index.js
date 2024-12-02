@@ -82,7 +82,6 @@ class Corestore extends ReadyResource {
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.globalCache = this.root ? this.root.globalCache : (opts.globalCache || null)
     this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
-    this.from = opts.from || null
     this.ns = opts.namespace || DEFAULT_NAMESPACE
     this.sessions = new Set() // active hypercores - should move to a session manager eventually
 
@@ -101,8 +100,6 @@ class Corestore extends ReadyResource {
   }
 
   async _open () {
-    if (this.from !== null) await this._setNamespaceFrom()
-
     if (this.root !== null) {
       if (this.root.opened === false) await this.root.ready()
       this.primaryKey = this.root.primaryKey
@@ -140,26 +137,6 @@ class Corestore extends ReadyResource {
     for (const core of this.cores) cores.push(core.close())
     await Promise.all(cores)
     await this.storage.close()
-  }
-
-  async _setNamespaceFrom () {
-    const s = await this.storage.resume(crypto.discoveryKey(this.from))
-
-    let ns = DEFAULT_NAMESPACE
-
-    if (s) {
-      const r = s.createReadBatch()
-      const promise = r.getUserData('corestore/namespace')
-      r.tryFlush()
-      const value = await promise
-      if (value) ns = value
-      s.destroy()
-    }
-
-    if (this.from !== null) {
-      this.ns = ns
-      this.from = null
-    }
   }
 
   async _attachMaybe (muxer, discoveryKey) {

@@ -24,30 +24,6 @@ test('basic', async function (t) {
   await core2.close()
 })
 
-test('session from a core', async function (t) {
-  const store = await create(t)
-
-  const ns = store.namespace('yo')
-  const core = ns.get({ name: 'test' })
-
-  await core.ready()
-  const session = store.session({ from: core.key })
-
-  const core2 = session.get({ name: 'test' })
-
-  await core.ready()
-  await core2.ready()
-
-  t.is(core.id, core2.id)
-
-  await core.close()
-  await core2.close()
-
-  await session.close()
-  await ns.close()
-  await store.close()
-})
-
 test('pass primary key', async function (t) {
   const primaryKey = b4a.alloc(32, 1)
   let key = null
