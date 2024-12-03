@@ -92,6 +92,8 @@ test('session pre ready', async function (t) {
 
   await a.close()
   await b.close()
+
+  await store.close()
 })
 
 test('weak ref to react to cores opening', async function (t) {
