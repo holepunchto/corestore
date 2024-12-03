@@ -24,29 +24,6 @@ test('basic', async function (t) {
   await core2.close()
 })
 
-test('session from a core', async function (t) {
-  const store = await create(t)
-
-  const ns = store.namespace('yo')
-  const core = ns.get({ name: 'test' })
-
-  const session = store.namespace(core)
-
-  const core2 = session.get({ name: 'test' })
-
-  await core.ready()
-  await core2.ready()
-
-  t.is(core.id, core2.id)
-
-  await core.close()
-  await core2.close()
-
-  await session.close()
-  await ns.close()
-  await store.close()
-})
-
 test('pass primary key', async function (t) {
   const primaryKey = b4a.alloc(32, 1)
   let key = null
@@ -100,52 +77,6 @@ test('global cache is passed down', async function (t) {
   t.ok(core.globalCache)
 
   await core.close()
-  await store.close()
-})
-
-test('setNamespace', async function (t) {
-  const dir = await tmp(t)
-  const store = new Corestore(dir)
-
-  const ns = store.namespace('hello world')
-
-  const core = ns.get({ name: 'cool burger' })
-
-  const session = store.session()
-
-  session.setNamespace(core)
-
-  const core2 = session.get({ name: 'cool burger' })
-
-  await core.ready()
-  await core2.ready()
-
-  t.is(core.id, core2.id)
-
-  await core.close()
-  await core2.close()
-  await session.close()
-  await ns.close()
-  await store.close()
-})
-
-test('setNamespace before ready', async function (t) {
-  const dir = await tmp(t)
-  const store = new Corestore(dir)
-
-  const core = store.get({ name: 'cool burger' })
-
-  store.setNamespace(core)
-
-  const core2 = store.get({ name: 'cool burger' })
-
-  await core.ready()
-  await core2.ready()
-
-  t.is(core.id, core2.id)
-
-  await core.close()
-  await core2.close()
   await store.close()
 })
 
