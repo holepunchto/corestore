@@ -128,12 +128,12 @@ test('session of hypercore sessions are tracked in corestore sessions', async fu
   closed.plan(2)
 
   const a = session.get({ name: 'test' })
-  await a.ready()
   const b = a.session()
 
   a.on('close', () => closed.pass('a closed (explicit)'))
   b.on('close', () => closed.pass('b closed (implicit)'))
 
+  await a.ready()
   await b.ready()
 
   await session.close()
