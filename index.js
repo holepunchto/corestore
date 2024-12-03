@@ -167,7 +167,9 @@ class Corestore extends ReadyResource {
 
   async _close () {
     const sessions = []
-    for (const sess of this.sessions) sessions.push(sess.close())
+    const hanging = [...this.sessions]
+    for (const sess of hanging) sessions.push(sess.close())
+
     await Promise.all(sessions)
     if (this.root !== null) return
 
@@ -247,7 +249,7 @@ class Corestore extends ReadyResource {
     if (core === null) return null
 
     return {
-      sessions: this.sessions.get(core),
+      sessions: this.sessions.get(core.id),
       ongc: this._ongcBound,
       active: opts.active !== false,
       encryptionKey: opts.encryptionKey || null,
