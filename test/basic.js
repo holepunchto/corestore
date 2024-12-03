@@ -80,6 +80,20 @@ test('global cache is passed down', async function (t) {
   await store.close()
 })
 
+test('session pre ready', async function (t) {
+  const dir = await tmp(t)
+  const store = new Corestore(dir)
+
+  const a = store.get({ name: 'test' })
+  const b = a.session()
+
+  await a.ready()
+  await b.ready()
+
+  await a.close()
+  await b.close()
+})
+
 test('weak ref to react to cores opening', async function (t) {
   t.plan(2)
 
