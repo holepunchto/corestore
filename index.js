@@ -226,11 +226,31 @@ class Corestore extends ReadyResource {
     if (b4a.isBuffer(opts) || typeof opts === 'string') opts = { key: opts }
     if (!opts) opts = {}
 
-    const sopts = this.opened === false || opts.preload
-      ? { preload: this._preload(opts) }
-      : this._getSessionOptions(opts)
+    const conf = {
+      preload: null,
+      parent: null,
+      sessions: null,
+      ongc: null,
+      core: null,
+      active: opts.active !== false,
+      encryptionKey: opts.encryptionKey || null,
+      valueEncoding: opts.valueEncoding || null,
+      exclusive: !!opts.exclusive,
+      manifest: opts.manifest || null,
+      keyPair: opts.keyPair || null,
+      onwait: opts.onwait || null,
+      wait: opts.wait !== false,
+      timeout: opts.timeout || 0,
+      draft: !!opts.draft
+    }
 
-    return new Hypercore(null, null, sopts)
+    if (this.opened === false || opts.preload) {
+      conf.preload = this._preload(opts)
+    } else {
+      this._addInternalOptions(opts, conf)
+    }
+
+    return new Hypercore(null, null, conf)
   }
 
   async createKeyPair (name, ns = this.ns) {
@@ -241,28 +261,19 @@ class Corestore extends ReadyResource {
   async _preload (opts) {
     if (opts.preload) opts = { ...opts, ...(await opts.preload) }
     await this.ready()
-    return this._getSessionOptions(opts)
+    const conf = { parent: null, sessions: null, ongc: null, core: null }
+    this._addInternalOptions(opts, conf)
+    return conf
   }
 
-  _getSessionOptions (opts) {
+  _addInternalOptions (opts, conf) {
     const core = this._getCore(opts)
-    if (core === null) return null
+    if (core === null) return
 
-    return {
-      sessions: this.sessions.get(core.id),
-      ongc: this._ongcBound,
-      active: opts.active !== false,
-      encryptionKey: opts.encryptionKey || null,
-      valueEncoding: opts.valueEncoding || null,
-      exclusive: !!opts.exclusive,
-      manifest: opts.manifest || null,
-      keyPair: opts.keyPair || null,
-      onwait: opts.onwait || null,
-      wait: opts.wait !== false,
-      timeout: opts.timeout || 0,
-      draft: !!opts.draft,
-      core
-    }
+    if (opts.parent) conf.parent = opts.parent
+    conf.sessions = this.sessions.get(core.id)
+    conf.ongc = this._ongcBound
+    conf.core = core
   }
 
   _auth (opts) {
