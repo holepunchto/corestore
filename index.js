@@ -261,7 +261,7 @@ class Corestore extends ReadyResource {
   async _preload (opts) {
     if (opts.preload) opts = { ...opts, ...(await opts.preload) }
     await this.ready()
-    const conf = { parent: null, sessions: null, ongc: null, core: null }
+    const conf = { parent: null, sessions: null, ongc: null, core: null, encryptionKey: null }
     this._addInternalOptions(opts, conf)
     return conf
   }
@@ -274,6 +274,11 @@ class Corestore extends ReadyResource {
     conf.sessions = this.sessions.get(core.id)
     conf.ongc = this._ongcBound
     conf.core = core
+
+    if (opts.encryptionKey) {
+      conf.encryptionKey = opts.encryptionKey
+      conf.isBlockKey = !!opts.isBlockKey
+    }
   }
 
   _auth (opts) {
