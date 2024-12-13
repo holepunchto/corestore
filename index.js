@@ -242,7 +242,8 @@ class Corestore extends ReadyResource {
       onwait: opts.onwait || null,
       wait: opts.wait !== false,
       timeout: opts.timeout || 0,
-      draft: !!opts.draft
+      draft: !!opts.draft,
+      writable: opts.writable
     }
 
     if (this.opened === false || opts.preload) {
