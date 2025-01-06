@@ -87,7 +87,7 @@ class CoreTracker extends EventEmitter {
 
   get (id) {
     // we allow you do call this from the outside, so support normal buffers also
-    if (!b4a.isBuffer(id)) id = b4a.from(id, 'hex')
+    if (b4a.isBuffer(id)) id = b4a.toString(id, 'hex')
     return this.map.get(id) || null
   }
 
