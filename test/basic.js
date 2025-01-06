@@ -104,7 +104,7 @@ test('weak ref to react to cores opening', async function (t) {
 
   t.teardown(() => store.close())
 
-  store.cores.on('add', function (core) {
+  store.watch(function (core) {
     const s = new Hypercore({ core, weak: true })
 
     t.pass('weak ref opened passively')

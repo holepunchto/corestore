@@ -79,10 +79,23 @@ class CoreTracker extends EventEmitter {
   constructor () {
     super()
     this.map = new Map()
+    this.watching = []
   }
 
   get size () {
     return this.map.size
+  }
+
+  watch (store) {
+    if (store.watchIndex !== -1) return
+    store.watchIndex = this.watching.push(store) - 1
+  }
+
+  unwatch (store) {
+    if (store.watchIndex === -1) return
+    const head = this.watching.pop()
+    if (head !== store) this.watching[(head.watchIndex = store.watchIndex)] = head
+    store.watchIndex = -1
   }
 
   get (id) {
@@ -93,12 +106,20 @@ class CoreTracker extends EventEmitter {
 
   set (id, core) {
     this.map.set(id, core)
-    this.emit('add', core)
+    this.emit('add', core) // TODO: will be removed
+    if (this.watching.length > 0) this._emit(core)
+  }
+
+  _emit (core) {
+    for (let i = this.watching.length - 1; i >= 0; i--) {
+      const store = this.watching[i]
+      for (const fn of store.watchers) fn(core)
+    }
   }
 
   delete (id, core) {
     this.map.delete(id)
-    this.emit('remove', core)
+    this.emit('remove', core) // TODO: will be removed
   }
 
   [Symbol.iterator] () {
@@ -119,11 +140,34 @@ class Corestore extends ReadyResource {
     this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
     this.ns = opts.namespace || DEFAULT_NAMESPACE
 
+    this.watchers = null
+    this.watchIndex = -1
+
     this.manifestVersion = 1 // just compat
 
     this._ongcBound = this._ongc.bind(this)
 
     this.ready().catch(noop)
+  }
+
+  watch (fn) {
+    if (this.watchers === null) {
+      this.watchers = new Set()
+      this.cores.watch(this)
+    }
+
+    this.watchers.add(fn)
+  }
+
+  unwatch (fn) {
+    if (this.watchers === null) return
+
+    this.watchers.delete(fn)
+
+    if (this.watchers.size === 0) {
+      this.watchers = null
+      this.cores.unwatch(this)
+    }
   }
 
   session (opts) {
@@ -171,6 +215,8 @@ class Corestore extends ReadyResource {
     const sessions = []
     const hanging = [...this.sessions]
     for (const sess of hanging) sessions.push(sess.close())
+
+    if (this.watchers !== null) this.cores.unwatch(this)
 
     await Promise.all(sessions)
     if (this.root !== null) return
