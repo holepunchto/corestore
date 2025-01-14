@@ -343,7 +343,7 @@ class Corestore extends ReadyResource {
 
     if (result.discoveryKey) return result
 
-    if (opts.discoveryKey) result.discoveryKey = opts.discoveryKey
+    if (opts.discoveryKey) result.discoveryKey = ID.decode(opts.discoveryKey)
     else if (result.key) result.discoveryKey = crypto.discoveryKey(result.key)
     else throw new Error('Could not derive discovery from input')
 
