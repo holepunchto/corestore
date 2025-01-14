@@ -145,6 +145,37 @@ test('session of hypercore sessions are tracked in corestore sessions', async fu
   await store.close()
 })
 
+test('named cores are stable', async function (t) {
+  const dir = await tmp(t)
+  const store = new Corestore(dir)
+
+  await store.ready()
+  const keyPair = await store.createKeyPair('test')
+
+  const oldManifest = {
+    version: 0,
+    signers: [{ publicKey: keyPair.publicKey }]
+  }
+
+  const core = store.get({ name: 'test', manifest: oldManifest })
+  await core.ready()
+
+  const expected = core.manifest
+
+  await core.close()
+  await store.close()
+
+  const fresh = new Corestore(dir)
+
+  const freshCore = fresh.get({ name: 'test' })
+  await freshCore.ready()
+
+  t.alike(freshCore.manifest, expected)
+
+  await freshCore.close()
+  await fresh.close()
+})
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)
