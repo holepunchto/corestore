@@ -1,44 +1,43 @@
 {
   "name": "corestore",
-  "version": "6.18.4",
+  "version": "7.0.0-rc.0",
   "description": "A Hypercore factory that simplifies managing collections of cores.",
   "main": "index.js",
+  "files": [
+    "index.js"
+  ],
+  "dependencies": {
+    "b4a": "^1.6.7",
+    "bare-events": "^2.5.0",
+    "hypercore": "^11.0.0",
+    "hypercore-crypto": "^3.4.2",
+    "hypercore-id-encoding": "^1.3.0",
+    "ready-resource": "^1.1.1",
+    "sodium-universal": "^4.0.1"
+  },
+  "devDependencies": {
+    "brittle": "^3.7.0",
+    "rache": "^1.0.0",
+    "standard": "^17.1.2",
+    "test-tmp": "^1.3.0"
+  },
   "scripts": {
     "test": "standard && brittle test/*.js"
   },
+  "imports": {
+    "events": {
+      "bare": "bare-events",
+      "default": "events"
+    }
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/holepunchto/corestore.git"
+    "url": "https://github.com/holepunchto/corestore2.git"
   },
-  "keywords": [
-    "corestore"
-  ],
-  "author": "Andrew Osheroff <andrewosh@gmail.com>",
+  "author": "Holepunch Inc",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/holepunchto/corestore/issues"
+    "url": "https://github.com/holepunchto/corestore2/issues"
   },
-  "homepage": "https://github.com/holepunchto/corestore#readme",
-  "files": [
-    "index.js",
-    "lib/**.js"
-  ],
-  "devDependencies": {
-    "brittle": "^3.2.2",
-    "rache": "^1.0.0",
-    "random-access-memory": "^6.2.0",
-    "standard": "^17.1.0",
-    "test-tmp": "^1.0.2"
-  },
-  "dependencies": {
-    "b4a": "^1.6.4",
-    "hypercore": "^10.37.10",
-    "hypercore-crypto": "^3.4.0",
-    "hypercore-id-encoding": "^1.2.0",
-    "read-write-mutexify": "^2.1.0",
-    "ready-resource": "^1.0.0",
-    "safety-catch": "^1.0.1",
-    "sodium-universal": "^4.0.0",
-    "xache": "^1.1.0"
-  }
+  "homepage": "https://github.com/holepunchto/corestore2"
 }
