@@ -176,6 +176,30 @@ test('named cores are stable', async function (t) {
   await fresh.close()
 })
 
+test('replicates', async function (t) {
+  const store = new Corestore(await tmp(t))
+
+  const a = store.get({ name: 'foo' })
+  await a.append('hello')
+  await a.close()
+
+  const store2 = new Corestore(await tmp(t))
+  const clone = store.get(a.key)
+
+  const s1 = store2.replicate(true)
+  const s2 = store.replicate(false)
+
+  s1.pipe(s2).pipe(s1)
+
+  t.alike(await clone.get(0), b4a.from('hello'))
+
+  s1.destroy()
+  s2.destroy()
+
+  await store.close()
+  await store2.close()
+})
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)
