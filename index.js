@@ -202,7 +202,7 @@ class Corestore extends ReadyResource {
       return
     }
 
-    if (b4a.equals(primaryKey, this.primaryKey)) {
+    if (primaryKey && b4a.equals(primaryKey, this.primaryKey)) {
       throw new Error('Another corestore is stored here')
     }
   }
