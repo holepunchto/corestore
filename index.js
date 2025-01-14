@@ -190,7 +190,7 @@ class Corestore extends ReadyResource {
       return
     }
 
-    const primaryKey = await this.storage.getLocalSeed()
+    const primaryKey = await this.storage.getSeed()
 
     if (primaryKey && this.primaryKey === null) {
       this.primaryKey = primaryKey
@@ -198,15 +198,11 @@ class Corestore extends ReadyResource {
     }
 
     if (this.primaryKey === null) {
-      this.primaryKey = crypto.randomBytes(32)
-    }
-
-    if (primaryKey === null) {
-      await this.storage.setLocalSeed(this.primaryKey, true)
+      this.primaryKey = await this.storage.setSeed(crypto.randomBytes(32))
       return
     }
 
-    if (b4a.equals(primaryKey, this.primaryKey)) {
+    if (primaryKey && b4a.equals(primaryKey, this.primaryKey)) {
       throw new Error('Another corestore is stored here')
     }
   }
