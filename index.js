@@ -198,11 +198,7 @@ class Corestore extends ReadyResource {
     }
 
     if (this.primaryKey === null) {
-      this.primaryKey = crypto.randomBytes(32)
-    }
-
-    if (primaryKey === null) {
-      this.primaryKey = await this.storage.setSeed(this.primaryKey)
+      this.primaryKey = await this.storage.setSeed(crypto.randomBytes(32))
       return
     }
 
