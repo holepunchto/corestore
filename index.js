@@ -190,7 +190,7 @@ class Corestore extends ReadyResource {
       return
     }
 
-    const primaryKey = await this.storage.getLocalSeed()
+    const primaryKey = await this.storage.getSeed()
 
     if (primaryKey && this.primaryKey === null) {
       this.primaryKey = primaryKey
@@ -202,7 +202,7 @@ class Corestore extends ReadyResource {
     }
 
     if (primaryKey === null) {
-      await this.storage.setLocalSeed(this.primaryKey, true)
+      await this.storage.setSeed(this.primaryKey, true)
       return
     }
 
