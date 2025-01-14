@@ -202,7 +202,7 @@ class Corestore extends ReadyResource {
     }
 
     if (primaryKey === null) {
-      await this.storage.setSeed(this.primaryKey, true)
+      await this.storage.setSeed(this.primaryKey)
       return
     }
 
