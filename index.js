@@ -183,6 +183,12 @@ class Corestore extends ReadyResource {
     if (session.sessions.length === 0) this.sessions.gc(session.id)
   }
 
+  async _getOrSetSeed () {
+    const seed = await this.storage.getSeed()
+    if (seed !== null) return seed
+    return await this.storage.setSeed(this.primaryKey || crypto.randomBytes(32))
+  }
+
   async _open () {
     if (this.root !== null) {
       if (this.root.opened === false) await this.root.ready()
@@ -190,19 +196,14 @@ class Corestore extends ReadyResource {
       return
     }
 
-    const primaryKey = await this.storage.getSeed()
+    const primaryKey = await this._getOrSetSeed()
 
-    if (primaryKey && this.primaryKey === null) {
+    if (this.primaryKey === null) {
       this.primaryKey = primaryKey
       return
     }
 
-    if (this.primaryKey === null) {
-      this.primaryKey = await this.storage.setSeed(crypto.randomBytes(32))
-      return
-    }
-
-    if (primaryKey && b4a.equals(primaryKey, this.primaryKey)) {
+    if (!b4a.equals(primaryKey, this.primaryKey)) {
       throw new Error('Another corestore is stored here')
     }
   }
@@ -227,7 +228,7 @@ class Corestore extends ReadyResource {
     if (this.opened === false) await this.ready()
     if (this.cores.get(toHex(discoveryKey)) === null && !(await this.storage.has(discoveryKey))) return
 
-    const core = this._getCore({ discoveryKey, createIfMissing: false })
+    const core = this._getCore(discoveryKey, { createIfMissing: false })
 
     if (!core) return
     if (!core.opened) await core.ready()
@@ -290,11 +291,7 @@ class Corestore extends ReadyResource {
       writable: opts.writable
     }
 
-    if (this.opened === false || opts.preload) {
-      conf.preload = this._preload(opts)
-    } else {
-      this._addInternalOptions(opts, conf)
-    }
+    conf.preload = this._preload(opts)
 
     return new Hypercore(null, null, conf)
   }
@@ -306,32 +303,26 @@ class Corestore extends ReadyResource {
 
   async _preload (opts) {
     if (opts.preload) opts = { ...opts, ...(await opts.preload) }
-    await this.ready()
-    const conf = { parent: null, sessions: null, ongc: null, core: null, encryptionKey: null, isBlockKey: false }
-    this._addInternalOptions(opts, conf)
-    return conf
-  }
+    if (this.opened === false) await this.ready()
 
-  _addInternalOptions (opts, conf) {
-    const core = this._getCore(opts)
-    if (core === null) return
+    const discoveryKey = opts.name ? await this.storage.getAlias({ name: opts.name, namespace: this.ns }) : null
+    const core = this._getCore(discoveryKey, opts)
 
-    if (opts.parent) conf.parent = opts.parent
-    conf.sessions = this.sessions.get(core.id)
-    conf.ongc = this._ongcBound
-    conf.core = core
-
-    if (opts.encryptionKey) {
-      conf.encryptionKey = opts.encryptionKey
-      conf.isBlockKey = !!opts.isBlockKey
+    return {
+      parent: opts.parent || null,
+      sessions: this.sessions.get(core.id),
+      ongc: this._ongcBound,
+      core,
+      encryptionKey: opts.encryptionKey || null,
+      isBlockKey: !!opts.isBlockKey
     }
   }
 
-  _auth (opts) {
+  _auth (discoveryKey, opts) {
     const result = {
       keyPair: null,
       key: null,
-      discoveryKey: null,
+      discoveryKey,
       manifest: null
     }
 
@@ -343,34 +334,32 @@ class Corestore extends ReadyResource {
 
     if (opts.manifest) {
       result.manifest = opts.manifest
-    } else if (result.keyPair) {
+    } else if (result.keyPair && !result.discoveryKey) {
       result.manifest = { version: 1, signers: [{ publicKey: result.keyPair.publicKey }] }
     }
 
     if (opts.key) result.key = ID.decode(opts.key)
     else if (result.manifest) result.key = Hypercore.key(result.manifest)
 
+    if (result.discoveryKey) return result
+
     if (opts.discoveryKey) result.discoveryKey = opts.discoveryKey
     else if (result.key) result.discoveryKey = crypto.discoveryKey(result.key)
-
-    if (!result.discoveryKey) {
-      throw new Error('Could not derive discovery from input')
-    }
+    else throw new Error('Could not derive discovery from input')
 
     return result
   }
 
-  _getCore (opts) {
-    const auth = this._auth(opts)
+  _hasCore (discoveryKey) {
+    return this.cores.get(toHex(discoveryKey)) !== null
+  }
+
+  _getCore (discoveryKey, opts) {
+    const auth = this._auth(discoveryKey, opts)
 
     const id = toHex(auth.discoveryKey)
     const existing = this.cores.get(id)
     if (existing) return existing
-
-    const userData = []
-
-    if (opts.name) userData.push({ key: 'corestore/name', value: b4a.from(opts.name) })
-    if (this.ns) userData.push({ key: 'corestore/namespace', value: this.ns })
 
     const core = Hypercore.createCore(this.storage, {
       eagerUpgrade: true,
@@ -387,7 +376,7 @@ class Corestore extends ReadyResource {
       legacy: opts.legacy,
       manifest: auth.manifest,
       globalCache: opts.globalCache || this.globalCache || null,
-      userData
+      alias: opts.name ? { name: opts.name, namespace: this.ns } : null
     })
 
     core.onidle = () => {
