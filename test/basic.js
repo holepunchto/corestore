@@ -200,6 +200,16 @@ test('replicates', async function (t) {
   await store2.close()
 })
 
+test('if key is passed, its available immediately', async function (t) {
+  const store = new Corestore(await tmp(t))
+
+  const a = store.get({ key: b4a.alloc(32) })
+  t.alike(a.key, b4a.alloc(32))
+
+  await a.close()
+  await store.close()
+})
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)

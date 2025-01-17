@@ -273,13 +273,13 @@ class Corestore extends ReadyResource {
 
     const conf = {
       preload: null,
-      parent: null,
+      parent: opts.parent || null,
       sessions: null,
       ongc: null,
       core: null,
       active: opts.active !== false,
       encryptionKey: opts.encryptionKey || null,
-      isBlockKey: false,
+      isBlockKey: !!opts.isBlockKey,
       valueEncoding: opts.valueEncoding || null,
       exclusive: !!opts.exclusive,
       manifest: opts.manifest || null,
@@ -291,7 +291,20 @@ class Corestore extends ReadyResource {
       writable: opts.writable
     }
 
-    conf.preload = this._preload(opts)
+    // name requires us to rt to storage + ready, so needs preload
+    // same goes if user has defined async preload obvs
+    if (opts.name || opts.preload) {
+      conf.preload = this._preload(opts)
+      return new Hypercore(null, null, conf)
+    }
+
+    // if not not we can sync create it, which just is easier for the
+    // upstream user in terms of guarantees (key is there etc etc)
+    const core = this._getCore(null, opts)
+
+    conf.core = core
+    conf.sessions = this.sessions.get(core.id)
+    conf.ongc = this._ongcBound
 
     return new Hypercore(null, null, conf)
   }
@@ -310,9 +323,9 @@ class Corestore extends ReadyResource {
 
     return {
       parent: opts.parent || null,
+      core,
       sessions: this.sessions.get(core.id),
       ongc: this._ongcBound,
-      core,
       encryptionKey: opts.encryptionKey || null,
       isBlockKey: !!opts.isBlockKey
     }
