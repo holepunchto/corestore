@@ -278,8 +278,9 @@ class Corestore extends ReadyResource {
       ongc: null,
       core: null,
       active: opts.active !== false,
-      encryptionKey: opts.encryptionKey || null,
-      isBlockKey: !!opts.isBlockKey,
+      encryption: opts.encryption || null,
+      encryptionKey: opts.encryptionKey || null, // back compat, should remove
+      isBlockKey: !!opts.isBlockKey, // back compat, should remove
       valueEncoding: opts.valueEncoding || null,
       exclusive: !!opts.exclusive,
       manifest: opts.manifest || null,
@@ -326,8 +327,9 @@ class Corestore extends ReadyResource {
       core,
       sessions: this.sessions.get(core.id),
       ongc: this._ongcBound,
-      encryptionKey: opts.encryptionKey || null,
-      isBlockKey: !!opts.isBlockKey
+      encryption: opts.encryption || null,
+      encryptionKey: opts.encryptionKey || null, // back compat, should remove
+      isBlockKey: !!opts.isBlockKey // back compat, should remove
     }
   }
 
