@@ -136,6 +136,7 @@ class Corestore extends ReadyResource {
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.sessions = new SessionTracker()
+    this.corestores = this.root ? this.root.corestores : new Set()
     this.globalCache = this.root ? this.root.globalCache : (opts.globalCache || null)
     this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
     this.ns = opts.namespace || DEFAULT_NAMESPACE
@@ -146,6 +147,8 @@ class Corestore extends ReadyResource {
     this.manifestVersion = 1 // just compat
 
     this._ongcBound = this._ongc.bind(this)
+
+    if (this.root) this.corestores.add(this)
 
     this.ready().catch(noop)
   }
@@ -171,6 +174,7 @@ class Corestore extends ReadyResource {
   }
 
   session (opts) {
+    this._maybeClosed()
     const root = this.root || this
     return new Corestore(null, { ...opts, root })
   }
@@ -209,14 +213,22 @@ class Corestore extends ReadyResource {
   }
 
   async _close () {
-    const sessions = []
+    const closing = []
     const hanging = [...this.sessions]
-    for (const sess of hanging) sessions.push(sess.close())
+    for (const sess of hanging) closing.push(sess.close())
 
     if (this.watchers !== null) this.cores.unwatch(this)
 
-    await Promise.all(sessions)
-    if (this.root !== null) return
+    if (this.root !== null) {
+      await Promise.all(closing)
+      return
+    }
+
+    for (const store of this.corestores) {
+      closing.push(store.close())
+    }
+
+    await Promise.all(closing)
 
     const cores = []
     for (const core of this.cores) cores.push(core.close())
@@ -239,6 +251,8 @@ class Corestore extends ReadyResource {
   }
 
   replicate (isInitiator, opts) {
+    this._maybeClosed()
+
     const isExternal = isStream(isInitiator)
     const stream = Hypercore.createProtocolStream(isInitiator, {
       ...opts,
@@ -267,7 +281,15 @@ class Corestore extends ReadyResource {
     return stream
   }
 
+  _maybeClosed () {
+    if (this.closing || (this.root !== null && this.root.closing)) {
+      throw new Error('Corestore is closed')
+    }
+  }
+
   get (opts) {
+    this._maybeClosed()
+
     if (b4a.isBuffer(opts) || typeof opts === 'string') opts = { key: opts }
     if (!opts) opts = {}
 
@@ -320,6 +342,8 @@ class Corestore extends ReadyResource {
     if (this.opened === false) await this.ready()
 
     const discoveryKey = opts.name ? await this.storage.getAlias({ name: opts.name, namespace: this.ns }) : null
+    this._maybeClosed()
+
     const core = this._getCore(discoveryKey, opts)
 
     return {
