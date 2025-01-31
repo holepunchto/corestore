@@ -183,6 +183,10 @@ class Corestore extends ReadyResource {
     return this.session({ ...opts, namespace: generateNamespace(this.ns, name) })
   }
 
+  getAuth (discoveryKey) {
+    return this.storage.getAuth(discoveryKey)
+  }
+
   _ongc (session) {
     if (session.sessions.length === 0) this.sessions.gc(session.id)
   }
