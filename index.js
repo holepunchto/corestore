@@ -299,7 +299,6 @@ class Corestore extends ReadyResource {
 
     const conf = {
       preload: null,
-      parent: opts.parent || null,
       sessions: null,
       ongc: null,
       core: null,
@@ -351,7 +350,6 @@ class Corestore extends ReadyResource {
     const core = this._getCore(discoveryKey, opts)
 
     return {
-      parent: opts.parent || null,
       core,
       sessions: this.sessions.get(core.id),
       ongc: this._ongcBound,
