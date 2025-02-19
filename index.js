@@ -137,6 +137,7 @@ class Corestore extends ReadyResource {
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.sessions = new SessionTracker()
     this.corestores = this.root ? this.root.corestores : new Set()
+    this.readOnly = opts.writable === false
     this.globalCache = this.root ? this.root.globalCache : (opts.globalCache || null)
     this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
     this.ns = opts.namespace || DEFAULT_NAMESPACE
@@ -314,7 +315,7 @@ class Corestore extends ReadyResource {
       wait: opts.wait !== false,
       timeout: opts.timeout || 0,
       draft: !!opts.draft,
-      writable: opts.writable
+      writable: opts.writable === undefined && this.readOnly ? false : opts.writable
     }
 
     // name requires us to rt to storage + ready, so needs preload
