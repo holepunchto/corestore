@@ -211,6 +211,14 @@ class Corestore extends ReadyResource {
     }
   }
 
+  suspend () {
+    return this.storage.db.suspend()
+  }
+
+  resume () {
+    return this.storage.db.resume()
+  }
+
   session (opts) {
     this._maybeClosed()
     const root = this.root || this
