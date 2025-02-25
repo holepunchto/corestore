@@ -225,6 +225,8 @@ test('finding peers (compat)', async function (t) {
 
   await core.update()
   t.ok(waited, 'waited')
+
+  await store.close()
 })
 
 async function create (t) {
