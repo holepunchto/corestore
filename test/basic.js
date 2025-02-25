@@ -210,6 +210,23 @@ test('if key is passed, its available immediately', async function (t) {
   await store.close()
 })
 
+test('finding peers (compat)', async function (t) {
+  const store = new Corestore(await tmp(t))
+
+  const done = store.findingPeers()
+
+  const core = store.get({ key: b4a.alloc(32) })
+  let waited = false
+
+  setTimeout(() => {
+    waited = true
+    done()
+  }, 500)
+
+  await core.update()
+  t.ok(waited, 'waited')
+})
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)

@@ -127,6 +127,31 @@ class CoreTracker extends EventEmitter {
   }
 }
 
+class FindingPeers {
+  constructor () {
+    this.count = 0
+    this.pending = []
+  }
+
+  add (core) {
+    if (this.count === 0) return
+    this.pending.push(core.findingPeers())
+  }
+
+  inc (sessions) {
+    if (++this.count !== 1) return
+
+    for (const core of sessions) {
+      this.pending.push(core.findingPeers())
+    }
+  }
+
+  dec (sessions) {
+    if (--this.count !== 0) return
+    while (this.pending.length > 0) this.pending.pop()()
+  }
+}
+
 class Corestore extends ReadyResource {
   constructor (storage, opts = {}) {
     super()
@@ -147,6 +172,7 @@ class Corestore extends ReadyResource {
 
     this.manifestVersion = 1 // just compat
 
+    this._findingPeers = null // here for legacy
     this._ongcBound = this._ongc.bind(this)
 
     if (this.root) this.corestores.add(this)
@@ -171,6 +197,17 @@ class Corestore extends ReadyResource {
     if (this.watchers.size === 0) {
       this.watchers = null
       this.cores.unwatch(this)
+    }
+  }
+
+  findingPeers () {
+    if (this._findingPeers === null) this._findingPeers = new FindingPeers()
+    this._findingPeers.inc(this.sessions)
+    let done = false
+    return () => {
+      if (done) return
+      done = true
+      this._findingPeers.dec(this.sessions)
     }
   }
 
@@ -322,7 +359,7 @@ class Corestore extends ReadyResource {
     // same goes if user has defined async preload obvs
     if (opts.name || opts.preload) {
       conf.preload = this._preload(opts)
-      return new Hypercore(null, null, conf)
+      return this._makeSession(conf)
     }
 
     // if not not we can sync create it, which just is easier for the
@@ -332,8 +369,13 @@ class Corestore extends ReadyResource {
     conf.core = core
     conf.sessions = this.sessions.get(core.id)
     conf.ongc = this._ongcBound
+    return this._makeSession(conf)
+  }
 
-    return new Hypercore(null, null, conf)
+  _makeSession (conf) {
+    const session = new Hypercore(null, null, conf)
+    if (this._findingPeers !== null) this._findingPeers.add(session)
+    return session
   }
 
   async createKeyPair (name, ns = this.ns) {
