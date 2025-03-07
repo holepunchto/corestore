@@ -6,7 +6,7 @@ const sodium = require('sodium-universal')
 const crypto = require('hypercore-crypto')
 const ID = require('hypercore-id-encoding')
 
-const auditStore = require('./audit.js')
+const auditStore = require('./lib/audit.js')
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
