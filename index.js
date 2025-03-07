@@ -453,6 +453,7 @@ class Corestore extends ReadyResource {
     const existing = this.cores.get(id)
     if (existing) return existing
 
+    const trace = new Error().stack
     const core = Hypercore.createCore(this.storage, {
       eagerUpgrade: true,
       notDownloadingLinger: opts.notDownloadingLinger,
@@ -467,6 +468,7 @@ class Corestore extends ReadyResource {
       keyPair: auth.keyPair,
       legacy: opts.legacy,
       manifest: auth.manifest,
+      trace,
       globalCache: opts.globalCache || this.globalCache || null,
       alias: opts.name ? { name: opts.name, namespace: this.ns } : null
     })
