@@ -6,7 +6,6 @@ const Hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
 
 const Corestore = require('../')
-const audit = require('../audit.js')
 
 test('basic', async function (t) {
   const store = await create(t)
@@ -247,7 +246,7 @@ test('audit', async function (t) {
     await d.append(i.toString())
   }
 
-  const result = await audit(store)
+  const result = await store.audit()
 
   t.is(result.cores, 4)
   t.is(result.skipped, 0)

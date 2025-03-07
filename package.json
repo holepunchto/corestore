@@ -4,7 +4,8 @@
   "description": "A Hypercore factory that simplifies managing collections of cores.",
   "main": "index.js",
   "files": [
-    "index.js"
+    "index.js",
+    "lib/*"
   ],
   "dependencies": {
     "b4a": "^1.6.7",
