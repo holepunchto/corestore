@@ -1,6 +1,6 @@
 const auditCore = require('hypercore/lib/audit.js')
 
-module.exports = async function audit (store) {
+module.exports = async function audit (store, { dryRun = false } = {}) {
   const stats = { cores: 0, skipped: 0, rootless: 0, dropped: 0 }
 
   for await (const { discoveryKey } of store.storage.createCoreStream()) {
@@ -9,9 +9,9 @@ module.exports = async function audit (store) {
     const core = await store.get({ discoveryKey })
     await core.ready()
 
-    const audit = await auditCore(core.core)
+    const audit = await auditCore(core.core, { dryRun })
 
-    if (audit === null) {
+    if (audit === null || audit.corrupt) {
       stats.rootless++
       continue
     }
