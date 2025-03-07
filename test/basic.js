@@ -259,7 +259,6 @@ test('audit', async function (t) {
   await c.close()
   await d.close()
   await store.close()
-
 })
 
 async function create (t) {
