@@ -3,7 +3,10 @@ const b4a = require('b4a')
 const tmp = require('test-tmp')
 const Rache = require('rache')
 const Hypercore = require('hypercore')
+const crypto = require('hypercore-crypto')
+
 const Corestore = require('../')
+const audit = require('../audit.js')
 
 test('basic', async function (t) {
   const store = await create(t)
@@ -227,6 +230,36 @@ test('finding peers (compat)', async function (t) {
   t.ok(waited, 'waited')
 
   await store.close()
+})
+
+test('audit', async function (t) {
+  const store = new Corestore(await tmp(t))
+
+  const a = store.get({ keyPair: crypto.keyPair() })
+  const b = store.get({ keyPair: crypto.keyPair() })
+  const c = store.get({ name: 'test' })
+  const d = store.get({ name: 'another' })
+
+  for (let i = 0; i < 100; i++) {
+    await a.append(i.toString())
+    await b.append(i.toString())
+    await c.append(i.toString())
+    await d.append(i.toString())
+  }
+
+  const result = await audit(store)
+
+  t.is(result.cores, 4)
+  t.is(result.skipped, 0)
+  t.is(result.rootless, 0)
+  t.is(result.dropped, 0)
+
+  await a.close()
+  await b.close()
+  await c.close()
+  await d.close()
+  await store.close()
+
 })
 
 async function create (t) {
