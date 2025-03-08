@@ -177,6 +177,8 @@ class CoreTracker {
 
     const all = []
     for (const core of this.map.values()) all.push(core.close())
+    this.map.clear()
+
     return Promise.all(all)
   }
 
@@ -351,6 +353,7 @@ class Corestore extends ReadyResource {
   async _attachMaybe (muxer, discoveryKey) {
     if (this.opened === false) await this.ready()
     if (this.cores.get(toHex(discoveryKey)) === null && !(await this.storage.has(discoveryKey, { ifMigrated: true }))) return
+    if (this.closing) return
 
     const core = this._openCore(discoveryKey, { createIfMissing: false })
 
