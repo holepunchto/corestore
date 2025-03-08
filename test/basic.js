@@ -240,18 +240,21 @@ test('audit', async function (t) {
   const d = store.get({ name: 'another' })
 
   for (let i = 0; i < 100; i++) {
-    await a.append(i.toString())
-    await b.append(i.toString())
-    await c.append(i.toString())
+    if (i < 20) await a.append(i.toString())
+    if (i < 40) await b.append(i.toString())
+    if (i < 80) await c.append(i.toString())
     await d.append(i.toString())
   }
 
-  const result = await store.audit()
+  let n = 0
+  for await (const { discoveryKey, audit } of store.audit()) {
+    n++
+    if (audit.droppedBits || audit.droppedBlocks || audit.droppedTreeNodes || audit.corrupt) {
+      t.fail('bad core')
+    }
+  }
 
-  t.is(result.cores, 4)
-  t.is(result.skipped, 0)
-  t.is(result.rootless, 0)
-  t.is(result.dropped, 0)
+  t.is(n, 4)
 
   await a.close()
   await b.close()
