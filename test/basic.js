@@ -26,6 +26,25 @@ test('basic', async function (t) {
   await core2.close()
 })
 
+test('basic non parallel', async function (t) {
+  const store = await create(t)
+
+  const core = store.get({ name: 'test' })
+  await core.ready()
+
+  const core2 = store.get({ name: 'test' })
+  await core2.ready()
+
+  t.alike(core.key, core2.key, 'same core')
+  t.is(core.core, core2.core, 'same internal core')
+
+  t.is(core.manifest.signers.length, 1)
+  t.unlike(core.key, core.manifest.signers[0].publicKey)
+
+  await core.close()
+  await core2.close()
+})
+
 test('pass primary key', async function (t) {
   const primaryKey = b4a.alloc(32, 1)
   let key = null

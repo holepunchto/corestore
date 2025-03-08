@@ -1,7 +1,6 @@
 const b4a = require('b4a')
 const Hypercore = require('hypercore')
 const ReadyResource = require('ready-resource')
-const EventEmitter = require('events')
 const sodium = require('sodium-universal')
 const crypto = require('hypercore-crypto')
 const ID = require('hypercore-id-encoding')
@@ -77,11 +76,14 @@ class SessionTracker {
   }
 }
 
-class CoreTracker extends EventEmitter {
+class CoreTracker {
   constructor () {
-    super()
     this.map = new Map()
     this.watching = []
+
+    this._gcing = new Set()
+    this._gcInterval = null
+    this._gcCycleBound = this._gcCycle.bind(this)
   }
 
   get size () {
@@ -100,15 +102,33 @@ class CoreTracker extends EventEmitter {
     store.watchIndex = -1
   }
 
+  resume (id) {
+    const core = this.map.get(id)
+
+    if (!core) return null
+
+    // signal back that we have a closing one stored
+    if (core.closing) return core
+
+    if (core.gc) {
+      this._gcing.delete(core)
+      if (this._gcing.size === 0) this._stopGC()
+      core.gc = 0
+    }
+
+    return core
+  }
+
   get (id) {
     // we allow you do call this from the outside, so support normal buffers also
     if (b4a.isBuffer(id)) id = b4a.toString(id, 'hex')
-    return this.map.get(id) || null
+    const core = this.map.get(id)
+    if (!core || core.closing) return null
+    return core
   }
 
   set (id, core) {
     this.map.set(id, core)
-    this.emit('add', core) // TODO: will be removed
     if (this.watching.length > 0) this._emit(core)
   }
 
@@ -119,13 +139,51 @@ class CoreTracker extends EventEmitter {
     }
   }
 
-  delete (id, core) {
-    this.map.delete(id)
-    this.emit('remove', core) // TODO: will be removed
+  _gc (core) {
+    const id = toHex(core.discoveryKey)
+    if (this.map.get(id) === core) this.map.delete(id)
   }
 
-  [Symbol.iterator] () {
-    return this.map.values()
+  _gcCycle () {
+    for (const core of this._gcing) {
+      if (++core.gc < 4) continue
+      const gc = this._gc.bind(this, core)
+      core.close().then(gc, gc)
+      this._gcing.delete(core)
+    }
+
+    if (this._gcing.size === 0) this._stopGC()
+  }
+
+  gc (core) {
+    core.gc = 1 // first strike
+    this._gcing.add(core)
+    if (this._gcing.size === 1) this._startGC()
+  }
+
+  _stopGC () {
+    clearInterval(this._gcInterval)
+    this._gcInterval = null
+  }
+
+  _startGC () {
+    if (this._gcInterval) return
+    this._gcInterval = setInterval(this._gcCycleBound, 2000)
+  }
+
+  close () {
+    this._stopGC()
+    this._gcing.clear()
+
+    const all = []
+    for (const core of this.map.values()) all.push(core.close())
+    return Promise.all(all)
+  }
+
+  * [Symbol.iterator] () {
+    for (const core of this.map.values()) {
+      if (!core.closing) yield core
+    }
   }
 }
 
@@ -286,17 +344,15 @@ class Corestore extends ReadyResource {
 
     await Promise.all(closing)
 
-    const cores = []
-    for (const core of this.cores) cores.push(core.close())
-    await Promise.all(cores)
+    await this.cores.close()
     await this.storage.close()
   }
 
   async _attachMaybe (muxer, discoveryKey) {
     if (this.opened === false) await this.ready()
-    if (this.cores.get(toHex(discoveryKey)) === null && !(await this.storage.has(discoveryKey))) return
+    if (this.cores.get(toHex(discoveryKey)) === null && !(await this.storage.has(discoveryKey, { ifMigrated: true }))) return
 
-    const core = this._getCore(discoveryKey, { createIfMissing: false })
+    const core = this._openCore(discoveryKey, { createIfMissing: false })
 
     if (!core) return
     if (!core.opened) await core.ready()
@@ -304,6 +360,8 @@ class Corestore extends ReadyResource {
     if (!core.replicator.attached(muxer)) {
       core.replicator.attachTo(muxer)
     }
+
+    core.checkIfIdle()
   }
 
   replicate (isInitiator, opts) {
@@ -378,11 +436,12 @@ class Corestore extends ReadyResource {
 
     // if not not we can sync create it, which just is easier for the
     // upstream user in terms of guarantees (key is there etc etc)
-    const core = this._getCore(null, opts)
+    const core = this._openCore(null, opts)
 
     conf.core = core
     conf.sessions = this.sessions.get(core.id)
     conf.ongc = this._ongcBound
+
     return this._makeSession(conf)
   }
 
@@ -404,7 +463,7 @@ class Corestore extends ReadyResource {
     const discoveryKey = opts.name ? await this.storage.getAlias({ name: opts.name, namespace: this.ns }) : null
     this._maybeClosed()
 
-    const core = this._getCore(discoveryKey, opts)
+    const core = this._openCore(discoveryKey, opts)
 
     return {
       core,
@@ -448,18 +507,15 @@ class Corestore extends ReadyResource {
     return result
   }
 
-  _hasCore (discoveryKey) {
-    return this.cores.get(toHex(discoveryKey)) !== null
-  }
-
-  _getCore (discoveryKey, opts) {
+  _openCore (discoveryKey, opts) {
     const auth = this._auth(discoveryKey, opts)
 
     const id = toHex(auth.discoveryKey)
-    const existing = this.cores.get(id)
-    if (existing) return existing
+    const existing = this.cores.resume(id)
+    if (existing && !existing.closing) return existing
 
     const core = Hypercore.createCore(this.storage, {
+      preopen: existing ? existing.closing : null, // always wait for the prev one to close first in any case...
       eagerUpgrade: true,
       notDownloadingLinger: opts.notDownloadingLinger,
       allowFork: opts.allowFork !== false,
@@ -478,8 +534,7 @@ class Corestore extends ReadyResource {
     })
 
     core.onidle = () => {
-      core.destroy()
-      this.cores.delete(id, core)
+      this.cores.gc(core)
     }
 
     core.replicator.ondownloading = () => {
