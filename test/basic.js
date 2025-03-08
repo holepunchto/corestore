@@ -247,7 +247,7 @@ test('audit', async function (t) {
   }
 
   let n = 0
-  for await (const { discoveryKey, audit } of store.audit()) {
+  for await (const { audit } of store.audit()) {
     n++
     if (audit.droppedBits || audit.droppedBlocks || audit.droppedTreeNodes || audit.corrupt) {
       t.fail('bad core')
