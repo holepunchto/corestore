@@ -282,6 +282,39 @@ test('audit', async function (t) {
   await store.close()
 })
 
+test('open by discovery key', async function (t) {
+  const store = new Corestore(await tmp(t))
+
+  const a = store.get({ discoveryKey: b4a.alloc(32) })
+
+  try {
+    await a.ready()
+  } catch {
+    t.ok('should fail')
+  }
+
+  const keyPair = crypto.keyPair()
+  const manifest = {
+    signers: [{ publicKey: keyPair.publicKey }]
+  }
+
+  const key = Hypercore.key(manifest)
+  const discoveryKey = Hypercore.discoveryKey(key)
+
+  const a1 = store.get({ discoveryKey })
+  const a2 = store.get({ discoveryKey, key, manifest })
+
+  try {
+    await a1.ready()
+  } catch {}
+
+  await a2.ready()
+  t.pass('a2 worked')
+
+  a2.close()
+  await store.close()
+})
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)

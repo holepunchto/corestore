@@ -4,6 +4,7 @@ const ReadyResource = require('ready-resource')
 const sodium = require('sodium-universal')
 const crypto = require('hypercore-crypto')
 const ID = require('hypercore-id-encoding')
+const { STORAGE_EMPTY } = require('hypercore-errors')
 
 const auditStore = require('./lib/audit.js')
 
@@ -161,12 +162,6 @@ class CoreTracker {
   }
 
   gc (core) {
-    // if not opened, gc immediately
-    if (!core.opened) {
-      this._gc(core)
-      return
-    }
-
     core.gc = 1 // first strike
     this._gcing.add(core)
     if (this._gcing.size === 1) this._startGC()
@@ -448,6 +443,11 @@ class Corestore extends ReadyResource {
       return this._makeSession(conf)
     }
 
+    if (opts.discoveryKey && !opts.key && !opts.manifest) {
+      conf.preload = this._preloadCheckIfExists(opts)
+      return this._makeSession(conf)
+    }
+
     // if not not we can sync create it, which just is easier for the
     // upstream user in terms of guarantees (key is there etc etc)
     const core = this._openCore(null, opts)
@@ -468,6 +468,12 @@ class Corestore extends ReadyResource {
   async createKeyPair (name, ns = this.ns) {
     if (this.opened === false) await this.ready()
     return createKeyPair(this.primaryKey, ns, name)
+  }
+
+  async _preloadCheckIfExists (opts) {
+    const has = await this.storage.has(opts.discoveryKey)
+    if (!has) throw STORAGE_EMPTY('No Hypercore is stored here')
+    return this._preload(opts)
   }
 
   async _preload (opts) {
