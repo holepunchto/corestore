@@ -119,6 +119,11 @@ class CoreTracker {
     return core
   }
 
+  opened (id) {
+    const core = this.map.get(id)
+    return !!(core && core.opened && !core.closing)
+  }
+
   get (id) {
     // we allow you do call this from the outside, so support normal buffers also
     if (b4a.isBuffer(id)) id = b4a.toString(id, 'hex')
@@ -156,6 +161,12 @@ class CoreTracker {
   }
 
   gc (core) {
+    // if not opened, gc immediately
+    if (!core.opened) {
+      this._gc(core)
+      return
+    }
+
     core.gc = 1 // first strike
     this._gcing.add(core)
     if (this._gcing.size === 1) this._startGC()
@@ -352,7 +363,7 @@ class Corestore extends ReadyResource {
 
   async _attachMaybe (muxer, discoveryKey) {
     if (this.opened === false) await this.ready()
-    if (this.cores.get(toHex(discoveryKey)) === null && !(await this.storage.has(discoveryKey, { ifMigrated: true }))) return
+    if (!this.cores.opened(toHex(discoveryKey)) && !(await this.storage.has(discoveryKey, { ifMigrated: true }))) return
     if (this.closing) return
 
     const core = this._openCore(discoveryKey, { createIfMissing: false })
@@ -518,7 +529,7 @@ class Corestore extends ReadyResource {
     if (existing && !existing.closing) return existing
 
     const core = Hypercore.createCore(this.storage, {
-      preopen: existing ? existing.closing : null, // always wait for the prev one to close first in any case...
+      preopen: (existing && existing.opened) ? existing.closing : null, // always wait for the prev one to close first in any case...
       eagerUpgrade: true,
       notDownloadingLinger: opts.notDownloadingLinger,
       allowFork: opts.allowFork !== false,
