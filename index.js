@@ -18,14 +18,14 @@ class StreamTracker {
 
   add (stream, isExternal) {
     const record = { index: 0, stream, isExternal }
-    this.records.push(record)
+    record.index = this.records.push(record) - 1
     return record
   }
 
   remove (record) {
     const popped = this.records.pop()
     if (popped === record) return
-    this.records[popped.index = record.index] = popped
+    this.records[(popped.index = record.index)] = popped
   }
 
   attachAll (core) {
