@@ -182,7 +182,10 @@ class CoreTracker {
     this._gcing.clear()
 
     const all = []
-    for (const core of this.map.values()) all.push(core.close())
+    for (const core of this.map.values()) {
+      core.onidle = noop // no reentry
+      all.push(core.close())
+    }
     this.map.clear()
 
     return Promise.all(all)
