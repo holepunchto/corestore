@@ -120,9 +120,12 @@ test('session pre ready', async function (t) {
 test('weak ref to react to cores opening', async function (t) {
   t.plan(2)
 
+  const s = setInterval(() => {}, 1000)
+
   const dir = await tmp(t)
   const store = new Corestore(dir)
 
+  t.teardown(() => clearInterval(s))
   t.teardown(() => store.close())
 
   store.watch(function (core) {
