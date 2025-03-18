@@ -175,6 +175,7 @@ class CoreTracker {
   _startGC () {
     if (this._gcInterval) return
     this._gcInterval = setInterval(this._gcCycleBound, 2000)
+    this._gcInterval.unref()
   }
 
   close () {
