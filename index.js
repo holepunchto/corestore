@@ -287,8 +287,9 @@ class Corestore extends ReadyResource {
     return auditStore(this, opts)
   }
 
-  suspend () {
-    return this.storage.db.suspend()
+  async suspend () {
+    await this.storage.db.flush()
+    await this.storage.db.suspend()
   }
 
   resume () {
