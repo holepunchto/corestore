@@ -318,6 +318,54 @@ test('open by discovery key', async function (t) {
   await store.close()
 })
 
+test('list stream', async function (t) {
+  const store = new Corestore(await tmp(t))
+  const namespace = store.namespace('test')
+  t.teardown(() => store.close())
+
+  const expectedAll = []
+  const expeactedNamespace = []
+
+  for (let i = 0; i < 10; i++) {
+    if (i < 5) {
+      const core = store.get(crypto.randomBytes(32))
+      await core.ready()
+      expectedAll.push(core.discoveryKey)
+    } else {
+      const core = namespace.get(crypto.randomBytes(32))
+      await core.ready()
+      expectedAll.push(core.discoveryKey)
+      expeactedNamespace.push(core.discoveryKey)
+    }
+  }
+
+  const discoveryKeysAll = await toArray(store.storage.createCoreStream())
+  const discoveryKeysNamespace = await toArray(namespace.storage.createAliasStream(namespace.ns))
+
+  t.alike(discoveryKeysAll.slice().map(item => item.discoveryKey).sort((a, b) => Buffer.compare(a, b)),
+    expectedAll.slice().sort((a, b) => Buffer.compare(a, b)))
+  t.alike(discoveryKeysNamespace.slice().map(item => item.discoveryKey).sort((a, b) => Buffer.compare(a, b)),
+    expeactedNamespace.slice().sort((a, b) => Buffer.compare(a, b)))
+
+  t.unlike(discoveryKeysAll.slice().sort((a, b) => Buffer.compare(a.discoveryKey, b.discoveryKey)),
+    discoveryKeysNamespace.slice().sort((a, b) => Buffer.compare(a.discoveryKey, b.discoveryKey)))
+})
+
+function toArray (stream) {
+  return new Promise((resolve, reject) => {
+    const all = []
+    stream.on('data', (data) => {
+      all.push(data)
+    })
+    stream.on('end', () => {
+      resolve(all)
+    })
+    stream.on('error', (err) => {
+      reject(err)
+    })
+  })
+}
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)
