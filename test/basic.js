@@ -354,7 +354,7 @@ test('basic - open with a keypair, read-only session concurrently opened', async
 })
 
 test('list stream', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = await create(t)
   const namespace = store.namespace('test')
   t.teardown(() => store.close())
 
@@ -363,27 +363,33 @@ test('list stream', async function (t) {
 
   for (let i = 0; i < 10; i++) {
     if (i < 5) {
-      const core = store.get(crypto.randomBytes(32))
+      const core = store.get({ name: `core${i}` })
       await core.ready()
       expectedAll.push(core.discoveryKey)
     } else {
-      const core = namespace.get(crypto.randomBytes(32))
+      const core = namespace.get({ name: `core${i}` })
       await core.ready()
       expectedAll.push(core.discoveryKey)
       expeactedNamespace.push(core.discoveryKey)
     }
   }
 
-  const discoveryKeysAll = await toArray(store.storage.createCoreStream())
-  const discoveryKeysNamespace = await toArray(namespace.storage.createAliasStream(namespace.ns))
+  const discoveryKeysAll = await toArray(store.storage.createDiscoveryKeyStream())
+  const discoveryKeysNamespace = await toArray(store.storage.createDiscoveryKeyStream(namespace.ns))
 
-  t.alike(discoveryKeysAll.slice().map(item => item.discoveryKey).sort((a, b) => Buffer.compare(a, b)),
+  t.comment('stream without arg sends all core discoveryKeys')
+  t.alike(discoveryKeysAll.slice().map(item => item).sort((a, b) => Buffer.compare(a, b)),
     expectedAll.slice().sort((a, b) => Buffer.compare(a, b)))
-  t.alike(discoveryKeysNamespace.slice().map(item => item.discoveryKey).sort((a, b) => Buffer.compare(a, b)),
+  t.comment('stream without namespace arg sends namespace core discoveryKeys')
+  t.alike(discoveryKeysNamespace.slice().map(item => item).sort((a, b) => Buffer.compare(a, b)),
     expeactedNamespace.slice().sort((a, b) => Buffer.compare(a, b)))
 
-  t.unlike(discoveryKeysAll.slice().sort((a, b) => Buffer.compare(a.discoveryKey, b.discoveryKey)),
-    discoveryKeysNamespace.slice().sort((a, b) => Buffer.compare(a.discoveryKey, b.discoveryKey)))
+  t.comment('with and withough namespace dont return the same')
+  t.unlike(discoveryKeysAll.slice().sort((a, b) => Buffer.compare(a, b)),
+    discoveryKeysNamespace.slice().sort((a, b) => Buffer.compare(a, b)))
+
+  t.comment('without namespace includes all of with namespace')
+  t.ok(discoveryKeysNamespace.every(b => discoveryKeysAll.some(a => a.equals(b))))
 })
 
 function toArray (stream) {
