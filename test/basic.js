@@ -346,7 +346,7 @@ test('basic - open with a keypair, read-only session concurrently opened', async
     await core1.ready()
     t.absent(core1.manifest)
 
-    const core2 = store.get({ key, manifest: { version: 1, signers: [{ publicKey: keyPair.publicKey }] }, keyPair })
+    const core2 = store.get({ key, manifest: { signers: [{ publicKey: keyPair.publicKey }] }, keyPair })
     await core2.ready()
 
     t.ok(core2.manifest)
