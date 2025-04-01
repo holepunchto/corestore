@@ -318,6 +318,41 @@ test('open by discovery key', async function (t) {
   await store.close()
 })
 
+test('basic - open with a keypair, read-only session concurrently opened', async t => {
+  const store = await create(t)
+
+  {
+    const keyPair = crypto.keyPair()
+    const key = Hypercore.key({
+      version: store.manifestVersion,
+      signers: [{ signature: 'ed25519', publicKey: keyPair.publicKey }]
+    })
+
+    const core1 = store.get({ key, keyPair })
+    await core1.ready()
+
+    t.ok(core1.manifest)
+  }
+
+  {
+    const keyPair = crypto.keyPair()
+    const key = Hypercore.key({
+      version: store.manifestVersion,
+      signers: [{ signature: 'ed25519', publicKey: keyPair.publicKey }]
+    })
+
+    const core1 = store.get({ key })
+
+    await core1.ready()
+    t.absent(core1.manifest)
+
+    const core2 = store.get({ key, manifest: { signers: [{ publicKey: keyPair.publicKey }] }, keyPair })
+    await core2.ready()
+
+    t.ok(core2.manifest)
+  }
+})
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)
