@@ -306,6 +306,10 @@ class Corestore extends ReadyResource {
     return this.session({ ...opts, namespace: generateNamespace(this.ns, name) })
   }
 
+  list (namespace) {
+    return this.storage.createDiscoveryKeyStream(namespace)
+  }
+
   getAuth (discoveryKey) {
     return this.storage.getAuth(discoveryKey)
   }

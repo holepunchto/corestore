@@ -353,6 +353,60 @@ test('basic - open with a keypair, read-only session concurrently opened', async
   }
 })
 
+test('list stream', async function (t) {
+  const store = await create(t)
+  const namespace = store.namespace('test')
+  t.teardown(() => store.close())
+
+  const expectedAll = []
+  const expeactedNamespace = []
+
+  for (let i = 0; i < 10; i++) {
+    if (i < 5) {
+      const core = store.get({ name: `core${i}` })
+      await core.ready()
+      expectedAll.push(core.discoveryKey)
+    } else {
+      const core = namespace.get({ name: `core${i}` })
+      await core.ready()
+      expectedAll.push(core.discoveryKey)
+      expeactedNamespace.push(core.discoveryKey)
+    }
+  }
+
+  const discoveryKeysAll = await toArray(store.list())
+  const discoveryKeysNamespace = await toArray(store.list(namespace.ns))
+
+  t.comment('stream without arg sends all core discoveryKeys')
+  t.alike(discoveryKeysAll.slice().map(item => item).sort((a, b) => Buffer.compare(a, b)),
+    expectedAll.slice().sort((a, b) => Buffer.compare(a, b)))
+  t.comment('stream without namespace arg sends namespace core discoveryKeys')
+  t.alike(discoveryKeysNamespace.slice().map(item => item).sort((a, b) => Buffer.compare(a, b)),
+    expeactedNamespace.slice().sort((a, b) => Buffer.compare(a, b)))
+
+  t.comment('with and withough namespace dont return the same')
+  t.unlike(discoveryKeysAll.slice().sort((a, b) => Buffer.compare(a, b)),
+    discoveryKeysNamespace.slice().sort((a, b) => Buffer.compare(a, b)))
+
+  t.comment('without namespace includes all of with namespace')
+  t.ok(discoveryKeysNamespace.every(b => discoveryKeysAll.some(a => a.equals(b))))
+})
+
+function toArray (stream) {
+  return new Promise((resolve, reject) => {
+    const all = []
+    stream.on('data', (data) => {
+      all.push(data)
+    })
+    stream.on('end', () => {
+      resolve(all)
+    })
+    stream.on('error', (err) => {
+      reject(err)
+    })
+  })
+}
+
 async function create (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)
