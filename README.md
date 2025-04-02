@@ -76,6 +76,9 @@ const core1 = ns1.get({ name: 'main' }) // These will load different Hypercores
 const core2 = ns2.get({ name: 'main' })
 ```
 
+#### `const stream = store.list(namespace)`
+Creates a discovery key stream of all cores within a namespace or all cores in general if no namespace is provided.
+
 #### `await store.close()`
 Fully close this Corestore instance.
 

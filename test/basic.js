@@ -374,8 +374,8 @@ test('list stream', async function (t) {
     }
   }
 
-  const discoveryKeysAll = await toArray(store.storage.createDiscoveryKeyStream())
-  const discoveryKeysNamespace = await toArray(store.storage.createDiscoveryKeyStream(namespace.ns))
+  const discoveryKeysAll = await toArray(store.list())
+  const discoveryKeysNamespace = await toArray(store.list(namespace.ns))
 
   t.comment('stream without arg sends all core discoveryKeys')
   t.alike(discoveryKeysAll.slice().map(item => item).sort((a, b) => Buffer.compare(a, b)),
