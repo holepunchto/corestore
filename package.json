@@ -24,7 +24,7 @@
   },
   "scripts": {
     "test": "standard && brittle test/*.js",
-    "test:bare": "bare test/*.js"
+    "test:bare": "bare test/basic.js"
   },
   "repository": {
     "type": "git",
