@@ -23,7 +23,8 @@
     "test-tmp": "^1.3.0"
   },
   "scripts": {
-    "test": "standard && brittle test/*.js"
+    "test": "standard && brittle test/*.js",
+    "test:bare": "bare test/*.js"
   },
   "repository": {
     "type": "git",
