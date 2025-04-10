@@ -238,11 +238,10 @@ class Corestore extends ReadyResource {
     this.globalCache = this.root ? this.root.globalCache : (opts.globalCache || null)
     this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
     this.ns = opts.namespace || DEFAULT_NAMESPACE
+    this.manifestVersion = opts.manifestVersion || 1
 
     this.watchers = null
     this.watchIndex = -1
-
-    this.manifestVersion = 1 // just compat
 
     this._findingPeers = null // here for legacy
     this._ongcBound = this._ongc.bind(this)
@@ -521,7 +520,7 @@ class Corestore extends ReadyResource {
     if (opts.manifest) {
       result.manifest = opts.manifest
     } else if (result.keyPair && !result.discoveryKey) {
-      result.manifest = { version: 1, signers: [{ publicKey: result.keyPair.publicKey }] }
+      result.manifest = { version: this.manifestVersion, signers: [{ publicKey: result.keyPair.publicKey }] }
     }
 
     if (opts.key) result.key = ID.decode(opts.key)

@@ -353,6 +353,35 @@ test('basic - open with a keypair, read-only session concurrently opened', async
   }
 })
 
+test('can set default manifest', async function (t) {
+  const store = await create(t)
+
+  const test = store.get({ name: 'test' })
+  await test.ready()
+
+  const key = test.key
+  t.is(test.manifest.version, store.manifestVersion)
+
+  await test.close()
+
+  const other = store.manifestVersion === 1 ? 2 : 1
+  const updated = store.session({ manifestVersion: other })
+
+  const test2 = updated.get({ name: 'test' })
+  await test2.ready()
+
+  t.is(test2.manifest.version, store.manifestVersion)
+  t.alike(test2.key, key)
+
+  const test3 = updated.get({ name: 'test3' })
+  await test3.ready()
+
+  t.is(test3.manifest.version, other)
+
+  await updated.close()
+  await store.close()
+})
+
 test('list stream', async function (t) {
   const store = await create(t)
   const namespace = store.namespace('test')
