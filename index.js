@@ -298,7 +298,7 @@ class Corestore extends ReadyResource {
   session (opts) {
     this._maybeClosed()
     const root = this.root || this
-    return new Corestore(null, { ...opts, root })
+    return new Corestore(null, { manifestVersion: this.manifestVersion, ...opts, root })
   }
 
   namespace (name, opts) {
