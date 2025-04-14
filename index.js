@@ -229,7 +229,7 @@ class Corestore extends ReadyResource {
     super()
 
     this.root = opts.root || null
-    this.storage = this.root ? this.root.storage : Hypercore.defaultStorage(storage, { id: opts.id })
+    this.storage = this.root ? this.root.storage : Hypercore.defaultStorage(storage, { id: opts.id, allowBackup: opts.allowBackup })
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.sessions = new SessionTracker()
