@@ -286,9 +286,12 @@ class Corestore extends ReadyResource {
     return auditStore(this, opts)
   }
 
-  async suspend () {
+  async suspend ({ log = noop } = {}) {
+    log('Flushing db...')
     await this.storage.db.flush()
+    log('Suspending db...')
     await this.storage.db.suspend()
+    log('Corestore suspended')
   }
 
   resume () {
