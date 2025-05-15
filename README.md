@@ -7,7 +7,7 @@ Corestore is a Hypercore factory that makes it easier to manage large collection
 Corestore provides:
 1. __Key Derivation__ - All writable Hypercore keys are derived from a single master key and a user-provided name.
 2. __Session Handling__ - If a single Hypercore is loaded multiple times through the `get` method, the underlying resources will only be opened once (using Hypercore 10's new session feature). Once all sessions are closed, the resources will be released.
-3. __Storage Management__ - Hypercores can be stored in any random-access-storage instance, where they will be keyed by their discovery keys.
+3. __Storage Management__ - Hypercores can be stored in any `hypercore-storage` instance, where they will be keyed by their discovery keys.
 4. __Namespacing__ - You can share a single Corestore instance between multiple applications or components without worrying about naming collisions by creating "namespaces" (e.g. `corestore.namespace('my-app').get({ name: 'main' })`)
 
 ### Installation
@@ -19,7 +19,7 @@ Corestore provides:
 > It will be updated to 11 in a few weeks.
 
 ### Usage
-A corestore instance can be constructed with a random-access-storage module, a function that returns a random-access-storage module given a path, or a string. If a string is specified, it will be assumed to be a path to a local storage directory:
+A corestore instance can be constructed with a `hypercore-storage` instance, or a string. If a string is specified, it will be assumed to be a path to a local storage directory:
 ```js
 const Corestore = require('corestore')
 
@@ -29,10 +29,21 @@ const core2 = store.get({ name: 'core-2' })
 ```
 
 ### API
-#### `const store = new Corestore(storage)`
+
+#### `const store = new Corestore(storage, options = {})`
+
 Create a new Corestore instance.
 
-`storage` can be either a random-access-storage module, a string, or a function that takes a path and returns an random-access-storage instance.
+`storage` can be either a `hypercore-storage` instance or a string.
+
+Options:
+
+```
+{
+  primaryKey: null, // The primary key to use as the master key for key derivation.
+  writable: true,
+}
+```
 
 #### `const core = store.get(key | { name: 'a-name', ...hypercoreOpts})`
 Loads a Hypercore, either by name (if the `name` option is provided), or from the provided key (if the first argument is a Buffer or String with hex/z32 key, or if the `key` options is set).
