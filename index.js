@@ -4,6 +4,7 @@ const ReadyResource = require('ready-resource')
 const sodium = require('sodium-universal')
 const crypto = require('hypercore-crypto')
 const ID = require('hypercore-id-encoding')
+const { isAndroid } = require('which-runtime')
 const { STORAGE_EMPTY } = require('hypercore-errors')
 
 const auditStore = require('./lib/audit.js')
@@ -239,6 +240,7 @@ class Corestore extends ReadyResource {
     this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
     this.ns = opts.namespace || DEFAULT_NAMESPACE
     this.manifestVersion = opts.manifestVersion || 1
+    this.shouldSuspend = isAndroid ? !!opts.suspend : opts.suspend !== false
 
     this.watchers = null
     this.watchIndex = -1
@@ -289,6 +291,7 @@ class Corestore extends ReadyResource {
   async suspend ({ log = noop } = {}) {
     await log('Flushing db...')
     await this.storage.db.flush()
+    if (!this.shouldSuspend) return
     await log('Suspending db...')
     await this.storage.db.suspend()
   }
