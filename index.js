@@ -241,6 +241,7 @@ class Corestore extends ReadyResource {
     this.ns = opts.namespace || DEFAULT_NAMESPACE
     this.manifestVersion = opts.manifestVersion || 1
     this.shouldSuspend = isAndroid ? !!opts.suspend : opts.suspend !== false
+    this.active = opts.active !== false
 
     this.watchers = null
     this.watchIndex = -1
@@ -405,7 +406,7 @@ class Corestore extends ReadyResource {
       muxer.cork()
 
       for (const core of this.cores) {
-        if (!core.replicator.downloading || core.replicator.attached(muxer) || !core.opened) continue
+        if (!core.replicator.downloading || core.replicator.attached(muxer) || !core.opened || !this.active) continue
         core.replicator.attachTo(muxer)
       }
 
@@ -571,7 +572,7 @@ class Corestore extends ReadyResource {
     }
 
     core.replicator.ondownloading = () => {
-      this.streamTracker.attachAll(core)
+      if (this.active) this.streamTracker.attachAll(core)
     }
 
     this.cores.set(id, core)
