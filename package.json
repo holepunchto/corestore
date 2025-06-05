@@ -29,12 +29,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/holepunchto/corestore2.git"
+    "url": "https://github.com/holepunchto/corestore.git"
   },
   "author": "Holepunch Inc",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/holepunchto/corestore2/issues"
+    "url": "https://github.com/holepunchto/corestore/issues"
   },
-  "homepage": "https://github.com/holepunchto/corestore2"
+  "homepage": "https://github.com/holepunchto/corestore"
 }
