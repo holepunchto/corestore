@@ -91,15 +91,8 @@ store.watch(function (core) {
 #### `store.unwatch(callback)`
 Unregister a callback used with `store.watch(callback)` so it no longer fires.
 
-#### `await store.suspend(options = {})`
+#### `await store.suspend()`
 Suspend the underlying storage for the Corestore.
-
-`options` may include:
-```
-{
-  log: (...args) => {} // A logging function
-}
-```
 
 #### `await store.resume()`
 Resume a suspended Corestore.
