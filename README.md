@@ -79,6 +79,36 @@ const core2 = ns2.get({ name: 'main' })
 #### `const stream = store.list(namespace)`
 Creates a discovery key stream of all cores within a namespace or all cores in general if no namespace is provided.
 
+#### `store.watch((core) => {})`
+Register a callback called when new Hypercores are opened. `core` is the internal core for the opened Hypercore. It can be used to create weak references to a Hypercore like so:
+
+```
+store.watch(function (core) {
+  const weakCore = new Hypercore({ core, weak: true })
+})
+```
+
+#### `store.unwatch(callback)`
+Unregister a callback used with `store.watch(callback)` so it no longer fires.
+
+#### `await store.suspend(options = {})`
+Suspend the underlying storage for the Corestore.
+
+`options` may include:
+```
+{
+  log: (...args) => {} // A logging function
+}
+```
+
+#### `await store.resume()`
+Resume a suspended Corestore.
+
+#### `const keypair = await store.createKeyPair(name, ns = this.ns)`
+Generate a key pair seeded with the Corestore's primary key using a `name` and a `ns` aka namespace. `ns` defaults to the current namespace.
+
+This is useful for creating deterministic key pairs that are unique to a peer.
+
 #### `await store.close()`
 Fully close this Corestore instance.
 
