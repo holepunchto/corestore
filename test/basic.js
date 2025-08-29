@@ -421,6 +421,51 @@ test('list stream', async function (t) {
   t.ok(discoveryKeysNamespace.every(b => discoveryKeysAll.some(a => a.equals(b))))
 })
 
+test('manifest is persisted', async function (t) {
+  const dir = await tmp()
+
+  const random = crypto.randomBytes(32)
+  const manifest = {
+    quorum: 1,
+    signers: [
+      { publicKey: random }
+    ]
+  }
+  const key = Hypercore.key(manifest)
+
+  {
+    const store = new Corestore(dir)
+
+    const a = store.get({ key })
+    await a.ready()
+
+    t.is(a.manifest, null)
+
+    const a2 = store.get({ manifest })
+    await a2.ready()
+
+    t.not(a.manifest, null)
+    t.not(a2.manifest, null)
+
+    await a.close()
+    await a2.close()
+
+    await store.close()
+  }
+
+  {
+    const store = new Corestore(dir)
+
+    const a = store.get({ key })
+    await a.ready()
+    await a.close()
+
+    t.not(a.manifest, null)
+
+    await store.close()
+  }
+})
+
 function toArray (stream) {
   return new Promise((resolve, reject) => {
     const all = []
