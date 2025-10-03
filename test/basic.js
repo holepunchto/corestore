@@ -271,7 +271,12 @@ test('audit', async function (t) {
   let n = 0
   for await (const { audit } of store.audit()) {
     n++
-    if (audit.droppedBits || audit.droppedBlocks || audit.droppedTreeNodes || audit.corrupt) {
+    if (
+      audit.droppedBits ||
+      audit.droppedBlocks ||
+      audit.droppedTreeNodes ||
+      audit.corrupt
+    ) {
       t.fail('bad core')
     }
   }
@@ -318,7 +323,7 @@ test('open by discovery key', async function (t) {
   await store.close()
 })
 
-test('basic - open with a keypair, read-only session concurrently opened', async t => {
+test('basic - open with a keypair, read-only session concurrently opened', async (t) => {
   const store = await create(t)
 
   {
@@ -346,7 +351,11 @@ test('basic - open with a keypair, read-only session concurrently opened', async
     await core1.ready()
     t.absent(core1.manifest)
 
-    const core2 = store.get({ key, manifest: { signers: [{ publicKey: keyPair.publicKey }] }, keyPair })
+    const core2 = store.get({
+      key,
+      manifest: { signers: [{ publicKey: keyPair.publicKey }] },
+      keyPair
+    })
     await core2.ready()
 
     t.ok(core2.manifest)
@@ -407,18 +416,34 @@ test('list stream', async function (t) {
   const discoveryKeysNamespace = await toArray(store.list(namespace.ns))
 
   t.comment('stream without arg sends all core discoveryKeys')
-  t.alike(discoveryKeysAll.slice().map(item => item).sort((a, b) => Buffer.compare(a, b)),
-    expectedAll.slice().sort((a, b) => Buffer.compare(a, b)))
+  t.alike(
+    discoveryKeysAll
+      .slice()
+      .map((item) => item)
+      .sort((a, b) => Buffer.compare(a, b)),
+    expectedAll.slice().sort((a, b) => Buffer.compare(a, b))
+  )
   t.comment('stream without namespace arg sends namespace core discoveryKeys')
-  t.alike(discoveryKeysNamespace.slice().map(item => item).sort((a, b) => Buffer.compare(a, b)),
-    expeactedNamespace.slice().sort((a, b) => Buffer.compare(a, b)))
+  t.alike(
+    discoveryKeysNamespace
+      .slice()
+      .map((item) => item)
+      .sort((a, b) => Buffer.compare(a, b)),
+    expeactedNamespace.slice().sort((a, b) => Buffer.compare(a, b))
+  )
 
   t.comment('with and withough namespace dont return the same')
-  t.unlike(discoveryKeysAll.slice().sort((a, b) => Buffer.compare(a, b)),
-    discoveryKeysNamespace.slice().sort((a, b) => Buffer.compare(a, b)))
+  t.unlike(
+    discoveryKeysAll.slice().sort((a, b) => Buffer.compare(a, b)),
+    discoveryKeysNamespace.slice().sort((a, b) => Buffer.compare(a, b))
+  )
 
   t.comment('without namespace includes all of with namespace')
-  t.ok(discoveryKeysNamespace.every(b => discoveryKeysAll.some(a => a.equals(b))))
+  t.ok(
+    discoveryKeysNamespace.every((b) =>
+      discoveryKeysAll.some((a) => a.equals(b))
+    )
+  )
 })
 
 test('manifest is persisted', async function (t) {
@@ -427,9 +452,7 @@ test('manifest is persisted', async function (t) {
   const random = crypto.randomBytes(32)
   const manifest = {
     quorum: 1,
-    signers: [
-      { publicKey: random }
-    ]
+    signers: [{ publicKey: random }]
   }
   const key = Hypercore.key(manifest)
 
@@ -466,7 +489,7 @@ test('manifest is persisted', async function (t) {
   }
 })
 
-function toArray (stream) {
+function toArray(stream) {
   return new Promise((resolve, reject) => {
     const all = []
     stream.on('data', (data) => {
@@ -481,7 +504,7 @@ function toArray (stream) {
   })
 }
 
-async function create (t) {
+async function create(t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)
   t.teardown(() => store.close())
