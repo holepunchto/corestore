@@ -409,6 +409,13 @@ class Corestore extends ReadyResource {
     core.checkIfIdle()
   }
 
+  _shouldReplicate(core, muxer) {
+    return core.replicator.downloading &&
+      !core.replicator.attached(muxer) &&
+      core.opened &&
+      this.active
+  }
+
   replicate(isInitiator, opts) {
     this._maybeClosed()
 
@@ -428,13 +435,9 @@ class Corestore extends ReadyResource {
       muxer.cork()
 
       for (const core of this.cores) {
-        if (
-          !core.replicator.downloading ||
-          core.replicator.attached(muxer) ||
-          !core.opened ||
-          !this.active
-        )
+        if (!this._shouldReplicate(core, muxer)) {
           continue
+        }
         core.replicator.attachTo(muxer)
       }
 
