@@ -100,8 +100,7 @@ class CoreTracker {
   unwatch(store) {
     if (store.watchIndex === -1) return
     const head = this.watching.pop()
-    if (head !== store)
-      this.watching[(head.watchIndex = store.watchIndex)] = head
+    if (head !== store) this.watching[(head.watchIndex = store.watchIndex)] = head
     store.watchIndex = -1
   }
 
@@ -238,16 +237,12 @@ class Corestore extends ReadyResource {
           allowBackup: opts.allowBackup,
           readOnly: opts.readOnly
         })
-    this.streamTracker = this.root
-      ? this.root.streamTracker
-      : new StreamTracker()
+    this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.sessions = new SessionTracker()
     this.corestores = this.root ? this.root.corestores : new Set()
     this.readOnly = opts.writable === false || !!opts.readOnly
-    this.globalCache = this.root
-      ? this.root.globalCache
-      : opts.globalCache || null
+    this.globalCache = this.root ? this.root.globalCache : opts.globalCache || null
     this.primaryKey = this.root ? this.root.primaryKey : opts.primaryKey || null
     this.ns = opts.namespace || DEFAULT_NAMESPACE
     this.manifestVersion = opts.manifestVersion || 1
@@ -411,10 +406,7 @@ class Corestore extends ReadyResource {
 
   _shouldReplicate(core, muxer) {
     return (
-      core.replicator.downloading &&
-      !core.replicator.attached(muxer) &&
-      core.opened &&
-      this.active
+      core.replicator.downloading && !core.replicator.attached(muxer) && core.opened && this.active
     )
   }
 
@@ -480,8 +472,7 @@ class Corestore extends ReadyResource {
       wait: opts.wait !== false,
       timeout: opts.timeout || 0,
       draft: !!opts.draft,
-      writable:
-        opts.writable === undefined && this.readOnly ? false : opts.writable
+      writable: opts.writable === undefined && this.readOnly ? false : opts.writable
     }
 
     // name requires us to rt to storage + ready, so needs preload
@@ -641,9 +632,7 @@ function deriveSeed(primaryKey, namespace, name) {
 
 function createKeyPair(primaryKey, namespace, name) {
   const seed = deriveSeed(primaryKey, namespace, name)
-  const buf = b4a.alloc(
-    sodium.crypto_sign_PUBLICKEYBYTES + sodium.crypto_sign_SECRETKEYBYTES
-  )
+  const buf = b4a.alloc(sodium.crypto_sign_PUBLICKEYBYTES + sodium.crypto_sign_SECRETKEYBYTES)
   const keyPair = {
     publicKey: buf.subarray(0, sodium.crypto_sign_PUBLICKEYBYTES),
     secretKey: buf.subarray(sodium.crypto_sign_PUBLICKEYBYTES)

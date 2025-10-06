@@ -271,12 +271,7 @@ test('audit', async function (t) {
   let n = 0
   for await (const { audit } of store.audit()) {
     n++
-    if (
-      audit.droppedBits ||
-      audit.droppedBlocks ||
-      audit.droppedTreeNodes ||
-      audit.corrupt
-    ) {
+    if (audit.droppedBits || audit.droppedBlocks || audit.droppedTreeNodes || audit.corrupt) {
       t.fail('bad core')
     }
   }
@@ -439,11 +434,7 @@ test('list stream', async function (t) {
   )
 
   t.comment('without namespace includes all of with namespace')
-  t.ok(
-    discoveryKeysNamespace.every((b) =>
-      discoveryKeysAll.some((a) => a.equals(b))
-    )
-  )
+  t.ok(discoveryKeysNamespace.every((b) => discoveryKeysAll.some((a) => a.equals(b))))
 })
 
 test('manifest is persisted', async function (t) {
