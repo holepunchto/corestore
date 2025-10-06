@@ -484,11 +484,13 @@ test('open readOnly', async function (t) {
   const dir = await tmp(t)
 
   const store = new Corestore(dir)
+  await store.ready()
   t.teardown(() => store.close())
 
   const storeReadOnly = new Corestore(dir, {
     readOnly: true
   })
+  await storeReadOnly.ready()
   t.teardown(() => storeReadOnly.close())
 
   t.absent(store.readOnly)
