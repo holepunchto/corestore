@@ -410,10 +410,12 @@ class Corestore extends ReadyResource {
   }
 
   _shouldReplicate(core, muxer) {
-    return core.replicator.downloading &&
+    return (
+      core.replicator.downloading &&
       !core.replicator.attached(muxer) &&
       core.opened &&
       this.active
+    )
   }
 
   replicate(isInitiator, opts) {
