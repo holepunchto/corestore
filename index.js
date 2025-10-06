@@ -13,23 +13,23 @@ const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
 
 class StreamTracker {
-  constructor () {
+  constructor() {
     this.records = []
   }
 
-  add (stream, isExternal) {
+  add(stream, isExternal) {
     const record = { index: 0, stream, isExternal }
     record.index = this.records.push(record) - 1
     return record
   }
 
-  remove (record) {
+  remove(record) {
     const popped = this.records.pop()
     if (popped === record) return
     this.records[(popped.index = record.index)] = popped
   }
 
-  attachAll (core) {
+  attachAll(core) {
     for (let i = 0; i < this.records.length; i++) {
       const record = this.records[i]
       const muxer = record.stream.noiseStream.userData
@@ -37,7 +37,7 @@ class StreamTracker {
     }
   }
 
-  destroy () {
+  destroy() {
     // reverse is safer cause we delete mb
     for (let i = this.records.length - 1; i >= 0; i--) {
       const record = this.records[i]
@@ -47,15 +47,15 @@ class StreamTracker {
 }
 
 class SessionTracker {
-  constructor () {
+  constructor() {
     this.map = new Map()
   }
 
-  get size () {
+  get size() {
     return this.map.size
   }
 
-  get (id) {
+  get(id) {
     const existing = this.map.get(id)
     if (existing !== undefined) return existing
     const fresh = []
@@ -63,23 +63,23 @@ class SessionTracker {
     return fresh
   }
 
-  gc (id) {
+  gc(id) {
     this.map.delete(id)
   }
 
-  list (id) {
-    return id ? (this.map.get(id) || []) : [...this]
+  list(id) {
+    return id ? this.map.get(id) || [] : [...this]
   }
 
-  * [Symbol.iterator] () {
+  *[Symbol.iterator]() {
     for (const sessions of this.map.values()) {
-      yield * sessions[Symbol.iterator]()
+      yield* sessions[Symbol.iterator]()
     }
   }
 }
 
 class CoreTracker {
-  constructor () {
+  constructor() {
     this.map = new Map()
     this.watching = []
 
@@ -88,23 +88,24 @@ class CoreTracker {
     this._gcCycleBound = this._gcCycle.bind(this)
   }
 
-  get size () {
+  get size() {
     return this.map.size
   }
 
-  watch (store) {
+  watch(store) {
     if (store.watchIndex !== -1) return
     store.watchIndex = this.watching.push(store) - 1
   }
 
-  unwatch (store) {
+  unwatch(store) {
     if (store.watchIndex === -1) return
     const head = this.watching.pop()
-    if (head !== store) this.watching[(head.watchIndex = store.watchIndex)] = head
+    if (head !== store)
+      this.watching[(head.watchIndex = store.watchIndex)] = head
     store.watchIndex = -1
   }
 
-  resume (id) {
+  resume(id) {
     const core = this.map.get(id)
 
     if (!core) return null
@@ -121,12 +122,12 @@ class CoreTracker {
     return core
   }
 
-  opened (id) {
+  opened(id) {
     const core = this.map.get(id)
     return !!(core && core.opened && !core.closing)
   }
 
-  get (id) {
+  get(id) {
     // we allow you do call this from the outside, so support normal buffers also
     if (b4a.isBuffer(id)) id = b4a.toString(id, 'hex')
     const core = this.map.get(id)
@@ -134,24 +135,24 @@ class CoreTracker {
     return core
   }
 
-  set (id, core) {
+  set(id, core) {
     this.map.set(id, core)
     if (this.watching.length > 0) this._emit(core)
   }
 
-  _emit (core) {
+  _emit(core) {
     for (let i = this.watching.length - 1; i >= 0; i--) {
       const store = this.watching[i]
       for (const fn of store.watchers) fn(core)
     }
   }
 
-  _gc (core) {
+  _gc(core) {
     const id = toHex(core.discoveryKey)
     if (this.map.get(id) === core) this.map.delete(id)
   }
 
-  _gcCycle () {
+  _gcCycle() {
     for (const core of this._gcing) {
       if (++core.gc < 4) continue
       const gc = this._gc.bind(this, core)
@@ -162,24 +163,24 @@ class CoreTracker {
     if (this._gcing.size === 0) this._stopGC()
   }
 
-  gc (core) {
+  gc(core) {
     core.gc = 1 // first strike
     this._gcing.add(core)
     if (this._gcing.size === 1) this._startGC()
   }
 
-  _stopGC () {
+  _stopGC() {
     clearInterval(this._gcInterval)
     this._gcInterval = null
   }
 
-  _startGC () {
+  _startGC() {
     if (this._gcInterval) return
     this._gcInterval = setInterval(this._gcCycleBound, 2000)
     if (this._gcInterval.unref) this._gcInterval.unref()
   }
 
-  close () {
+  close() {
     this._stopGC()
     this._gcing.clear()
 
@@ -193,7 +194,7 @@ class CoreTracker {
     return Promise.all(all)
   }
 
-  * [Symbol.iterator] () {
+  *[Symbol.iterator]() {
     for (const core of this.map.values()) {
       if (!core.closing) yield core
     }
@@ -201,17 +202,17 @@ class CoreTracker {
 }
 
 class FindingPeers {
-  constructor () {
+  constructor() {
     this.count = 0
     this.pending = []
   }
 
-  add (core) {
+  add(core) {
     if (this.count === 0) return
     this.pending.push(core.findingPeers())
   }
 
-  inc (sessions) {
+  inc(sessions) {
     if (++this.count !== 1) return
 
     for (const core of sessions) {
@@ -219,25 +220,35 @@ class FindingPeers {
     }
   }
 
-  dec (sessions) {
+  dec(sessions) {
     if (--this.count !== 0) return
     while (this.pending.length > 0) this.pending.pop()()
   }
 }
 
 class Corestore extends ReadyResource {
-  constructor (storage, opts = {}) {
+  constructor(storage, opts = {}) {
     super()
 
     this.root = opts.root || null
-    this.storage = this.root ? this.root.storage : Hypercore.defaultStorage(storage, { id: opts.id, allowBackup: opts.allowBackup, readOnly: opts.readOnly })
-    this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
+    this.storage = this.root
+      ? this.root.storage
+      : Hypercore.defaultStorage(storage, {
+          id: opts.id,
+          allowBackup: opts.allowBackup,
+          readOnly: opts.readOnly
+        })
+    this.streamTracker = this.root
+      ? this.root.streamTracker
+      : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.sessions = new SessionTracker()
     this.corestores = this.root ? this.root.corestores : new Set()
     this.readOnly = opts.writable === false || !!opts.readOnly
-    this.globalCache = this.root ? this.root.globalCache : (opts.globalCache || null)
-    this.primaryKey = this.root ? this.root.primaryKey : (opts.primaryKey || null)
+    this.globalCache = this.root
+      ? this.root.globalCache
+      : opts.globalCache || null
+    this.primaryKey = this.root ? this.root.primaryKey : opts.primaryKey || null
     this.ns = opts.namespace || DEFAULT_NAMESPACE
     this.manifestVersion = opts.manifestVersion || 1
     this.shouldSuspend = isAndroid ? !!opts.suspend : opts.suspend !== false
@@ -254,7 +265,7 @@ class Corestore extends ReadyResource {
     this.ready().catch(noop)
   }
 
-  watch (fn) {
+  watch(fn) {
     if (this.watchers === null) {
       this.watchers = new Set()
       this.cores.watch(this)
@@ -263,7 +274,7 @@ class Corestore extends ReadyResource {
     this.watchers.add(fn)
   }
 
-  unwatch (fn) {
+  unwatch(fn) {
     if (this.watchers === null) return
 
     this.watchers.delete(fn)
@@ -274,7 +285,7 @@ class Corestore extends ReadyResource {
     }
   }
 
-  findingPeers () {
+  findingPeers() {
     if (this._findingPeers === null) this._findingPeers = new FindingPeers()
     this._findingPeers.inc(this.sessions)
     let done = false
@@ -285,11 +296,11 @@ class Corestore extends ReadyResource {
     }
   }
 
-  audit (opts = {}) {
+  audit(opts = {}) {
     return auditStore(this, opts)
   }
 
-  async suspend ({ log = noop } = {}) {
+  async suspend({ log = noop } = {}) {
     await log('Flushing db...')
     await this.storage.db.flush()
     if (!this.shouldSuspend) return
@@ -297,39 +308,46 @@ class Corestore extends ReadyResource {
     await this.storage.db.suspend()
   }
 
-  resume () {
+  resume() {
     return this.storage.db.resume()
   }
 
-  session (opts) {
+  session(opts) {
     this._maybeClosed()
     const root = this.root || this
-    return new Corestore(null, { manifestVersion: this.manifestVersion, ...opts, root })
+    return new Corestore(null, {
+      manifestVersion: this.manifestVersion,
+      ...opts,
+      root
+    })
   }
 
-  namespace (name, opts) {
-    return this.session({ ...opts, namespace: generateNamespace(this.ns, name) })
+  namespace(name, opts) {
+    return this.session({
+      ...opts,
+      namespace: generateNamespace(this.ns, name)
+    })
   }
 
-  list (namespace) {
+  list(namespace) {
     return this.storage.createDiscoveryKeyStream(namespace)
   }
 
-  getAuth (discoveryKey) {
+  getAuth(discoveryKey) {
     return this.storage.getAuth(discoveryKey)
   }
 
-  _ongc (session) {
+  _ongc(session) {
     if (session.sessions.length === 0) this.sessions.gc(session.id)
   }
 
-  async _getOrSetSeed () {
+  async _getOrSetSeed() {
     const seed = await this.storage.getSeed()
     if (seed !== null) return seed
     return await this.storage.setSeed(this.primaryKey || crypto.randomBytes(32))
   }
 
-  async _open () {
+  async _open() {
     if (this.root !== null) {
       if (this.root.opened === false) await this.root.ready()
       this.primaryKey = this.root.primaryKey
@@ -348,7 +366,7 @@ class Corestore extends ReadyResource {
     }
   }
 
-  async _close () {
+  async _close() {
     const closing = []
     const hanging = [...this.sessions]
     for (const sess of hanging) closing.push(sess.close())
@@ -370,9 +388,13 @@ class Corestore extends ReadyResource {
     await this.storage.close()
   }
 
-  async _attachMaybe (muxer, discoveryKey) {
+  async _attachMaybe(muxer, discoveryKey) {
     if (this.opened === false) await this.ready()
-    if (!this.cores.opened(toHex(discoveryKey)) && !(await this.storage.has(discoveryKey, { ifMigrated: true }))) return
+    if (
+      !this.cores.opened(toHex(discoveryKey)) &&
+      !(await this.storage.has(discoveryKey, { ifMigrated: true }))
+    )
+      return
     if (this.closing) return
 
     const core = this._openCore(discoveryKey, { createIfMissing: false })
@@ -387,13 +409,13 @@ class Corestore extends ReadyResource {
     core.checkIfIdle()
   }
 
-  replicate (isInitiator, opts) {
+  replicate(isInitiator, opts) {
     this._maybeClosed()
 
     const isExternal = isStream(isInitiator)
     const stream = Hypercore.createProtocolStream(isInitiator, {
       ...opts,
-      ondiscoverykey: discoveryKey => {
+      ondiscoverykey: (discoveryKey) => {
         if (this.closing) return
         const muxer = stream.noiseStream.userData
         return this._attachMaybe(muxer, discoveryKey)
@@ -406,7 +428,13 @@ class Corestore extends ReadyResource {
       muxer.cork()
 
       for (const core of this.cores) {
-        if (!core.replicator.downloading || core.replicator.attached(muxer) || !core.opened || !this.active) continue
+        if (
+          !core.replicator.downloading ||
+          core.replicator.attached(muxer) ||
+          !core.opened ||
+          !this.active
+        )
+          continue
         core.replicator.attachTo(muxer)
       }
 
@@ -418,13 +446,13 @@ class Corestore extends ReadyResource {
     return stream
   }
 
-  _maybeClosed () {
+  _maybeClosed() {
     if (this.closing || (this.root !== null && this.root.closing)) {
       throw new Error('Corestore is closed')
     }
   }
 
-  get (opts) {
+  get(opts) {
     this._maybeClosed()
 
     if (b4a.isBuffer(opts) || typeof opts === 'string') opts = { key: opts }
@@ -447,7 +475,8 @@ class Corestore extends ReadyResource {
       wait: opts.wait !== false,
       timeout: opts.timeout || 0,
       draft: !!opts.draft,
-      writable: opts.writable === undefined && this.readOnly ? false : opts.writable
+      writable:
+        opts.writable === undefined && this.readOnly ? false : opts.writable
     }
 
     // name requires us to rt to storage + ready, so needs preload
@@ -473,28 +502,30 @@ class Corestore extends ReadyResource {
     return this._makeSession(conf)
   }
 
-  _makeSession (conf) {
+  _makeSession(conf) {
     const session = new Hypercore(null, null, conf)
     if (this._findingPeers !== null) this._findingPeers.add(session)
     return session
   }
 
-  async createKeyPair (name, ns = this.ns) {
+  async createKeyPair(name, ns = this.ns) {
     if (this.opened === false) await this.ready()
     return createKeyPair(this.primaryKey, ns, name)
   }
 
-  async _preloadCheckIfExists (opts) {
+  async _preloadCheckIfExists(opts) {
     const has = await this.storage.has(opts.discoveryKey)
     if (!has) throw STORAGE_EMPTY('No Hypercore is stored here')
     return this._preload(opts)
   }
 
-  async _preload (opts) {
+  async _preload(opts) {
     if (opts.preload) opts = { ...opts, ...(await opts.preload) }
     if (this.opened === false) await this.ready()
 
-    const discoveryKey = opts.name ? await this.storage.getAlias({ name: opts.name, namespace: this.ns }) : null
+    const discoveryKey = opts.name
+      ? await this.storage.getAlias({ name: opts.name, namespace: this.ns })
+      : null
     this._maybeClosed()
 
     const core = this._openCore(discoveryKey, opts)
@@ -509,7 +540,7 @@ class Corestore extends ReadyResource {
     }
   }
 
-  _auth (discoveryKey, opts) {
+  _auth(discoveryKey, opts) {
     const result = {
       keyPair: null,
       key: null,
@@ -526,7 +557,10 @@ class Corestore extends ReadyResource {
     if (opts.manifest) {
       result.manifest = opts.manifest
     } else if (result.keyPair && !result.discoveryKey) {
-      result.manifest = { version: this.manifestVersion, signers: [{ publicKey: result.keyPair.publicKey }] }
+      result.manifest = {
+        version: this.manifestVersion,
+        signers: [{ publicKey: result.keyPair.publicKey }]
+      }
     }
 
     if (opts.key) result.key = ID.decode(opts.key)
@@ -541,7 +575,7 @@ class Corestore extends ReadyResource {
     return result
   }
 
-  _openCore (discoveryKey, opts) {
+  _openCore(discoveryKey, opts) {
     const auth = this._auth(discoveryKey, opts)
 
     const id = toHex(auth.discoveryKey)
@@ -549,7 +583,7 @@ class Corestore extends ReadyResource {
     if (existing && !existing.closing) return existing
 
     const core = Hypercore.createCore(this.storage, {
-      preopen: (existing && existing.opened) ? existing.closing : null, // always wait for the prev one to close first in any case...
+      preopen: existing && existing.opened ? existing.closing : null, // always wait for the prev one to close first in any case...
       eagerUpgrade: true,
       notDownloadingLinger: opts.notDownloadingLinger,
       allowFork: opts.allowFork !== false,
@@ -582,27 +616,29 @@ class Corestore extends ReadyResource {
 
 module.exports = Corestore
 
-function isStream (s) {
+function isStream(s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
 }
 
-function generateNamespace (namespace, name) {
+function generateNamespace(namespace, name) {
   if (!b4a.isBuffer(name)) name = b4a.from(name)
   const out = b4a.allocUnsafeSlow(32)
   sodium.crypto_generichash_batch(out, [namespace, name])
   return out
 }
 
-function deriveSeed (primaryKey, namespace, name) {
+function deriveSeed(primaryKey, namespace, name) {
   if (!b4a.isBuffer(name)) name = b4a.from(name)
   const out = b4a.alloc(32)
   sodium.crypto_generichash_batch(out, [NS, namespace, name], primaryKey)
   return out
 }
 
-function createKeyPair (primaryKey, namespace, name) {
+function createKeyPair(primaryKey, namespace, name) {
   const seed = deriveSeed(primaryKey, namespace, name)
-  const buf = b4a.alloc(sodium.crypto_sign_PUBLICKEYBYTES + sodium.crypto_sign_SECRETKEYBYTES)
+  const buf = b4a.alloc(
+    sodium.crypto_sign_PUBLICKEYBYTES + sodium.crypto_sign_SECRETKEYBYTES
+  )
   const keyPair = {
     publicKey: buf.subarray(0, sodium.crypto_sign_PUBLICKEYBYTES),
     secretKey: buf.subarray(sodium.crypto_sign_PUBLICKEYBYTES)
@@ -611,8 +647,8 @@ function createKeyPair (primaryKey, namespace, name) {
   return keyPair
 }
 
-function noop () {}
+function noop() {}
 
-function toHex (discoveryKey) {
+function toHex(discoveryKey) {
   return b4a.toString(discoveryKey, 'hex')
 }
