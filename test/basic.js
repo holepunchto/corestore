@@ -480,6 +480,30 @@ test('manifest is persisted', async function (t) {
   }
 })
 
+test('open readOnly', async function (t) {
+  const dir = await tmp(t)
+
+  const store = new Corestore(dir)
+  t.teardown(() => store.close())
+
+  const storeReadOnly = new Corestore(dir, {
+    readOnly: true
+  })
+  t.teardown(() => storeReadOnly.close())
+
+  t.absent(store.readOnly)
+  t.ok(storeReadOnly.readOnly)
+  t.ok(storeReadOnly.storage.readOnly)
+
+  t.is(storeReadOnly.storage.db.path, store.storage.db.path)
+
+  await storeReadOnly.suspend()
+  await storeReadOnly.resume()
+
+  t.ok(storeReadOnly.readOnly)
+  t.ok(storeReadOnly.storage.readOnly)
+})
+
 function toArray(stream) {
   return new Promise((resolve, reject) => {
     const all = []
