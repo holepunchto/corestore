@@ -51,7 +51,7 @@ test('pass primary key', async function (t) {
 
   {
     const dir = await tmp(t)
-    const store = new Corestore(dir, { primaryKey })
+    const store = new Corestore(dir, { primaryKey, unsafe: true })
 
     t.alike(store.primaryKey, primaryKey)
 
@@ -74,7 +74,7 @@ test('pass primary key', async function (t) {
   {
     const dir = await tmp(t)
 
-    const store = new Corestore(dir, { primaryKey })
+    const store = new Corestore(dir, { primaryKey, unsafe: true })
 
     const core = store.get({ name: 'test' })
     await core.ready()

@@ -5,7 +5,7 @@ const sodium = require('sodium-universal')
 const crypto = require('hypercore-crypto')
 const ID = require('hypercore-id-encoding')
 const { isAndroid } = require('which-runtime')
-const { STORAGE_EMPTY } = require('hypercore-errors')
+const { STORAGE_EMPTY, ASSERTION } = require('hypercore-errors')
 
 const auditStore = require('./lib/audit.js')
 
@@ -254,6 +254,12 @@ class Corestore extends ReadyResource {
 
     this._findingPeers = null // here for legacy
     this._ongcBound = this._ongc.bind(this)
+
+    if (opts.primaryKey && !this.root && !opts.unsafe) {
+      throw ASSERTION(
+        'Passing the primary key is unsafe unless you know what you are doing. Set unsafe: true to acknowledge that'
+      )
+    }
 
     if (this.root) this.corestores.add(this)
 
