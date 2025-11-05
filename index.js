@@ -79,7 +79,8 @@ class SessionTracker {
 }
 
 class CoreTracker {
-  constructor() {
+  constructor({ gcCycleTime = 2000 } = {}) {
+    this.gcCycleTime = gcCycleTime
     this.map = new Map()
     this.watching = []
 
@@ -175,7 +176,7 @@ class CoreTracker {
 
   _startGC() {
     if (this._gcInterval) return
-    this._gcInterval = setInterval(this._gcCycleBound, 2000)
+    this._gcInterval = setInterval(this._gcCycleBound, this.gcCycleTime)
     if (this._gcInterval.unref) this._gcInterval.unref()
   }
 
@@ -238,7 +239,7 @@ class Corestore extends ReadyResource {
           readOnly: opts.readOnly
         })
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
-    this.cores = this.root ? this.root.cores : new CoreTracker()
+    this.cores = this.root ? this.root.cores : new CoreTracker(opts.gcCycleTime)
     this.sessions = new SessionTracker()
     this.corestores = this.root ? this.root.corestores : new Set()
     this.readOnly = opts.writable === false || !!opts.readOnly
