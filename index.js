@@ -307,11 +307,11 @@ class Corestore extends ReadyResource {
     if (!this.storage.readOnly) await this.storage.db.flush()
     if (!this.shouldSuspend) return
     await log('Suspending db...')
-    await this.storage.db.suspend()
+    await this.storage.suspend()
   }
 
   resume() {
-    return this.storage.db.resume()
+    return this.storage.resume()
   }
 
   session(opts) {
@@ -394,7 +394,7 @@ class Corestore extends ReadyResource {
     if (this.opened === false) await this.ready()
     if (
       !this.cores.opened(toHex(discoveryKey)) &&
-      !(await this.storage.has(discoveryKey, { ifMigrated: true }))
+      !(await this.storage.hasCore(discoveryKey, { ifMigrated: true }))
     )
       return
     if (this.closing) return
@@ -517,7 +517,7 @@ class Corestore extends ReadyResource {
   }
 
   async _preloadCheckIfExists(opts) {
-    const has = await this.storage.has(opts.discoveryKey)
+    const has = await this.storage.hasCore(opts.discoveryKey)
     if (!has) throw STORAGE_EMPTY('No Hypercore is stored here')
     return this._preload(opts)
   }
