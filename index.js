@@ -396,8 +396,9 @@ class Corestore extends ReadyResource {
     if (
       !this.cores.opened(toHex(discoveryKey)) &&
       !(await this.storage.hasCore(discoveryKey, { ifMigrated: true }))
-    )
+    ) {
       return
+    }
     if (this.closing) return
 
     const core = this._openCore(discoveryKey, { createIfMissing: false })
