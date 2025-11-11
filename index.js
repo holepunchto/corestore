@@ -235,7 +235,8 @@ class Corestore extends ReadyResource {
       : Hypercore.defaultStorage(storage, {
           id: opts.id,
           allowBackup: opts.allowBackup,
-          readOnly: opts.readOnly
+          readOnly: opts.readOnly,
+          wait: opts.wait
         })
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
