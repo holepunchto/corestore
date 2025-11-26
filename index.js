@@ -457,6 +457,25 @@ class Corestore extends ReadyResource {
     }
   }
 
+  async staticify(core, opts) {
+    if (!this.opened) await this.ready()
+
+    const s = await core.state.storage.createStaticCore()
+    const key = Hypercore.key(s.manifest)
+    const discoveryKey = Hypercore.discoveryKey(key)
+
+    await this.storage.createCore({
+      key,
+      discoveryKey,
+      manifest: s.manifest,
+      core: s.core
+    })
+
+    const staticCore = this.get({ ...opts, key })
+    await staticCore.ready()
+    return staticCore
+  }
+
   get(opts) {
     this._maybeClosed()
 
