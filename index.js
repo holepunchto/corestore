@@ -459,19 +459,44 @@ class Corestore extends ReadyResource {
 
   async staticify(core, opts) {
     if (!this.opened) await this.ready()
+    if (!core.opened) await core.ready()
 
-    const s = await core.state.storage.createStaticCore()
-    const key = Hypercore.key(s.manifest)
-    const discoveryKey = Hypercore.discoveryKey(key)
+    const rx = core.state.storage.read()
 
-    await this.storage.createCore({
-      key,
-      discoveryKey,
-      manifest: s.manifest,
-      core: s.core
-    })
+    const headPromise = rx.getHead()
+    const authPromise = rx.getAuth()
 
-    const staticCore = this.get({ ...opts, key })
+    rx.tryFlush()
+
+    const [head, auth] = await Promise.all([headPromise, authPromise])
+    if (!head || head.length === 0) throw new Error('Core must have data')
+
+    const prologue = {
+      length: head.length,
+      hash: head.rootHash
+    }
+
+    const manifest = {
+      version: 1,
+      hash: auth.manifest.hash,
+      quorum: 0,
+      signers: [],
+      prologue
+    }
+
+    const c = {
+      key: null,
+      discoveryKey: null,
+      manifest,
+      core: core.state.storage.core
+    }
+
+    c.key = Hypercore.key(c.manifest)
+    c.discoveryKey = Hypercore.discoveryKey(c.key)
+
+    await this.storage.createCore(c)
+
+    const staticCore = this.get({ ...opts, key: c.key })
     await staticCore.ready()
     return staticCore
   }
