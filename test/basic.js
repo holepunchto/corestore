@@ -532,6 +532,32 @@ test('staticify', async (t) => {
   t.alike(s.core.header.manifest.signers, [], 'static core has no singers')
 })
 
+test('staticify - pitfalls from sharing data pointer w/ original', async (t) => {
+  const store = await create(t)
+
+  // Clearing
+  const core = store.get({ name: 'yolo' })
+  await core.ready()
+  while (core.length < 10) await core.append('tick')
+
+  const s = await store.staticify(core)
+
+  await core.clear(0, core.length)
+  t.absent(await s.get(s.length - 1, { wait: false }), 'clearing original clears static')
+
+  // Truncation
+  const core2 = store.get({ name: 'yolo2' })
+  await core2.ready()
+  while (core2.length < 10) await core2.append('tick2')
+
+  const s2 = await store.staticify(core2)
+
+  t.alike(await s2.get(s.length - 1, { wait: false }), Buffer.from('tick2'), 'static has last block')
+  await core2.truncate(core2.length - 1)
+  t.absent(await s2.get(s.length - 1, { wait: false }), 'static no longer has block')
+  await t.exception(s2.treeHash(), /Expected tree node/, 'getting tree hash fails')
+})
+
 function toArray(stream) {
   return new Promise((resolve, reject) => {
     const all = []
