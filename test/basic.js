@@ -506,6 +506,32 @@ test('open readOnly', async function (t) {
   t.ok(storeReadOnly.storage.readOnly)
 })
 
+test('staticify', async (t) => {
+  const store = await create(t)
+
+  const noDataCore = store.get({ name: 'no-data' })
+  await noDataCore.ready()
+  await t.exception(store.staticify(noDataCore), /must have data/, 'throw if core has no data')
+
+  const core = store.get({ name: 'yolo' })
+  await core.ready()
+  while (core.length < 10) await core.append('tick')
+
+  const s = await store.staticify(core)
+
+  await t.exception(s.append('shouldnt work'), 'cant append to static core')
+
+  t.unlike(s.key, core.key, 'different key')
+  t.is(s.length, core.length)
+  t.alike(await s.treeHash(), await core.treeHash(), 'tree hashes match')
+
+  await core.append('diverge')
+
+  t.not(s.length, core.length, 'static is unchanged')
+  t.unlike(await s.treeHash(), await core.treeHash(), 'tree hashes dont match')
+  t.alike(s.core.header.manifest.signers, [], 'static core has no singers')
+})
+
 function toArray(stream) {
   return new Promise((resolve, reject) => {
     const all = []
