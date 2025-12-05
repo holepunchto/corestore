@@ -506,6 +506,48 @@ test('open readOnly', async function (t) {
   t.ok(storeReadOnly.storage.readOnly)
 })
 
+test('staticify', async (t) => {
+  const dir = await tmp(t)
+  const store = new Corestore(dir)
+  t.teardown(() => store.close())
+
+  const noDataCore = store.get({ name: 'no-data' })
+  await noDataCore.ready()
+  await t.exception(store.staticify(noDataCore), /must have data/, 'throw if core has no data')
+
+  const core = store.get({ name: 'yolo' })
+  await core.ready()
+  while (core.length < 10) await core.append('tick')
+
+  const s = await store.staticify(core)
+
+  await t.exception(s.append('shouldnt work'), 'cant append to static core')
+
+  t.unlike(s.key, core.key, 'different key')
+  t.is(s.length, core.length)
+  t.alike(await s.treeHash(), await core.treeHash(), 'tree hashes match')
+
+  const staticHash = await s.treeHash()
+  const staticKey = s.key
+
+  await core.append('diverge')
+
+  t.not(s.length, core.length, 'static is unchanged')
+  t.unlike(staticHash, await core.treeHash(), 'tree hashes dont match')
+  t.alike(s.core.header.manifest.signers, [], 'static core has no singers')
+
+  await core.close()
+  await s.close()
+  await store.close()
+
+  const store2 = new Corestore(dir)
+  t.teardown(() => store2.close())
+
+  const s2 = await store2.get(staticKey)
+  t.alike(staticHash, await s2.treeHash(), 'tree hashes still matches')
+  t.alike(s.core.header.manifest.signers, [], 'static core still has no singers')
+})
+
 function toArray(stream) {
   return new Promise((resolve, reject) => {
     const all = []

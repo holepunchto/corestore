@@ -79,6 +79,10 @@ swarm.join(...)
 swarm.on('connection', (connection) => store.replicate(connection))
 ```
 
+#### `const staticCore = await store.staticify(core, opts = {})`
+
+Create a static version of the passed Hypercore `core`. Static Hypercores are read only and have no signers so cannot be updated by anyone. This is useful for creating content addressed cores that are immutable. `opts` are the same opts as `store.get()` with only `discoveryKey` & `key` options being ignored as they are derived when creating the static core.
+
 #### `const storeB = storeA.session()`
 
 Create a new Corestore session. Closing a session will close all cores made from this session.
