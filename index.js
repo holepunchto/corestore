@@ -639,6 +639,7 @@ class Corestore extends ReadyResource {
       inflightRange: opts.inflightRange,
       compat: false, // no compat for now :)
       force: opts.force,
+      pushOnly: opts.pushOnly === true,
       createIfMissing: opts.createIfMissing,
       discoveryKey: auth.discoveryKey,
       overwrite: opts.overwrite,
