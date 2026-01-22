@@ -9,7 +9,7 @@
   ],
   "dependencies": {
     "b4a": "^1.6.7",
-    "hypercore": "^11.19.0",
+    "hypercore": "github:holepunchto/hypercore#push-only-mode",
     "hypercore-crypto": "^3.4.2",
     "hypercore-errors": "^1.4.0",
     "hypercore-id-encoding": "^1.3.0",
