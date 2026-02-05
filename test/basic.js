@@ -506,6 +506,25 @@ test('open readOnly', async function (t) {
   t.ok(storeReadOnly.storage.readOnly)
 })
 
+test('open pushOnly', async function (t) {
+  const dir = await tmp(t)
+
+  const store = new Corestore(dir)
+  await store.ready()
+
+  t.teardown(() => store.close())
+
+  const off = store.get({ name: 'off' })
+  await off.ready()
+
+  t.absent(off.replicator.pushOnly)
+
+  const on = store.get({ name: 'on', pushOnly: true })
+  await on.ready()
+
+  t.ok(on.replicator.pushOnly)
+})
+
 function toArray(stream) {
   return new Promise((resolve, reject) => {
     const all = []

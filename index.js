@@ -522,6 +522,7 @@ class Corestore extends ReadyResource {
       manifest: opts.manifest || null,
       keyPair: opts.keyPair || null,
       onwait: opts.onwait || null,
+      pushOnly: opts.pushOnly === true,
       wait: opts.wait !== false,
       timeout: opts.timeout || 0,
       draft: !!opts.draft,
