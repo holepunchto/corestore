@@ -637,6 +637,7 @@ class Corestore extends ReadyResource {
       eagerUpgrade: true,
       notDownloadingLinger: opts.notDownloadingLinger,
       allowFork: opts.allowFork !== false,
+      allowPush: !!opts.allowPush,
       inflightRange: opts.inflightRange,
       compat: false, // no compat for now :)
       force: opts.force,
