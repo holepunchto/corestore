@@ -584,6 +584,7 @@ class Corestore extends ReadyResource {
       core,
       sessions: this.sessions.get(core.id),
       ongc: this._ongcBound,
+      manifest: opts.manifest || null,
       encryption: opts.encryption || null,
       encryptionKey: opts.encryptionKey || null, // back compat, should remove
       isBlockKey: !!opts.isBlockKey // back compat, should remove
