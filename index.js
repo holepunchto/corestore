@@ -489,7 +489,16 @@ class Corestore extends ReadyResource {
       key: null,
       discoveryKey: null,
       manifest,
-      core: core.state.storage.core
+      core: {
+        ...core.state.storage.core,
+        dependencies: [
+          ...core.state.storage.dependencies,
+          {
+            dataPointer: core.state.storage.core.dataPointer,
+            length: head.length
+          }
+        ]
+      }
     }
 
     c.key = Hypercore.key(c.manifest)
