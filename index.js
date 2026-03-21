@@ -378,6 +378,7 @@ class Corestore extends ReadyResource {
 
     if (this.root !== null) {
       await Promise.all(closing)
+      this.corestores.delete(this)
       return
     }
 
