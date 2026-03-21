@@ -268,8 +268,6 @@ class Corestore extends ReadyResource {
       )
     }
 
-    if (this.root) this.corestores.add(this)
-
     this.ready().catch(noop)
   }
 
@@ -358,6 +356,7 @@ class Corestore extends ReadyResource {
 
   async _open() {
     if (this.root !== null) {
+      this.corestores.add(this)
       if (this.root.opened === false) await this.root.ready()
       this.primaryKey = this.root.primaryKey
       return
