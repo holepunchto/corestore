@@ -572,7 +572,10 @@ test('findingPeers pending callbacks are drained on store close', async function
 
   const done = store.findingPeers()
 
-  t.ok(store._findingPeers.pending.length > 0 || store._findingPeers.count > 0, 'findingPeers is active')
+  t.ok(
+    store._findingPeers.pending.length > 0 || store._findingPeers.count > 0,
+    'findingPeers is active'
+  )
 
   // Close without calling done() — pending should still be cleared
   await store.close()
