@@ -588,6 +588,7 @@ test('findingPeers pending callbacks are drained on store close', async function
   }
 
   done() // dbl check what happens if user calls this also
+  t.pass('no crash when awaiting done() after the underlying store closed')
 })
 
 function toArray(stream) {
