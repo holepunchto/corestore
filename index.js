@@ -204,6 +204,7 @@ class FindingPeers {
   constructor() {
     this.count = 0
     this.pending = []
+    this.destroyed = false
   }
 
   add(core) {
@@ -212,7 +213,7 @@ class FindingPeers {
   }
 
   inc(sessions) {
-    if (++this.count !== 1) return
+    if (this.destroyed || ++this.count !== 1) return
 
     for (const core of sessions) {
       this.pending.push(core.findingPeers())
@@ -220,7 +221,12 @@ class FindingPeers {
   }
 
   dec(sessions) {
-    if (--this.count !== 0) return
+    if (this.destroyed || --this.count !== 0) return
+    while (this.pending.length > 0) this.pending.pop()()
+  }
+
+  destroy() {
+    this.destroyed = true
     while (this.pending.length > 0) this.pending.pop()()
   }
 }
@@ -292,7 +298,7 @@ class Corestore extends ReadyResource {
     this._findingPeers.inc(this.sessions)
     let done = false
     return () => {
-      if (done) return
+      if (done || !this._findingPeers) return
       done = true
       this._findingPeers.dec(this.sessions)
     }
@@ -374,7 +380,15 @@ class Corestore extends ReadyResource {
     const hanging = [...this.sessions]
     for (const sess of hanging) closing.push(sess.close())
 
-    if (this.watchers !== null) this.cores.unwatch(this)
+    if (this.watchers !== null) {
+      this.cores.unwatch(this)
+      this.watchers = null
+    }
+
+    if (this._findingPeers !== null) {
+      this._findingPeers.destroy()
+      this._findingPeers = null
+    }
 
     if (this.root !== null) {
       await Promise.all(closing)

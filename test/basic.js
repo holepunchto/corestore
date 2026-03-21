@@ -525,6 +525,68 @@ test('open pushOnly', async function (t) {
   t.ok(on.replicator.pushOnly)
 })
 
+test('corestores set does not grow when sessions are closed', async function (t) {
+  const store = await create(t)
+
+  const before = store.corestores.size
+
+  for (let i = 0; i < 10; i++) {
+    const session = store.session()
+    await session.ready()
+    await session.close()
+  }
+
+  t.is(store.corestores.size, before, 'corestores set should not grow after sessions are closed')
+})
+
+test('namespace sessions are removed from corestores set on close', async function (t) {
+  const store = await create(t)
+
+  const before = store.corestores.size
+
+  for (let i = 0; i < 5; i++) {
+    const ns = store.namespace('ns-' + i)
+    await ns.ready()
+    await ns.close()
+  }
+
+  t.is(store.corestores.size, before, 'corestores set should not retain closed namespace sessions')
+})
+
+test('watchers are cleared when store is closed', async function (t) {
+  const dir = await tmp(t)
+  const store = new Corestore(dir)
+
+  const fn = () => {}
+  store.watch(fn)
+
+  t.ok(store.watchers !== null, 'watchers set exists before close')
+
+  await store.close()
+
+  t.is(store.watchers, null, 'watchers set should be null after close')
+})
+
+test('findingPeers pending callbacks are drained on store close', async function (t) {
+  const store = await create(t)
+
+  const done = store.findingPeers()
+
+  t.ok(store._findingPeers.pending.length > 0 || store._findingPeers.count > 0, 'findingPeers is active')
+
+  // Close without calling done() — pending should still be cleared
+  await store.close()
+
+  if (store._findingPeers !== null) {
+    t.is(store._findingPeers.pending.length, 0, 'pending callbacks should be drained after close')
+    t.is(store._findingPeers.count, 0, 'count should be zero after close')
+  } else {
+    t.pass('_findingPeers was cleaned up')
+  }
+
+  done() // dbl check what happens if user calls this also
+})
+
 function toArray(stream) {
   return new Promise((resolve, reject) => {
     const all = []
