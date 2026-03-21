@@ -530,11 +530,12 @@ test('corestores set does not grow when sessions are closed', async function (t)
 
   const before = store.corestores.size
   const sessions = []
+
   for (let i = 0; i < 10; i++) sessions.push(store.session())
-  await Promise.all(sessions.map(s => s.ready())
-  t.is(store.corestores.size > before, true, 'sanity check: corestores set grew')
+  await Promise.all(sessions.map(s => s.ready()))
+  t.ok(store.corestores.size > before, 'sanity check: corestores set grew')
   
-  await Promise.all(sessions.map(s => s.close())
+  await Promise.all(sessions.map(s => s.close()))
   t.is(store.corestores.size, before, 'corestores set should not grow after sessions are closed')
 })
 
@@ -543,11 +544,12 @@ test('namespace sessions are removed from corestores set on close', async functi
 
   const before = store.corestores.size
   const sessions = []
+
   for (let i = 0; i < 10; i++) sessions.push(store.namespace('ns-' + i))
-  await Promise.all(sessions.map(s => s.ready())
-  t.is(store.corestores.size > before, true, 'sanity check: corestores set grew')
+  await Promise.all(sessions.map(s => s.ready()))
+  t.ok(store.corestores.size > before, 'sanity check: corestores set grew')
   
-  await Promise.all(sessions.map(s => s.close())
+  await Promise.all(sessions.map(s => s.close()))
   t.is(store.corestores.size, before, 'corestores set should not grow after namespaces are closed')
 })
 
