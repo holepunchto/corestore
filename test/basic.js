@@ -169,6 +169,42 @@ test('session of hypercore sessions are tracked in corestore sessions', async fu
   await store.close()
 })
 
+test('corestore.sessions can iterate current cores open', async function (t) {
+  const dir = await tmp(t)
+  const store = new Corestore(dir)
+
+  const startingOpenCores = [...store.sessions]
+  t.alike(startingOpenCores, [], 'starts empty')
+
+  const session = store.session()
+  const session2 = store.session()
+
+  const ignored = session2.get({ name: 'ignored' })
+  await ignored.ready()
+
+  const a = session.get({ name: 'a' })
+  await a.ready()
+  const b = session.get({ name: 'b' })
+  await b.ready()
+
+  const openCores = [...session.sessions]
+  t.alike(openCores, [a, b])
+  t.absent(openCores.includes(ignored), 'doesnt track other session cores')
+
+  await session.close()
+  await session2.close()
+
+  await store.close()
+
+  t.comment('reopening')
+  const store2 = new Corestore(dir)
+
+  const reopenedCores = [...store2.sessions]
+  t.alike(reopenedCores, [], 'reopen clears current cores')
+
+  await store2.close()
+})
+
 test('named cores are stable', async function (t) {
   const dir = await tmp(t)
   const store = new Corestore(dir)
