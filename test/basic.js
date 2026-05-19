@@ -1,6 +1,5 @@
 const test = require('brittle')
 const b4a = require('b4a')
-const tmp = require('test-tmp')
 const Rache = require('rache')
 const Hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
@@ -50,7 +49,7 @@ test('pass primary key', async function (t) {
   let key = null
 
   {
-    const dir = await tmp(t)
+    const dir = await t.tmp()
     const store = new Corestore(dir, { primaryKey, unsafe: true })
 
     t.alike(store.primaryKey, primaryKey)
@@ -72,7 +71,7 @@ test('pass primary key', async function (t) {
   }
 
   {
-    const dir = await tmp(t)
+    const dir = await t.tmp()
 
     const store = new Corestore(dir, { primaryKey, unsafe: true })
 
@@ -87,7 +86,7 @@ test('pass primary key', async function (t) {
 })
 
 test('global cache is passed down', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir, { globalCache: new Rache({ maxSize: 4 }) })
 
   t.ok(store.globalCache)
@@ -102,7 +101,7 @@ test('global cache is passed down', async function (t) {
 })
 
 test('session pre ready', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
 
   const a = store.get({ name: 'test' })
@@ -122,7 +121,7 @@ test('weak ref to react to cores opening', async function (t) {
 
   const s = setInterval(() => {}, 1000)
 
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
 
   t.teardown(() => clearInterval(s))
@@ -145,7 +144,7 @@ test('weak ref to react to cores opening', async function (t) {
 })
 
 test('session of hypercore sessions are tracked in corestore sessions', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
 
   const session = store.session()
@@ -170,7 +169,7 @@ test('session of hypercore sessions are tracked in corestore sessions', async fu
 })
 
 test('named cores are stable', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
 
   await store.ready()
@@ -201,13 +200,13 @@ test('named cores are stable', async function (t) {
 })
 
 test('replicates', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = new Corestore(await t.tmp())
 
   const a = store.get({ name: 'foo' })
   await a.append('hello')
   await a.close()
 
-  const store2 = new Corestore(await tmp(t))
+  const store2 = new Corestore(await t.tmp())
   const clone = store.get(a.key)
 
   const s1 = store2.replicate(true)
@@ -225,7 +224,7 @@ test('replicates', async function (t) {
 })
 
 test('if key is passed, its available immediately', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = new Corestore(await t.tmp())
 
   const a = store.get({ key: b4a.alloc(32) })
   t.alike(a.key, b4a.alloc(32))
@@ -235,7 +234,7 @@ test('if key is passed, its available immediately', async function (t) {
 })
 
 test('finding peers (compat)', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = new Corestore(await t.tmp())
 
   const done = store.findingPeers()
 
@@ -254,7 +253,7 @@ test('finding peers (compat)', async function (t) {
 })
 
 test('audit', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = new Corestore(await t.tmp())
 
   const a = store.get({ keyPair: crypto.keyPair() })
   const b = store.get({ keyPair: crypto.keyPair() })
@@ -286,7 +285,7 @@ test('audit', async function (t) {
 })
 
 test('open by discovery key', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = new Corestore(await t.tmp())
 
   const a = store.get({ discoveryKey: b4a.alloc(32) })
 
@@ -438,7 +437,7 @@ test('list stream', async function (t) {
 })
 
 test('manifest is persisted', async function (t) {
-  const dir = await tmp()
+  const dir = await t.tmp()
 
   const random = crypto.randomBytes(32)
   const manifest = {
@@ -481,7 +480,7 @@ test('manifest is persisted', async function (t) {
 })
 
 test('open readOnly', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
 
   const store = new Corestore(dir)
   await store.ready()
@@ -507,7 +506,7 @@ test('open readOnly', async function (t) {
 })
 
 test('open pushOnly', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
 
   const store = new Corestore(dir)
   await store.ready()
@@ -554,7 +553,7 @@ test('namespace sessions are removed from corestores set on close', async functi
 })
 
 test('watchers are cleared when store is closed', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
 
   const fn = () => {}
@@ -591,6 +590,77 @@ test('findingPeers pending callbacks are drained on store close', async function
   t.pass('no crash when awaiting done() after the underlying store closed')
 })
 
+test('wakeup session', async function (t) {
+  const store = await create(t)
+  const store2 = await create(t)
+
+  const a = store.get({ name: 'foo' })
+  await a.append('hello')
+
+  const clone = store2.get(a.key)
+
+  const topic1 = b4a.alloc(32, 1)
+  const topic2 = b4a.alloc(32, 2)
+
+  const wakeup1 = store2.wakeupSession(topic1)
+  const wakeup2 = store2.wakeupSession(topic2)
+
+  wakeup1.add(clone.core)
+
+  const s1 = store2.replicate(true)
+  const s2 = store.replicate(false)
+
+  s1.pipe(s2).pipe(s1)
+
+  await new Promise((resolve) => clone.on('append', resolve))
+
+  s1.destroy()
+  s2.destroy()
+
+  t.alike(toList(await wakeup1.drain()), [{ key: a.key, length: a.length }])
+  t.alike(toList(await wakeup1.drain()), [])
+  t.alike(toList(await wakeup2.drain()), [])
+})
+
+test('wakeup session persistence', async function (t) {
+  const dir = await t.tmp()
+
+  const topic = b4a.alloc(32, 1)
+
+  const store = await create(t)
+  const store2 = new Corestore(dir)
+
+  const a = store.get({ name: 'foo' })
+  await a.append('hello')
+
+  const clone = store2.get(a.key)
+
+  {
+    const wakeup = store2.wakeupSession(topic)
+    wakeup.add(clone.core)
+
+    t.is(store2.wakeupSession(topic), wakeup)
+  }
+
+  const s1 = store2.replicate(true)
+  const s2 = store.replicate(false)
+
+  s1.pipe(s2).pipe(s1)
+
+  await new Promise((resolve) => clone.on('append', resolve))
+
+  s1.destroy()
+  s2.destroy()
+
+  await store2.close()
+
+  const store3 = new Corestore(dir)
+  const wakeup = store3.wakeupSession(topic)
+
+  t.alike(toList(await wakeup.drain()), [{ key: a.key, length: a.length }])
+  t.alike(toList(await wakeup.drain()), [])
+})
+
 function toArray(stream) {
   return new Promise((resolve, reject) => {
     const all = []
@@ -607,8 +677,16 @@ function toArray(stream) {
 }
 
 async function create(t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
   t.teardown(() => store.close())
   return store
+}
+
+function toList(map) {
+  const list = []
+  for (const [hex, length] of map) {
+    list.push({ key: b4a.from(hex, 'hex'), length })
+  }
+  return list
 }
