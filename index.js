@@ -231,6 +231,74 @@ class FindingPeers {
   }
 }
 
+class WakeupSession extends ReadyResource {
+  constructor(storage, topic, { maxSize, onwakeup = noop } = {}) {
+    super()
+
+    this.storage = storage
+    this.topic = topic
+    this.maxSize = maxSize
+    this.needsDrain = true
+    this.onwakeup = onwakeup
+
+    this._wakeup = null
+    this._draining = null
+    this._preupdateBound = this._preupdate.bind(this)
+  }
+
+  async _open() {
+    this._wakeup = await this.storage.createWakeupSession(this.topic, {
+      maxSize: this.maxSize
+    })
+  }
+
+  async add(core) {
+    if (!core.opened) await core.ready()
+    if (this.closing || core.closing) return false
+
+    core.preupdate = this._preupdateBound
+
+    return true
+  }
+
+  async _preupdate(batch, key) {
+    await this.ready()
+    this.queue(key, batch.length)
+  }
+
+  async queue(key, length) {
+    await this.ready()
+    if (this.closing) return
+
+    await this._wakeup.addWakeup(key, length)
+
+    this.needsDrain = true
+    this.onwakeup()
+  }
+
+  drain() {
+    if (this._draining) return this._draining
+    if (this.closing || !this.needsDrain) return new Map()
+
+    this.needsDrain = false
+
+    this._draining = this._drain()
+    return this._draining
+  }
+
+  async _drain() {
+    await this.ready()
+    if (this.closing) return new Map()
+
+    const hints = await this._wakeup.drain()
+    if (this.closing) return new Map()
+
+    this._draining = null
+
+    return hints
+  }
+}
+
 class Corestore extends ReadyResource {
   constructor(storage, opts = {}) {
     super()
@@ -251,6 +319,7 @@ class Corestore extends ReadyResource {
     this.readOnly = opts.writable === false || !!opts.readOnly
     this.globalCache = this.root ? this.root.globalCache : opts.globalCache || null
     this.primaryKey = this.root ? this.root.primaryKey : opts.primaryKey || null
+    this.wakeupSessions = this.root ? this.root.wakeupSessions : new Map()
     this.ns = opts.namespace || DEFAULT_NAMESPACE
     this.manifestVersion = opts.manifestVersion || 1
     this.shouldSuspend = isAndroid ? !!opts.suspend : opts.suspend !== false
@@ -258,6 +327,7 @@ class Corestore extends ReadyResource {
 
     this.watchers = null
     this.watchIndex = -1
+
 
     this._findingPeers = null // here for legacy
     this._ongcBound = this._ongc.bind(this)
@@ -342,6 +412,18 @@ class Corestore extends ReadyResource {
 
   getAuth(discoveryKey) {
     return this.storage.getAuth(discoveryKey)
+  }
+
+  wakeupSession(topic, opts) {
+    const hex = b4a.toString(topic, 'hex')
+    let session = this.wakeupSessions.get(hex)
+
+    if (!session) {
+      session = new WakeupSession(this.storage, topic, opts)
+      this.wakeupSessions.set(hex, session)
+    }
+
+    return session
   }
 
   _ongc(session) {
