@@ -328,7 +328,6 @@ class Corestore extends ReadyResource {
     this.watchers = null
     this.watchIndex = -1
 
-
     this._findingPeers = null // here for legacy
     this._ongcBound = this._ongc.bind(this)
 

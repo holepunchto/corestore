@@ -437,7 +437,7 @@ test('list stream', async function (t) {
 })
 
 test('manifest is persisted', async function (t) {
-  const dir = await tmp()
+  const dir = await t.tmp()
 
   const random = crypto.randomBytes(32)
   const manifest = {
