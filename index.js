@@ -589,7 +589,7 @@ class Corestore extends ReadyResource {
     const id = await this.storage.getGroup(topic)
     if (id === null) return
 
-    yield *this.storage.createGroupUpdateStream(id, opts)
+    yield* this.storage.createGroupUpdateStream(id, opts)
   }
 
   get(opts) {
@@ -746,7 +746,7 @@ class Corestore extends ReadyResource {
       manifest: auth.manifest,
       group: auth.group,
       globalCache: opts.globalCache || this.globalCache || null,
-      alias: opts.name ? { name: opts.name, namespace: this.ns } : null,
+      alias: opts.name ? { name: opts.name, namespace: this.ns } : null
     })
 
     core.onidle = () => {
