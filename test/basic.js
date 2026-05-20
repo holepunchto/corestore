@@ -635,7 +635,7 @@ test('group - persistance', async function (t) {
   await a.append('hello')
 
   const aclone = store2.get({ key: a.key, group: topic })
-  const bclone = store2.get({ key: b.key, group: topic })
+  store2.get({ key: b.key, group: topic }) // mark in group
 
   {
     const s1 = store2.replicate(true)
