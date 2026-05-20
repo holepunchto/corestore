@@ -590,22 +590,17 @@ test('findingPeers pending callbacks are drained on store close', async function
   t.pass('no crash when awaiting done() after the underlying store closed')
 })
 
-test('wakeup session', async function (t) {
+test('groups', async function (t) {
   const store = await create(t)
   const store2 = await create(t)
 
   const a = store.get({ name: 'foo' })
   await a.append('hello')
 
-  const clone = store2.get(a.key)
-
   const topic1 = b4a.alloc(32, 1)
   const topic2 = b4a.alloc(32, 2)
 
-  const wakeup1 = store2.wakeupSession(topic1)
-  const wakeup2 = store2.wakeupSession(topic2)
-
-  wakeup1.add(clone.core)
+  const clone = store2.get({ key: a.key, group: topic1 })
 
   const s1 = store2.replicate(true)
   const s2 = store.replicate(false)
@@ -614,15 +609,19 @@ test('wakeup session', async function (t) {
 
   await new Promise((resolve) => clone.on('append', resolve))
 
+  // make sure only one update per core
+  await a.append('goodbye')
+
+  await new Promise((resolve) => clone.on('append', resolve))
+
   s1.destroy()
   s2.destroy()
 
-  t.alike(toList(await wakeup1.drain()), [{ key: a.key, length: a.length }])
-  t.alike(toList(await wakeup1.drain()), [])
-  t.alike(toList(await wakeup2.drain()), [])
+  t.alike(await toArray(store2.getGroupUpdates(topic1)), [a.key])
+  t.alike(await toArray(store2.getGroupUpdates(topic2)), [])
 })
 
-test('wakeup session persistence', async function (t) {
+test('group - persistance', async function (t) {
   const dir = await t.tmp()
 
   const topic = b4a.alloc(32, 1)
@@ -631,49 +630,57 @@ test('wakeup session persistence', async function (t) {
   const store2 = new Corestore(dir)
 
   const a = store.get({ name: 'foo' })
+  const b = store.get({ name: 'bar' })
+
   await a.append('hello')
 
-  const clone = store2.get(a.key)
+  const aclone = store2.get({ key: a.key, group: topic })
+  const bclone = store2.get({ key: b.key, group: topic })
 
   {
-    const wakeup = store2.wakeupSession(topic)
-    wakeup.add(clone.core)
+    const s1 = store2.replicate(true)
+    const s2 = store.replicate(false)
 
-    t.is(store2.wakeupSession(topic), wakeup)
+    s1.pipe(s2).pipe(s1)
+
+    await new Promise((resolve) => aclone.on('append', resolve))
+
+    s1.destroy()
+    s2.destroy()
   }
-
-  const s1 = store2.replicate(true)
-  const s2 = store.replicate(false)
-
-  s1.pipe(s2).pipe(s1)
-
-  await new Promise((resolve) => clone.on('append', resolve))
-
-  s1.destroy()
-  s2.destroy()
 
   await store2.close()
 
   const store3 = new Corestore(dir)
-  const wakeup = store3.wakeupSession(topic)
 
-  t.alike(toList(await wakeup.drain()), [{ key: a.key, length: a.length }])
-  t.alike(toList(await wakeup.drain()), [])
+  await b.append('goodbye')
+
+  const b2 = store3.get({ key: b.key }) // group remembered
+  await b2.ready()
+
+  {
+    const s1 = store3.replicate(true)
+    const s2 = store.replicate(false)
+
+    s1.pipe(s2).pipe(s1)
+
+    await new Promise((resolve) => b2.on('append', resolve))
+
+    s1.destroy()
+    s2.destroy()
+  }
+
+  t.alike(await toArray(store3.getGroupUpdates(topic)), [b.key, a.key])
+
+  await store3.close()
 })
 
-function toArray(stream) {
-  return new Promise((resolve, reject) => {
-    const all = []
-    stream.on('data', (data) => {
-      all.push(data)
-    })
-    stream.on('end', () => {
-      resolve(all)
-    })
-    stream.on('error', (err) => {
-      reject(err)
-    })
-  })
+async function toArray(ite) {
+  const all = []
+  for await (const data of ite) {
+    all.push(data)
+  }
+  return all
 }
 
 async function create(t) {
@@ -681,12 +688,4 @@ async function create(t) {
   const store = new Corestore(dir)
   t.teardown(() => store.close())
   return store
-}
-
-function toList(map) {
-  const list = []
-  for (const [hex, length] of map) {
-    list.push({ key: b4a.from(hex, 'hex'), length })
-  }
-  return list
 }

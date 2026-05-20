@@ -413,18 +413,6 @@ class Corestore extends ReadyResource {
     return this.storage.getAuth(discoveryKey)
   }
 
-  wakeupSession(topic, opts) {
-    const hex = b4a.toString(topic, 'hex')
-    let session = this.wakeupSessions.get(hex)
-
-    if (!session) {
-      session = new WakeupSession(this.storage, topic, opts)
-      this.wakeupSessions.set(hex, session)
-    }
-
-    return session
-  }
-
   _ongc(session) {
     if (session.sessions.length === 0) this.sessions.gc(session.id)
   }
@@ -597,6 +585,13 @@ class Corestore extends ReadyResource {
     return staticCore
   }
 
+  async *getGroupUpdates(topic, opts) {
+    const id = await this.storage.getGroup(topic)
+    if (id === null) return
+
+    yield *this.storage.createGroupUpdateStream(id, opts)
+  }
+
   get(opts) {
     this._maybeClosed()
 
@@ -691,7 +686,8 @@ class Corestore extends ReadyResource {
       keyPair: null,
       key: null,
       discoveryKey,
-      manifest: null
+      manifest: null,
+      group: null
     }
 
     if (opts.name) {
@@ -707,6 +703,10 @@ class Corestore extends ReadyResource {
         version: this.manifestVersion,
         signers: [{ publicKey: result.keyPair.publicKey }]
       }
+    }
+
+    if (opts.group) {
+      result.group = opts.group
     }
 
     if (opts.key) result.key = ID.decode(opts.key)
@@ -725,7 +725,7 @@ class Corestore extends ReadyResource {
     const auth = this._auth(discoveryKey, opts)
 
     const id = toHex(auth.discoveryKey)
-    const existing = this.cores.resume(id)
+    const existing = this.cores.resume(id, auth.group)
     if (existing && !existing.closing) return existing
 
     const core = Hypercore.createCore(this.storage, {
@@ -744,8 +744,9 @@ class Corestore extends ReadyResource {
       keyPair: auth.keyPair,
       legacy: opts.legacy,
       manifest: auth.manifest,
+      group: auth.group,
       globalCache: opts.globalCache || this.globalCache || null,
-      alias: opts.name ? { name: opts.name, namespace: this.ns } : null
+      alias: opts.name ? { name: opts.name, namespace: this.ns } : null,
     })
 
     core.onidle = () => {
