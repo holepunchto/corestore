@@ -11,10 +11,14 @@ test('groups', async function (t) {
   const a = store.get({ name: 'foo' })
   await a.append('hello')
 
+  const b = store.get({ name: 'bar' })
+  await b.append('world')
+
   const topic1 = b4a.alloc(32, 1)
   const topic2 = b4a.alloc(32, 2)
 
   const clone = store2.get({ key: a.key, group: topic1 })
+  const cloneB = store2.get({ key: b.key, group: topic1 })
 
   const s1 = store2.replicate(true)
   const s2 = store.replicate(false)
@@ -22,16 +26,12 @@ test('groups', async function (t) {
   s1.pipe(s2).pipe(s1)
 
   await new Promise((resolve) => clone.on('append', resolve))
-
-  // make sure only one update per core
-  await a.append('goodbye')
-
-  await new Promise((resolve) => clone.on('append', resolve))
+  await new Promise((resolve) => cloneB.on('append', resolve))
 
   s1.destroy()
   s2.destroy()
 
-  t.alike(await toArray(store2.getGroupUpdates(topic1)), [a.key])
+  t.alike(await toArray(store2.getGroupUpdates(topic1)), [b.key, a.key])
   t.alike(await toArray(store2.getGroupUpdates(topic2)), [])
 })
 
