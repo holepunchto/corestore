@@ -5,6 +5,7 @@ const Hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
 
 const Corestore = require('../')
+const { create, toArray } = require('./helpers')
 
 test('basic', async function (t) {
   const store = await create(t)
@@ -674,18 +675,3 @@ test('group - persistance', async function (t) {
 
   await store3.close()
 })
-
-async function toArray(ite) {
-  const all = []
-  for await (const data of ite) {
-    all.push(data)
-  }
-  return all
-}
-
-async function create(t) {
-  const dir = await t.tmp()
-  const store = new Corestore(dir)
-  t.teardown(() => store.close())
-  return store
-}

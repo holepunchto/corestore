@@ -27,9 +27,9 @@
   "scripts": {
     "format": "prettier --write .",
     "test": "npm run test:node && npm run test:bare",
-    "test:bare": "brittle-bare --coverage test/*.js",
+    "test:bare": "brittle-bare --coverage test/all.js",
     "lint": "prettier --check . && lunte",
-    "test:node": "brittle-node --coverage test/*.js"
+    "test:node": "brittle-node --coverage test/all.js"
   },
   "repository": {
     "type": "git",
