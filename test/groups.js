@@ -103,6 +103,24 @@ test('group - persistance', async function (t) {
   await store3.close()
 })
 
+test('group-active - fired per core not per session', async function (t) {
+  t.plan(1)
+  const topic = b4a.alloc(32, 1)
+
+  const store = await create(t)
+
+  const a = store.get({ name: 'foo', group: topic })
+  t.teardown(() => a.close())
+  const a2 = store.get({ name: 'foo' })
+  t.teardown(() => a2.close())
+
+  store.on('group-active', (group) => {
+    t.is(group, topic, 'group active')
+  })
+
+  await a.append('hello')
+})
+
 function includesKey(keys, key) {
   return keys.find((k) => k.toString('hex') === key.toString('hex'))
 }

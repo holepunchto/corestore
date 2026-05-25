@@ -576,11 +576,6 @@ class Corestore extends ReadyResource {
   _makeSession(conf) {
     const session = new Hypercore(null, null, conf)
 
-    // needs a better way
-    session.on('group-update', (key) => {
-      this.emit('group-active', key)
-    })
-
     if (this._findingPeers !== null) this._findingPeers.add(session)
     return session
   }
@@ -688,6 +683,9 @@ class Corestore extends ReadyResource {
 
     core.onidle = () => {
       this.cores.gc(core)
+    }
+    core.ongroupupdate = (key) => {
+      this.emit('group-active', key)
     }
 
     core.replicator.ondownloading = () => {
