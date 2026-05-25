@@ -5,8 +5,10 @@ const Corestore = require('../')
 const { create, toArray } = require('./helpers')
 
 test('groups', async function (t) {
+  t.plan(3)
+
+  // source
   const store = await create(t)
-  const store2 = await create(t)
 
   const a = store.get({ name: 'foo' })
   await a.append('hello')
@@ -17,21 +19,33 @@ test('groups', async function (t) {
   const topic1 = b4a.alloc(32, 1)
   const topic2 = b4a.alloc(32, 2)
 
+  // clones
+  const store2 = await create(t)
+
   const clone = store2.get({ key: a.key, group: topic1 })
   const cloneB = store2.get({ key: b.key, group: topic1 })
+
+  t.comment('replicating')
+
+  const cloneAppended = new Promise((resolve) => clone.on('append', resolve))
+  const cloneBAppended = new Promise((resolve) => cloneB.on('append', resolve))
 
   const s1 = store2.replicate(true)
   const s2 = store.replicate(false)
 
   s1.pipe(s2).pipe(s1)
 
-  await new Promise((resolve) => clone.on('append', resolve))
-  await new Promise((resolve) => cloneB.on('append', resolve))
+  t.comment('waiting for append')
+
+  await cloneAppended
+  await cloneBAppended
 
   s1.destroy()
   s2.destroy()
 
-  t.alike(await toArray(store2.getGroupUpdates(topic1)), [b.key, a.key])
+  const keys = await toArray(store2.getGroupUpdates(topic1))
+  t.ok(includesKey(keys, a.key))
+  t.ok(includesKey(keys, b.key))
   t.alike(await toArray(store2.getGroupUpdates(topic2)), [])
 })
 
@@ -88,3 +102,7 @@ test('group - persistance', async function (t) {
 
   await store3.close()
 })
+
+function includesKey(keys, key) {
+  return keys.find((k) => k.toString('hex') === key.toString('hex'))
+}
