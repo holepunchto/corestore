@@ -577,8 +577,8 @@ class Corestore extends ReadyResource {
     const session = new Hypercore(null, null, conf)
 
     // needs a better way
-    session.on('append', () => {
-      if (session.core.header.group) this.emit('group-active', session.core.header.group.key)
+    session.on('group-update', (key) => {
+      this.emit('group-active', key)
     })
 
     if (this._findingPeers !== null) this._findingPeers.add(session)
