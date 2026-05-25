@@ -684,6 +684,7 @@ class Corestore extends ReadyResource {
     core.onidle = () => {
       this.cores.gc(core)
     }
+
     core.ongroupupdate = (key) => {
       this.emit('group-active', key)
     }
