@@ -259,6 +259,16 @@ class Corestore extends ReadyResource {
     this.watchers = null
     this.watchIndex = -1
 
+    // Group notification
+    this.groupNotifiers = new Map()
+    this.on('group-active', (topic) => {
+      const topicHex = topic.toString('hex')
+      if (!this.groupNotifiers.has(topicHex)) return
+
+      const fns = this.groupNotifiers.get(topicHex)
+      for (const fn of fns) fn()
+    })
+
     this._findingPeers = null // here for legacy
     this._ongcBound = this._ongc.bind(this)
 
@@ -288,6 +298,27 @@ class Corestore extends ReadyResource {
     if (this.watchers.size === 0) {
       this.watchers = null
       this.cores.unwatch(this)
+    }
+  }
+
+  notifyGroup(topic, fn) {
+    const topicHex = topic.toString('hex')
+
+    const existing = this.groupNotifiers.get(topicHex) || []
+    this.groupNotifiers.set(topicHex, existing.concat(fn))
+  }
+
+  unnotifyGroup(topic, fn) {
+    const topicHex = topic.toString('hex')
+    if (!this.groupNotifiers.has(topicHex)) return
+
+    const existing = this.groupNotifiers.get(topicHex) || []
+    const remainder = existing.filter((f) => f !== fn)
+
+    if (remainder.length) {
+      this.groupNotifiers.set(topicHex, remainder)
+    } else {
+      this.groupNotifiers.delete(topicHex)
     }
   }
 

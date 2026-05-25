@@ -121,6 +121,30 @@ test('group-active - fired per core not per session', async function (t) {
   await a.append('hello')
 })
 
+test('(un)notifyGroup', async function (t) {
+  t.plan(4)
+  const topic = b4a.alloc(32, 1)
+
+  const store = await create(t)
+
+  const a = store.get({ name: 'foo', group: topic })
+  t.teardown(() => a.close())
+
+  const handler = () => {
+    t.pass('notified')
+  }
+  store.notifyGroup(b4a.alloc(32, 1), handler)
+  t.ok(store.groupNotifiers.has(topic.toString('hex')), 'registered handler in map')
+
+  await a.append('hello')
+  await a.append('hello') // fires each time
+
+  store.unnotifyGroup(b4a.alloc(32, 1), handler)
+  t.is(store.groupNotifiers.size, 0, 'cleared handler')
+
+  await a.append('hello')
+})
+
 function includesKey(keys, key) {
   return keys.find((k) => k.toString('hex') === key.toString('hex'))
 }
