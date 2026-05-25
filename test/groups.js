@@ -121,6 +121,36 @@ test('group-active - fired per core not per session', async function (t) {
   await a.append('hello')
 })
 
+test('group-active - fired via passive', async function (t) {
+  t.plan(2)
+  const topic = b4a.alloc(32, 1)
+
+  const store = await create(t)
+
+  const dir = await t.tmp()
+  let store2 = new Corestore(dir)
+
+  const a = store.get({ name: 'foo', group: topic })
+  await a.ready()
+
+  const a2 = store2.get({ key: a.key, group: topic })
+  t.teardown(() => a2.close())
+  await a2.ready()
+
+  await store2.close()
+
+  store2 = new Corestore(dir)
+  t.teardown(() => store2.close())
+
+  store2.on('group-active', (group) => {
+    t.alike(group, topic, 'group active from passive core')
+  })
+  replicate(t, store, store2)
+
+  t.absent(store2.cores.map.has(a.key.toString('hex')), 'reopened store2 doesnt have core loaded')
+  await a.append('hello')
+})
+
 test('(un)notifyGroup', async function (t) {
   t.plan(4)
   const topic = b4a.alloc(32, 1)
@@ -144,6 +174,25 @@ test('(un)notifyGroup', async function (t) {
 
   await a.append('hello')
 })
+
+function replicate(t, a, b) {
+  const s1 = a.replicate(true)
+  const s2 = b.replicate(false)
+
+  s1.pipe(s2).pipe(s1)
+
+  s1.on('error', console.error)
+  s2.on('error', console.error)
+
+  t.teardown(async () => {
+    s1.destroy()
+    s2.destroy()
+    await Promise.all([
+      new Promise((resolve) => s1.once('close', resolve)),
+      new Promise((resolve) => s2.once('close', resolve))
+    ])
+  })
+}
 
 function includesKey(keys, key) {
   return keys.find((k) => k.toString('hex') === key.toString('hex'))
