@@ -3,6 +3,7 @@ const b4a = require('b4a')
 
 const Corestore = require('../')
 const { create, toArray, includesKey } = require('./helpers')
+const GroupNotifyHandle = require('../lib/notify')
 
 test('groups', async function (t) {
   t.plan(3)
@@ -183,6 +184,28 @@ test('notifyGroup handle - updates empty for unknown topic', async function (t) 
   const handle = store.notifyGroup(b4a.alloc(32, 99))
   t.alike(await toArray(handle.updates()), [], 'empty stream when topic has no group')
   handle.destroy()
+})
+
+test('notifyGroup - passed handle never attached ends early', async function (t) {
+  const store = await create(t)
+
+  const topic = b4a.alloc(32, 1)
+  const legit = store.notifyGroup(topic)
+  t.teardown(() => legit.destroy())
+
+  const handle = new GroupNotifyHandle(store, b4a.alloc(32, 1))
+  t.is(handle.index, -1, 'non-attached handle has index -1')
+  t.execution(() => handle.destroy(), 'destroy runs w/o issue')
+
+  t.not(legit.index, -1, 'legit index wasnt updated')
+
+  const a = store.get({ name: 'a', group: topic })
+  await a.ready()
+  t.teardown(() => a.close())
+
+  await a.append('boo')
+
+  t.ok(includesKey(await toArray(handle.updates()), a.key), 'legit updates stream returns key')
 })
 
 function replicate(t, a, b) {

@@ -320,6 +320,8 @@ class Corestore extends ReadyResource {
   }
 
   _removeGroupNotify(handle) {
+    if (handle.index === -1) return
+
     const topicHex = b4a.toString(handle._topic, 'hex')
     const handles = this._groupNotifiers.get(topicHex)
     if (!handles) return
@@ -327,6 +329,7 @@ class Corestore extends ReadyResource {
     const popped = handles.pop()
     if (popped !== handle) handles[(popped.index = handle.index)] = popped
     if (handles.length === 0) this._groupNotifiers.delete(topicHex)
+    handle.index = -1
   }
 
   findingPeers() {
