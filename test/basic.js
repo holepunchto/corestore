@@ -1,11 +1,11 @@
 const test = require('brittle')
 const b4a = require('b4a')
-const tmp = require('test-tmp')
 const Rache = require('rache')
 const Hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
 
 const Corestore = require('../')
+const { create, toArray } = require('./helpers')
 
 test('basic', async function (t) {
   const store = await create(t)
@@ -50,7 +50,7 @@ test('pass primary key', async function (t) {
   let key = null
 
   {
-    const dir = await tmp(t)
+    const dir = await t.tmp()
     const store = new Corestore(dir, { primaryKey, unsafe: true })
 
     t.alike(store.primaryKey, primaryKey)
@@ -72,7 +72,7 @@ test('pass primary key', async function (t) {
   }
 
   {
-    const dir = await tmp(t)
+    const dir = await t.tmp()
 
     const store = new Corestore(dir, { primaryKey, unsafe: true })
 
@@ -87,7 +87,7 @@ test('pass primary key', async function (t) {
 })
 
 test('global cache is passed down', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir, { globalCache: new Rache({ maxSize: 4 }) })
 
   t.ok(store.globalCache)
@@ -102,7 +102,7 @@ test('global cache is passed down', async function (t) {
 })
 
 test('session pre ready', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
 
   const a = store.get({ name: 'test' })
@@ -122,7 +122,7 @@ test('weak ref to react to cores opening', async function (t) {
 
   const s = setInterval(() => {}, 1000)
 
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
 
   t.teardown(() => clearInterval(s))
@@ -145,7 +145,7 @@ test('weak ref to react to cores opening', async function (t) {
 })
 
 test('session of hypercore sessions are tracked in corestore sessions', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
 
   const session = store.session()
@@ -170,7 +170,7 @@ test('session of hypercore sessions are tracked in corestore sessions', async fu
 })
 
 test('named cores are stable', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
 
   await store.ready()
@@ -201,13 +201,13 @@ test('named cores are stable', async function (t) {
 })
 
 test('replicates', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = new Corestore(await t.tmp())
 
   const a = store.get({ name: 'foo' })
   await a.append('hello')
   await a.close()
 
-  const store2 = new Corestore(await tmp(t))
+  const store2 = new Corestore(await t.tmp())
   const clone = store.get(a.key)
 
   const s1 = store2.replicate(true)
@@ -225,7 +225,7 @@ test('replicates', async function (t) {
 })
 
 test('if key is passed, its available immediately', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = new Corestore(await t.tmp())
 
   const a = store.get({ key: b4a.alloc(32) })
   t.alike(a.key, b4a.alloc(32))
@@ -235,7 +235,7 @@ test('if key is passed, its available immediately', async function (t) {
 })
 
 test('finding peers (compat)', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = new Corestore(await t.tmp())
 
   const done = store.findingPeers()
 
@@ -254,7 +254,7 @@ test('finding peers (compat)', async function (t) {
 })
 
 test('audit', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = new Corestore(await t.tmp())
 
   const a = store.get({ keyPair: crypto.keyPair() })
   const b = store.get({ keyPair: crypto.keyPair() })
@@ -286,7 +286,7 @@ test('audit', async function (t) {
 })
 
 test('open by discovery key', async function (t) {
-  const store = new Corestore(await tmp(t))
+  const store = new Corestore(await t.tmp())
 
   const a = store.get({ discoveryKey: b4a.alloc(32) })
 
@@ -438,7 +438,7 @@ test('list stream', async function (t) {
 })
 
 test('manifest is persisted', async function (t) {
-  const dir = await tmp()
+  const dir = await t.tmp()
 
   const random = crypto.randomBytes(32)
   const manifest = {
@@ -481,7 +481,7 @@ test('manifest is persisted', async function (t) {
 })
 
 test('open readOnly', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
 
   const store = new Corestore(dir)
   await store.ready()
@@ -507,7 +507,7 @@ test('open readOnly', async function (t) {
 })
 
 test('open pushOnly', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
 
   const store = new Corestore(dir)
   await store.ready()
@@ -554,7 +554,7 @@ test('namespace sessions are removed from corestores set on close', async functi
 })
 
 test('watchers are cleared when store is closed', async function (t) {
-  const dir = await tmp(t)
+  const dir = await t.tmp()
   const store = new Corestore(dir)
 
   const fn = () => {}
@@ -590,25 +590,3 @@ test('findingPeers pending callbacks are drained on store close', async function
   done() // dbl check what happens if user calls this also
   t.pass('no crash when awaiting done() after the underlying store closed')
 })
-
-function toArray(stream) {
-  return new Promise((resolve, reject) => {
-    const all = []
-    stream.on('data', (data) => {
-      all.push(data)
-    })
-    stream.on('end', () => {
-      resolve(all)
-    })
-    stream.on('error', (err) => {
-      reject(err)
-    })
-  })
-}
-
-async function create(t) {
-  const dir = await tmp(t)
-  const store = new Corestore(dir)
-  t.teardown(() => store.close())
-  return store
-}
