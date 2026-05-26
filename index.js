@@ -557,10 +557,6 @@ class Corestore extends ReadyResource {
     return staticCore
   }
 
-  getGroupUpdates(topic, opts) {
-    return new GroupNotifyHandle(this, topic).updates(opts)
-  }
-
   get(opts) {
     this._maybeClosed()
 

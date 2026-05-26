@@ -44,10 +44,10 @@ test('groups', async function (t) {
   s1.destroy()
   s2.destroy()
 
-  const keys = await toArray(store2.getGroupUpdates(topic1))
+  const keys = await toArray(store2.notifyGroup(topic1).updates())
   t.ok(includesKey(keys, a.key))
   t.ok(includesKey(keys, b.key))
-  t.alike(await toArray(store2.getGroupUpdates(topic2)), [])
+  t.alike(await toArray(store2.notifyGroup(topic2).updates()), [])
 })
 
 test('group - persistance', async function (t) {
@@ -99,7 +99,7 @@ test('group - persistance', async function (t) {
     s2.destroy()
   }
 
-  t.alike(await toArray(store3.getGroupUpdates(topic)), [b.key, a.key])
+  t.alike(await toArray(store3.notifyGroup(topic).updates()), [b.key, a.key])
 
   await store3.close()
 })
