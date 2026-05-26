@@ -110,8 +110,10 @@ test('group-active - fired per core not per session', async function (t) {
   const store = await create(t)
 
   const a = store.get({ name: 'foo', group: topic })
+  await a.ready()
   t.teardown(() => a.close())
   const a2 = store.get({ name: 'foo' })
+  await a2.ready()
   t.teardown(() => a2.close())
 
   store.on('group-active', (group) => {
