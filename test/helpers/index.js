@@ -1,4 +1,5 @@
 const Corestore = require('../..')
+const b4a = require('b4a')
 
 async function toArray(ite) {
   const all = []
@@ -15,7 +16,12 @@ async function create(t) {
   return store
 }
 
+function includesKey(keys, key) {
+  return keys.find((k) => b4a.equals(k, key))
+}
+
 module.exports = {
   toArray,
-  create
+  create,
+  includesKey
 }

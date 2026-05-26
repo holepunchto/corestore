@@ -8,6 +8,7 @@ const { isAndroid } = require('which-runtime')
 const { STORAGE_EMPTY, ASSERTION } = require('hypercore-errors')
 
 const auditStore = require('./lib/audit.js')
+const GroupNotifyHandle = require('./lib/notify.js')
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
@@ -259,8 +260,10 @@ class Corestore extends ReadyResource {
     this.watchers = null
     this.watchIndex = -1
 
+    this._groupNotifiers = new Map() // group notifications
     this._findingPeers = null // here for legacy
     this._ongcBound = this._ongc.bind(this)
+    this._onGroupActiveBound = this._onGroupActive.bind(this)
 
     if (opts.primaryKey && !this.root && !opts.unsafe) {
       throw ASSERTION(
@@ -289,6 +292,44 @@ class Corestore extends ReadyResource {
       this.watchers = null
       this.cores.unwatch(this)
     }
+  }
+
+  _onGroupActive(topic) {
+    this.emit('group-active', topic)
+
+    const topicHex = b4a.toString(topic, 'hex')
+    const handles = this._groupNotifiers.get(topicHex)
+    if (!handles) return
+    for (const handle of handles) handle.emit('update')
+  }
+
+  notifyGroup(topic) {
+    const topicHex = b4a.toString(topic, 'hex')
+    let handles = this._groupNotifiers.get(topicHex)
+
+    if (!handles) {
+      handles = []
+      this._groupNotifiers.set(topicHex, handles)
+    }
+
+    const handle = new GroupNotifyHandle(this, topic)
+    const length = handles.push(handle)
+    handle.index = length - 1
+
+    return handle
+  }
+
+  _removeGroupNotify(handle) {
+    if (handle.index === -1) return
+
+    const topicHex = b4a.toString(handle._topic, 'hex')
+    const handles = this._groupNotifiers.get(topicHex)
+    if (!handles) return
+
+    const popped = handles.pop()
+    if (popped !== handle) handles[(popped.index = handle.index)] = popped
+    if (handles.length === 0) this._groupNotifiers.delete(topicHex)
+    handle.index = -1
   }
 
   findingPeers() {
@@ -516,11 +557,8 @@ class Corestore extends ReadyResource {
     return staticCore
   }
 
-  async *getGroupUpdates(topic, opts) {
-    const id = await this.storage.getGroup(topic)
-    if (id === null) return
-
-    yield* this.storage.createGroupUpdateStream(id, opts)
+  getGroupUpdates(topic, opts) {
+    return new GroupNotifyHandle(this, topic).updates(opts)
   }
 
   get(opts) {
@@ -575,11 +613,6 @@ class Corestore extends ReadyResource {
 
   _makeSession(conf) {
     const session = new Hypercore(null, null, conf)
-
-    // needs a better way
-    session.on('append', () => {
-      if (session.core.header.group) this.emit('group-active', session.core.header.group.key)
-    })
 
     if (this._findingPeers !== null) this._findingPeers.add(session)
     return session
@@ -689,6 +722,8 @@ class Corestore extends ReadyResource {
     core.onidle = () => {
       this.cores.gc(core)
     }
+
+    core.ongroupupdate = this._onGroupActiveBound
 
     core.replicator.ondownloading = () => {
       if (this.active) this.streamTracker.attachAll(core)
