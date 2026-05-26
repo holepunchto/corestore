@@ -17,7 +17,7 @@ async function create(t) {
 }
 
 function includesKey(keys, key) {
-  return keys.find((k) => b4a.toString(k, 'hex') === b4a.toString(key, 'hex'))
+  return keys.find((k) => b4a.equals(k, key))
 }
 
 module.exports = {
