@@ -15,7 +15,12 @@ async function create(t) {
   return store
 }
 
+function includesKey(keys, key) {
+  return keys.find((k) => k.toString('hex') === key.toString('hex'))
+}
+
 module.exports = {
   toArray,
-  create
+  create,
+  includesKey
 }

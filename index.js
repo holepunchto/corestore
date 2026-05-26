@@ -8,6 +8,7 @@ const { isAndroid } = require('which-runtime')
 const { STORAGE_EMPTY, ASSERTION } = require('hypercore-errors')
 
 const auditStore = require('./lib/audit.js')
+const GroupNotifyHandle = require('./lib/notify.js')
 
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
@@ -259,18 +260,10 @@ class Corestore extends ReadyResource {
     this.watchers = null
     this.watchIndex = -1
 
-    // Group notification
-    this.groupNotifiers = new Map()
-    this.on('group-active', (topic) => {
-      const topicHex = topic.toString('hex')
-      if (!this.groupNotifiers.has(topicHex)) return
-
-      const fns = this.groupNotifiers.get(topicHex)
-      for (const fn of fns) fn()
-    })
-
+    this._groupNotifiers = new Map() // group notifications
     this._findingPeers = null // here for legacy
     this._ongcBound = this._ongc.bind(this)
+    this._onGroupActiveBound = this._onGroupActive.bind(this)
 
     if (opts.primaryKey && !this.root && !opts.unsafe) {
       throw ASSERTION(
@@ -301,25 +294,39 @@ class Corestore extends ReadyResource {
     }
   }
 
-  notifyGroup(topic, fn) {
-    const topicHex = topic.toString('hex')
+  _onGroupActive(topic) {
+    this.emit('group-active', topic)
 
-    const existing = this.groupNotifiers.get(topicHex) || []
-    this.groupNotifiers.set(topicHex, existing.concat(fn))
+    const topicHex = b4a.toString(topic, 'hex')
+    const handles = this._groupNotifiers.get(topicHex)
+    if (!handles) return
+    for (const handle of handles) handle.emit('update')
   }
 
-  unnotifyGroup(topic, fn) {
-    const topicHex = topic.toString('hex')
-    if (!this.groupNotifiers.has(topicHex)) return
+  notifyGroup(topic) {
+    const topicHex = b4a.toString(topic, 'hex')
+    let handles = this._groupNotifiers.get(topicHex)
 
-    const existing = this.groupNotifiers.get(topicHex) || []
-    const remainder = existing.filter((f) => f !== fn)
-
-    if (remainder.length) {
-      this.groupNotifiers.set(topicHex, remainder)
-    } else {
-      this.groupNotifiers.delete(topicHex)
+    if (!handles) {
+      handles = []
+      this._groupNotifiers.set(topicHex, handles)
     }
+
+    const handle = new GroupNotifyHandle(this, topic)
+    const length = handles.push(handle)
+    handle.index = length - 1
+
+    return handle
+  }
+
+  _removeGroupNotify(handle) {
+    const topicHex = b4a.toString(handle._topic, 'hex')
+    const handles = this._groupNotifiers.get(topicHex)
+    if (!handles) return
+
+    const popped = handles.pop()
+    if (popped !== handle) handles[(popped.index = handle.index)] = popped
+    if (handles.length === 0) this._groupNotifiers.delete(topicHex)
   }
 
   findingPeers() {
@@ -547,11 +554,8 @@ class Corestore extends ReadyResource {
     return staticCore
   }
 
-  async *getGroupUpdates(topic, opts) {
-    const id = await this.storage.getGroup(topic)
-    if (id === null) return
-
-    yield* this.storage.createGroupUpdateStream(id, opts)
+  getGroupUpdates(topic, opts) {
+    return new GroupNotifyHandle(this, topic).updates(opts)
   }
 
   get(opts) {
@@ -716,9 +720,7 @@ class Corestore extends ReadyResource {
       this.cores.gc(core)
     }
 
-    core.ongroupupdate = (key) => {
-      this.emit('group-active', key)
-    }
+    core.ongroupupdate = this._onGroupActiveBound
 
     core.replicator.ondownloading = () => {
       if (this.active) this.streamTracker.attachAll(core)

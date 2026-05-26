@@ -2,7 +2,7 @@ const test = require('brittle')
 const b4a = require('b4a')
 
 const Corestore = require('../')
-const { create, toArray } = require('./helpers')
+const { create, toArray, includesKey } = require('./helpers')
 
 test('groups', async function (t) {
   t.plan(3)
@@ -151,8 +151,8 @@ test('group-active - fired via passive', async function (t) {
   await a.append('hello')
 })
 
-test('(un)notifyGroup', async function (t) {
-  t.plan(4)
+test('notifyGroup handle', async function (t) {
+  t.plan(5)
   const topic = b4a.alloc(32, 1)
 
   const store = await create(t)
@@ -160,19 +160,27 @@ test('(un)notifyGroup', async function (t) {
   const a = store.get({ name: 'foo', group: topic })
   t.teardown(() => a.close())
 
-  const handler = () => {
-    t.pass('notified')
-  }
-  store.notifyGroup(b4a.alloc(32, 1), handler)
-  t.ok(store.groupNotifiers.has(topic.toString('hex')), 'registered handler in map')
+  const handle = store.notifyGroup(b4a.alloc(32, 1))
+  t.ok(store._groupNotifiers.has(topic.toString('hex')), 'registered handle in map')
+
+  handle.on('update', () => t.pass('notified'))
 
   await a.append('hello')
   await a.append('hello') // fires each time
 
-  store.unnotifyGroup(b4a.alloc(32, 1), handler)
-  t.is(store.groupNotifiers.size, 0, 'cleared handler')
+  t.ok(includesKey(await toArray(handle.updates()), a.key), 'updates stream returns key')
+
+  handle.destroy()
+  t.is(store._groupNotifiers.size, 0, 'cleared handle')
 
   await a.append('hello')
+})
+
+test('notifyGroup handle - updates empty for unknown topic', async function (t) {
+  const store = await create(t)
+  const handle = store.notifyGroup(b4a.alloc(32, 99))
+  t.alike(await toArray(handle.updates()), [], 'empty stream when topic has no group')
+  handle.destroy()
 })
 
 function replicate(t, a, b) {
@@ -192,8 +200,4 @@ function replicate(t, a, b) {
       new Promise((resolve) => s2.once('close', resolve))
     ])
   })
-}
-
-function includesKey(keys, key) {
-  return keys.find((k) => k.toString('hex') === key.toString('hex'))
 }

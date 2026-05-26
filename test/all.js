@@ -9,6 +9,7 @@ async function runTests() {
 
   await import('./basic.js')
   await import('./groups.js')
+  await import('./notify.js')
 
   test.resume()
 }

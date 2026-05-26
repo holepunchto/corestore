@@ -7,8 +7,15 @@
     "index.js",
     "lib/*"
   ],
+  "imports": {
+    "events": {
+      "bare": "bare-events",
+      "default": "events"
+    }
+  },
   "dependencies": {
     "b4a": "^1.6.7",
+    "bare-events": "^2.8.3",
     "hypercore": "^11.31.0",
     "hypercore-crypto": "^3.4.2",
     "hypercore-errors": "^1.4.0",
