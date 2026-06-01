@@ -118,7 +118,7 @@ test('group-active - fired per core not per session', async function (t) {
   t.teardown(() => a2.close())
 
   store.on('group-active', (group, { key, length, fork }) => {
-    t.ok(b4a.equals(a.core.key, key))
+    t.alike(a.core.key, key)
     t.is(length, 1)
     t.is(fork, 0)
     t.is(group, topic, 'group active')
@@ -149,7 +149,7 @@ test('group-active - fired via passive', async function (t) {
   t.teardown(() => store2.close())
 
   store2.on('group-active', (group, { key, length, fork }) => {
-    t.ok(b4a.equals(a.core.key, key))
+    t.alike(a.core.key, key)
     t.is(length, 1)
     t.is(fork, 0)
     t.alike(group, topic, 'group active from passive core')
