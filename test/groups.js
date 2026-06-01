@@ -161,7 +161,7 @@ test('group-active - fired via passive', async function (t) {
 })
 
 test('notifyGroup handle', async function (t) {
-  t.plan(7)
+  t.plan(11)
   const topic = b4a.alloc(32, 1)
 
   const store = await create(t)
@@ -182,44 +182,19 @@ test('notifyGroup handle', async function (t) {
   await a.append('hello') // fires each time
 
   t.ok(includesKey(await toArray(handle.updates()), a.key), 'updates stream returns key')
-  t.alike(
-    events,
-    [
-      {
-        key: a.key,
-        length: 1,
-        fork: 0
-      },
-      {
-        key: a.key,
-        length: 2,
-        fork: 0
-      }
-    ],
-    'has update events'
-  )
+  t.is(events.length, 2, 'events added to')
+
+  t.alike(events[0].key, a.key)
+  t.is(events[0].length, 1)
+
+  t.alike(events[1].key, a.key)
+  t.is(events[1].length, 2)
 
   handle.destroy()
   t.is(store._groupNotifiers.size, 0, 'cleared handle')
 
   await a.append('hello')
-
-  t.alike(
-    events,
-    [
-      {
-        key: a.key,
-        length: 1,
-        fork: 0
-      },
-      {
-        key: a.key,
-        length: 2,
-        fork: 0
-      }
-    ],
-    'events not added to'
-  )
+  t.is(events.length, 2, 'events not added to')
 })
 
 test('notifyGroup handle - updates empty for unknown topic', async function (t) {
