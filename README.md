@@ -114,6 +114,35 @@ store.watch(function (core) {
 
 Unregister a callback used with `store.watch(callback)` so it no longer fires.
 
+#### `const handle = store.notifyGroup(topic)`
+
+Get a `handle` for updates from all `hypercore`s with the group `topic` set.
+
+#### `const stream = handle.update(opts = {})`
+
+Gets updates for the `topic` the handle is for.
+
+`opts` includes:
+
+```js
+{
+  since: 0,      // What timestamp to start returning updates from. Default `0` returns all updates
+  reverse: true, // Flag to return updates in reverse order. Defaults to `true` so latest returned first
+}
+```
+
+Stream returns the core's `key`:
+
+```js
+for await (const key of handle.updates()) {
+    // ...
+}
+```
+
+#### `handle.on('update', callback)`
+
+Calls the callback whenever a core with the `topic` for the `handle` updates.
+
 #### `await store.suspend()`
 
 Suspend the underlying storage for the Corestore.
