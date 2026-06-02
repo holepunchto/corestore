@@ -135,7 +135,7 @@ Stream returns the core's `key`:
 
 ```js
 for await (const key of handle.updates()) {
-    // ...
+  // ...
 }
 ```
 
