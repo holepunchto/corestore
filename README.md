@@ -139,6 +139,10 @@ for await (const key of handle.updates()) {
 }
 ```
 
+#### `handle.destroy()`
+
+Destroys and unregisters the `handle` from its `store`.
+
 #### `handle.on('update', callback)`
 
 Calls the callback whenever a core with the `topic` for the `handle` updates.
