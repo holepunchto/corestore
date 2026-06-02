@@ -161,6 +161,10 @@ This is useful for creating deterministic key pairs that are unique to a peer.
 
 Fully close this Corestore instance.
 
+#### `store.on('group-active', (topic) => {})`
+
+The `group-active` event emits whenever an opened Hypercore in the store updates. The `topic` is the group topic the core belongs to.
+
 ### License
 
 MIT
