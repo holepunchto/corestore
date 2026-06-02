@@ -116,6 +116,9 @@ Unregister a callback used with `store.watch(callback)` so it no longer fires.
 
 #### `const handle = store.notifyGroup(topic)`
 
+> [!IMPORTANT]
+> This feature is _experimental_. The API is subject to change, and everything may break.
+
 Get a `handle` for updates from all `hypercore`s with the group `topic` set.
 
 #### `const stream = handle.update(opts = {})`
@@ -166,6 +169,9 @@ This is useful for creating deterministic key pairs that are unique to a peer.
 Fully close this Corestore instance.
 
 #### `store.on('group-active', (topic) => {})`
+
+> [!IMPORTANT]
+> This feature is _experimental_. The API is subject to change, and everything may break.
 
 The `group-active` event emits whenever an opened Hypercore in the store updates. The `topic` is the group topic the core belongs to.
 
