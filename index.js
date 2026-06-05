@@ -356,7 +356,7 @@ class Corestore extends ReadyResource {
     }
     if (!this.shouldSuspend) return
     await log('Suspending db...')
-    await this.storage.suspend()
+    await this.storage.suspend({ log })
     await log('Suspending db completed')
   }
 
