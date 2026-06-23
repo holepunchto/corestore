@@ -294,13 +294,13 @@ class Corestore extends ReadyResource {
     }
   }
 
-  _onGroupActive(topic) {
-    this.emit('group-active', topic)
+  _onGroupActive(topic, update) {
+    this.emit('group-active', topic, update)
 
     const topicHex = b4a.toString(topic, 'hex')
     const handles = this._groupNotifiers.get(topicHex)
     if (!handles) return
-    for (const handle of handles) handle.emit('update')
+    for (const handle of handles) handle.emit('update', update)
   }
 
   notifyGroup(topic) {

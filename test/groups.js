@@ -105,7 +105,7 @@ test('group - persistance', async function (t) {
 })
 
 test('group-active - fired per core not per session', async function (t) {
-  t.plan(1)
+  t.plan(4)
   const topic = b4a.alloc(32, 1)
 
   const store = await create(t)
@@ -117,7 +117,10 @@ test('group-active - fired per core not per session', async function (t) {
   await a2.ready()
   t.teardown(() => a2.close())
 
-  store.on('group-active', (group) => {
+  store.on('group-active', (group, { key, length, fork }) => {
+    t.alike(a.core.key, key)
+    t.is(length, 1)
+    t.is(fork, 0)
     t.is(group, topic, 'group active')
   })
 
@@ -125,7 +128,7 @@ test('group-active - fired per core not per session', async function (t) {
 })
 
 test('group-active - fired via passive', async function (t) {
-  t.plan(2)
+  t.plan(5)
   const topic = b4a.alloc(32, 1)
 
   const store = await create(t)
@@ -145,7 +148,10 @@ test('group-active - fired via passive', async function (t) {
   store2 = new Corestore(dir)
   t.teardown(() => store2.close())
 
-  store2.on('group-active', (group) => {
+  store2.on('group-active', (group, { key, length, fork }) => {
+    t.alike(a.core.key, key)
+    t.is(length, 1)
+    t.is(fork, 0)
     t.alike(group, topic, 'group active from passive core')
   })
   replicate(t, store, store2)
@@ -155,7 +161,7 @@ test('group-active - fired via passive', async function (t) {
 })
 
 test('notifyGroup handle', async function (t) {
-  t.plan(5)
+  t.plan(11)
   const topic = b4a.alloc(32, 1)
 
   const store = await create(t)
@@ -166,17 +172,29 @@ test('notifyGroup handle', async function (t) {
   const handle = store.notifyGroup(b4a.alloc(32, 1))
   t.ok(store._groupNotifiers.has(topic.toString('hex')), 'registered handle in map')
 
-  handle.on('update', () => t.pass('notified'))
+  const events = []
+  handle.on('update', (core) => {
+    t.pass('notified')
+    events.push(core)
+  })
 
   await a.append('hello')
   await a.append('hello') // fires each time
 
   t.ok(includesKey(await toArray(handle.updates()), a.key), 'updates stream returns key')
+  t.is(events.length, 2, 'events added to')
+
+  t.alike(events[0].key, a.key)
+  t.is(events[0].length, 1)
+
+  t.alike(events[1].key, a.key)
+  t.is(events[1].length, 2)
 
   handle.destroy()
   t.is(store._groupNotifiers.size, 0, 'cleared handle')
 
   await a.append('hello')
+  t.is(events.length, 2, 'events not added to')
 })
 
 test('notifyGroup handle - updates empty for unknown topic', async function (t) {
