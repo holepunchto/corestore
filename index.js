@@ -348,12 +348,12 @@ class Corestore extends ReadyResource {
   }
 
   async suspend({ log = noop } = {}) {
-    await log('Corestore suspension started...')
+    await log('Suspension requested.')
     // If readOnly we don't need to flush
     if (!this.storage.readOnly) {
-      await log('Flusing db...')
+      await log('Flushing db...')
       await this.storage.db.flush()
-      await log('Flusing db completed')
+      await log('Flushing db completed')
     }
     if (!this.shouldSuspend) return
     await log('Suspending db...')
