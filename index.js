@@ -13,6 +13,17 @@ const GroupNotifyHandle = require('./lib/notify.js')
 const [NS] = crypto.namespace('corestore', 1)
 const DEFAULT_NAMESPACE = b4a.alloc(32) // This is meant to be 32 0-bytes
 
+/**
+ * Options for the {@link Corestore} constructor. Any other options are
+ * forwarded to the underlying `hypercore-storage` instance.
+ * @typedef {Object} CorestoreOptions
+ * @property {Buffer} [primaryKey] - The 32-byte master key from which all writable named cores are derived. Generated and persisted automatically when omitted.
+ * @property {boolean} [writable=true] - Set to `false` to open the store read-only; loaded cores default to read-only too.
+ * @property {boolean} [readOnly=false] - Open the backing storage in read-only mode.
+ * @property {boolean} [active=true] - Whether loaded cores are automatically attached to active replication streams.
+ * @property {boolean} [unsafe=false] - Acknowledge that passing `primaryKey` directly is unsafe; required when `primaryKey` is set on a root store.
+ */
+
 class StreamTracker {
   constructor() {
     this.records = []
@@ -233,10 +244,26 @@ class FindingPeers {
 }
 
 class Corestore extends ReadyResource {
+  /**
+   * Create a new Corestore instance.
+   * @param {string|object} storage - can be either a `hypercore-storage` instance or a string.
+   * @param {CorestoreOptions} [opts] - Store options.
+   * @throws {ASSERTION} if `primaryKey` is set on a root store without `unsafe: true`.
+   * @example
+   * {
+   *   primaryKey: null, // The primary key to use as the master key for key derivation.
+   *   writable: true,
+   * }
+   */
   constructor(storage, opts = {}) {
     super()
 
     this.root = opts.root || null
+    /**
+     * The backing storage adapter used for aliases, seeds, and Hypercore data
+     * files.
+     * @type {object}
+     */
     this.storage = this.root
       ? this.root.storage
       : Hypercore.defaultStorage(storage, {
@@ -249,12 +276,31 @@ class Corestore extends ReadyResource {
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.sessions = new SessionTracker()
     this.corestores = this.root ? this.root.corestores : new Set()
+    /**
+     * `true` when the store was opened without write access.
+     * @type {boolean}
+     */
     this.readOnly = opts.writable === false || !!opts.readOnly
     this.globalCache = this.root ? this.root.globalCache : opts.globalCache || null
+    /**
+     * The 32-byte primary key used to deterministically derive writable named
+     * cores and namespaced key pairs.
+     * @type {Buffer}
+     */
     this.primaryKey = this.root ? this.root.primaryKey : opts.primaryKey || null
     this.ns = opts.namespace || DEFAULT_NAMESPACE
+    /**
+     * The Hypercore manifest version used when Corestore creates new writable
+     * cores.
+     * @type {number}
+     */
     this.manifestVersion = opts.manifestVersion || 1
     this.shouldSuspend = isAndroid ? !!opts.suspend : opts.suspend !== false
+    /**
+     * `true` when the store should automatically attach loaded cores to active
+     * replication streams.
+     * @type {boolean}
+     */
     this.active = opts.active !== false
 
     this.watchers = null
@@ -274,6 +320,17 @@ class Corestore extends ReadyResource {
     this.ready().catch(noop)
   }
 
+  /**
+   * Register a callback called when new Hypercores are opened. `core` is the
+   * internal core for the opened Hypercore. It can be used to create weak
+   * references to a Hypercore like so:
+   * @param {Function} fn - Callback invoked with the internal `core` each time a Hypercore is opened.
+   * @returns {void}
+   * @example
+   * store.watch(function (core) {
+   *   const weakCore = new Hypercore({ core, weak: true })
+   * })
+   */
   watch(fn) {
     if (this.watchers === null) {
       this.watchers = new Set()
@@ -283,6 +340,14 @@ class Corestore extends ReadyResource {
     this.watchers.add(fn)
   }
 
+  /**
+   * Unregister a callback used with `store.watch(callback)` so it no longer
+   * fires.
+   * @param {Function} fn - The callback previously passed to `store.watch()`.
+   * @returns {void}
+   * @example
+   * store.unwatch(onCore)
+   */
   unwatch(fn) {
     if (this.watchers === null) return
 
@@ -303,6 +368,14 @@ class Corestore extends ReadyResource {
     for (const handle of handles) handle.emit('update')
   }
 
+  /**
+   * Get a `handle` for updates from all `hypercore`s with the group `topic` set.
+   * @param {Buffer} topic - The 32-byte group topic to watch.
+   * @returns {GroupNotifyHandle} A handle that emits `update` when a core in the group changes.
+   * @example
+   * const handle = store.notifyGroup(topic)
+   * handle.on('update', () => console.log('group changed'))
+   */
   notifyGroup(topic) {
     const topicHex = b4a.toString(topic, 'hex')
     let handles = this._groupNotifiers.get(topicHex)
@@ -332,6 +405,14 @@ class Corestore extends ReadyResource {
     handle.index = -1
   }
 
+  /**
+   * A completion callback. Call it after the current peer-discovery pass
+   * finishes so pending update waits on loaded cores can unblock.
+   * @returns {Function} A `done` function to call once peer discovery has finished.
+   * @example
+   * const done = store.findingPeers()
+   * swarm.flush().then(done, done)
+   */
   findingPeers() {
     if (this._findingPeers === null) this._findingPeers = new FindingPeers()
     this._findingPeers.inc(this.sessions)
@@ -343,10 +424,25 @@ class Corestore extends ReadyResource {
     }
   }
 
+  /**
+   * An audit report describing the state of the backing store and any detected
+   * inconsistencies.
+   * @param {object} [opts] - Audit options (e.g. `dryRun`).
+   * @returns {AsyncGenerator<object>} Yields a result per core as it is audited.
+   * @example
+   * for await (const report of store.audit()) console.log(report)
+   */
   audit(opts = {}) {
     return auditStore(this, opts)
   }
 
+  /**
+   * Suspend the underlying storage for the Corestore.
+   * @param {object} [options] - Suspend options.
+   * @returns {Promise<void>} Resolves once the storage is flushed and suspended.
+   * @example
+   * await store.suspend()
+   */
   async suspend({ log = noop } = {}) {
     await log('Flushing db...')
     // If readOnly we don't need to flush
@@ -360,10 +456,24 @@ class Corestore extends ReadyResource {
     await log('Suspending db completed')
   }
 
+  /**
+   * Resume a suspended Corestore.
+   * @returns {Promise<void>} Resolves once the storage is resumed.
+   * @example
+   * await store.resume()
+   */
   resume() {
     return this.storage.resume()
   }
 
+  /**
+   * Create a new Corestore session. Closing a session will close all cores made
+   * from this session.
+   * @param {object} opts - Session options (forwarded to the new Corestore).
+   * @returns {Corestore} A new Corestore session sharing the same storage.
+   * @example
+   * const session = store.session()
+   */
   session(opts) {
     this._maybeClosed()
     const root = this.root || this
@@ -374,6 +484,19 @@ class Corestore extends ReadyResource {
     })
   }
 
+  /**
+   * Create a new namespaced Corestore session. Namespacing is useful if you're
+   * going to be sharing a single Corestore instance between many applications or
+   * components, as it prevents name collisions.
+   * @param {string|Buffer} name - Namespace name; combined with the current namespace to derive a new one.
+   * @param {object} opts - Session options (forwarded to the new Corestore).
+   * @returns {Corestore} A new namespaced Corestore session.
+   * @example
+   * const ns1 = store.namespace('a')
+   * const ns2 = ns1.namespace('b')
+   * const core1 = ns1.get({ name: 'main' }) // These will load different Hypercores
+   * const core2 = ns2.get({ name: 'main' })
+   */
   namespace(name, opts) {
     return this.session({
       ...opts,
@@ -381,10 +504,26 @@ class Corestore extends ReadyResource {
     })
   }
 
+  /**
+   * Creates a discovery key stream of all cores within a namespace or all cores
+   * in general if no namespace is provided.
+   * @param {Buffer} [namespace] - to scope to; omit to list all cores.
+   * @returns {Readable} A stream of discovery keys.
+   * @example
+   * for await (const discoveryKey of store.list()) console.log(discoveryKey)
+   */
   list(namespace) {
     return this.storage.createDiscoveryKeyStream(namespace)
   }
 
+  /**
+   * The storage-layer auth metadata for that core, including manifest details
+   * when available.
+   * @param {Buffer} discoveryKey - Discovery key of the core to look up.
+   * @returns {Promise<object|null>} The auth record, or `null` if not stored.
+   * @example
+   * const auth = await store.getAuth(discoveryKey)
+   */
   getAuth(discoveryKey) {
     return this.storage.getAuth(discoveryKey)
   }
@@ -478,6 +617,22 @@ class Corestore extends ReadyResource {
     )
   }
 
+  /**
+   * Creates a replication stream that's capable of replicating all Hypercores
+   * that are managed by the Corestore, assuming the remote peer has the correct
+   * capabilities.
+   * @param {boolean|Stream} isInitiator - `true`/`false` to initiate, or an existing stream/connection to replicate over.
+   * @param {object} opts - Replication options, forwarded to the protocol stream.
+   * @returns {Stream} The replication stream.
+   * @example
+   * const swarm = new Hyperswarm()
+   *
+   * // join the relevant topic
+   * swarm.join(...)
+   *
+   * // simply pass the connection stream to corestore
+   * swarm.on('connection', (connection) => store.replicate(connection))
+   */
   replicate(isInitiator, opts) {
     this._maybeClosed()
 
@@ -517,6 +672,16 @@ class Corestore extends ReadyResource {
     }
   }
 
+  /**
+   * A reopened Hypercore whose manifest is converted into a static
+   * prologue-based manifest for the current data snapshot.
+   * @param {Hypercore} core - The source core to snapshot. Must have data.
+   * @param {object} opts - Options forwarded to `store.get()` for the new core.
+   * @returns {Promise<Hypercore>} The new static Hypercore.
+   * @throws if the core has no data to staticify.
+   * @example
+   * const staticCore = await store.staticify(core)
+   */
   async staticify(core, opts) {
     if (!this.opened) await this.ready()
     if (!core.opened) await core.ready()
@@ -561,6 +726,15 @@ class Corestore extends ReadyResource {
     return staticCore
   }
 
+  /**
+   * Loads a Hypercore, either by name (if the `name` option is provided), or
+   * from the provided key (if the first argument is a Buffer or String with
+   * hex/z32 key, or if the `key` options is set).
+   * @param {Buffer|string|object} opts - A key (Buffer/hex/z32 string), or an options object with `name`, `key`, or `discoveryKey` plus Hypercore options.
+   * @returns {Hypercore} A Hypercore session for the requested core.
+   * @example
+   * const core = store.get({ name: 'my-core' })
+   */
   get(opts) {
     this._maybeClosed()
 
@@ -618,6 +792,15 @@ class Corestore extends ReadyResource {
     return session
   }
 
+  /**
+   * Generate a key pair seeded with the Corestore's primary key using a `name`
+   * and a `ns` aka namespace. `ns` defaults to the current namespace.
+   * @param {string} name - to derive the key pair from.
+   * @param {Buffer} [ns]
+   * @returns {Promise<{publicKey: Buffer, secretKey: Buffer}>} The derived key pair.
+   * @example
+   * const keyPair = await store.createKeyPair('signer')
+   */
   async createKeyPair(name, ns = this.ns) {
     if (this.opened === false) await this.ready()
     return createKeyPair(this.primaryKey, ns, name)
