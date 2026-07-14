@@ -46,6 +46,7 @@ Options:
 {
   primaryKey: null, // The primary key to use as the master key for key derivation.
   writable: true,
+  treeCache: { maxSize: 8192 } // Options to use when creating hypercore's default storage
 }
 ```
 

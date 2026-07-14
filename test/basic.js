@@ -86,6 +86,17 @@ test('pass primary key', async function (t) {
   }
 })
 
+test('pass treeCache options', async (t) => {
+  const dir = await t.tmp()
+
+  const store = new Corestore(dir, { treeCache: { maxSize: 128, maxAge: 1337 } })
+  await store.ready()
+
+  t.is(store.storage.treeCache.maxSize, 128, 'set maxSize')
+  t.is(store.storage.treeCache.maxAge, 1337, 'set maxAge')
+  await store.close()
+})
+
 test('global cache is passed down', async function (t) {
   const dir = await t.tmp()
   const store = new Corestore(dir, { globalCache: new Rache({ maxSize: 4 }) })

@@ -243,7 +243,8 @@ class Corestore extends ReadyResource {
           id: opts.id,
           allowBackup: opts.allowBackup,
           readOnly: opts.readOnly,
-          wait: opts.wait
+          wait: opts.wait,
+          treeCache: opts.treeCache
         })
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
