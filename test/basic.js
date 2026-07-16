@@ -6,6 +6,26 @@ const crypto = require('hypercore-crypto')
 
 const Corestore = require('../')
 
+test.solo('basic', async function (t) {
+  const store = await create(t)
+
+  const manifest = {
+    prologue: {
+      hash: b4a.from('bb30a42c1e62f0afda5f0a4e8a562f7a13a24cea00ee81917b86b89e801314aa', 'hex'),
+      length: 0
+    },
+    signers: []
+  }
+
+  const core = store.get({ manifest })
+  await core.ready()
+
+  console.log(core.length)
+  console.log(await core.get(0, { wait: false }))
+
+  await t.exception(core.append('hello'))
+})
+
 test('basic', async function (t) {
   const store = await create(t)
 
