@@ -1,5 +1,6 @@
 const b4a = require('b4a')
 const Hypercore = require('hypercore')
+const { SuspendController } = require('hypercore')
 const ReadyResource = require('ready-resource')
 const sodium = require('sodium-universal')
 const crypto = require('hypercore-crypto')
@@ -248,6 +249,7 @@ class Corestore extends ReadyResource {
         })
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
     this.cores = this.root ? this.root.cores : new CoreTracker()
+    this._suspendController = this.root ? this.root._suspendController : new SuspendController()
     this.sessions = new SessionTracker()
     this.corestores = this.root ? this.root.corestores : new Set()
     this.readOnly = opts.writable === false || !!opts.readOnly
@@ -363,6 +365,20 @@ class Corestore extends ReadyResource {
 
   resume() {
     return this.storage.resume()
+  }
+
+  // pauses replication on every core, both ways, but keeps peers connected,
+  // when this resolves replication issues no more storage operations
+  async suspendReplication() {
+    this._suspendController.suspend()
+
+    for (const core of this.cores.map.values()) {
+      while (!core.closing && core.replicator.busy) await immediate()
+    }
+  }
+
+  resumeReplication() {
+    this._suspendController.resume()
   }
 
   session(opts) {
@@ -717,6 +733,7 @@ class Corestore extends ReadyResource {
       manifest: auth.manifest,
       group: auth.group,
       globalCache: opts.globalCache || this.globalCache || null,
+      suspendSignal: this._suspendController.signal,
       alias: opts.name ? { name: opts.name, namespace: this.ns } : null
     })
 
@@ -767,6 +784,10 @@ function createKeyPair(primaryKey, namespace, name) {
 }
 
 function noop() {}
+
+function immediate() {
+  return new Promise(setImmediate)
+}
 
 function toHex(discoveryKey) {
   return b4a.toString(discoveryKey, 'hex')
