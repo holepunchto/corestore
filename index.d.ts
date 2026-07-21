@@ -45,7 +45,7 @@ export class Corestore {
   /**
    * Suspend the underlying storage for the Corestore.
    */
-  suspend(options?: any): Promise<void>
+  suspend(options?: any): Promise<any>
 
   /**
    * Resume a suspended Corestore.
@@ -74,7 +74,7 @@ export class Corestore {
    */
   replicate(isInitiator: any, opts: any): any
 
-  staticify(core: any, opts: any): Promise<void>
+  staticify(core: any, opts: any): Promise<any>
 
   /**
    * Loads a Hypercore, either by name (if the `name` option is provided), or from the provided key (if the first argument is a Buffer or String with hex/z32 key, or if the `key` options is set).
@@ -85,14 +85,14 @@ export class Corestore {
    * Generate a key pair seeded with the Corestore's primary key using a `name` and a `ns` aka namespace. `ns` defaults to the current namespace.
    * @param ns - `ns` defaults to the current namespace.
    */
-  createKeyPair(name: any, ns?: any): Promise<void>
+  createKeyPair(name: any, ns?: any): Promise<any>
 
-  ready(): Promise<void>
+  ready(): Promise<any>
 
   /**
    * Fully close this Corestore instance.
    */
-  close(): Promise<void>
+  close(): Promise<any>
 
   readonly opened: any
 
@@ -136,7 +136,7 @@ export class Corestore {
   on(event: 'group-active', listener: (topic: any, update: any) => void): this
 }
 
-export class GroupNotifyHandle {
+declare class GroupNotifyHandle {
   constructor(store: any, topic: any)
 
   updates(opts: any): any
@@ -162,7 +162,7 @@ export class GroupNotifyHandle {
   on(event: 'update', listener: (...args: any[]) => void): this
 }
 
-export class FindingPeers {
+declare class FindingPeers {
   constructor()
 
   add(core: any): any
