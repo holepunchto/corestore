@@ -1,5 +1,7 @@
 // Type declarations for the holepunchto/corestore public API.
 
+import type Hypercore from 'hypercore'
+
 export interface CorestoreOptions {
   /** The primary key to use as the master key for key derivation. */
   primaryKey?: any
@@ -36,7 +38,7 @@ export class Corestore {
   /**
    * Get a `handle` for updates from all `hypercore`s with the group `topic` set.
    */
-  notifyGroup(topic: any): any
+  notifyGroup(topic: any): GroupNotifyHandle
 
   findingPeers(): any
 
@@ -55,12 +57,12 @@ export class Corestore {
   /**
    * Create a new Corestore session. Closing a session will close all cores made from this session.
    */
-  session(opts: any): any
+  session(opts: any): Corestore
 
   /**
    * Create a new namespaced Corestore session. Namespacing is useful if you're going to be sharing a single Corestore instance between many applications or components, as it prevents name collisions.
    */
-  namespace(name: any, opts: any): any
+  namespace(name: any, opts: any): Corestore
 
   /**
    * Creates a discovery key stream of all cores within a namespace or all cores in general if no namespace is provided.
@@ -79,7 +81,7 @@ export class Corestore {
   /**
    * Loads a Hypercore, either by name (if the `name` option is provided), or from the provided key (if the first argument is a Buffer or String with hex/z32 key, or if the `key` options is set).
    */
-  get(opts: any): any
+  get(opts: any): Hypercore
 
   /**
    * Generate a key pair seeded with the Corestore's primary key using a `name` and a `ns` aka namespace. `ns` defaults to the current namespace.
