@@ -147,9 +147,18 @@ for await (const key of handle.updates()) {
 
 Destroys and unregisters the `handle` from its `store`.
 
-#### `handle.on('update', callback)`
+#### `handle.on('update', (update) => {})`
 
 Calls the callback whenever a core with the `topic` for the `handle` updates.
+Passes the `update` argument object with the following shape:
+
+```
+{
+  key: core.key,
+  length: core.length,
+  fork: core.fork
+}
+```
 
 #### `await store.suspend()`
 
@@ -180,7 +189,7 @@ The `group-active` event emits whenever an opened Hypercore in the store updates
 {
   key: core.key,
   length: core.length,
-  fork: this.fork
+  fork: core.fork
 }
 ```
 
