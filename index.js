@@ -105,7 +105,7 @@ class CoreTracker {
     store.watchIndex = -1
   }
 
-  resume(id) {
+  resume(id, group) {
     const core = this.map.get(id)
 
     if (!core) return null
@@ -117,6 +117,12 @@ class CoreTracker {
       this._gcing.delete(core)
       if (this._gcing.size === 0) this._stopGC()
       core.gc = 0
+    }
+
+    if (group) {
+      core.opening.then(() => {
+        if (!core.header.group) core.setGroup(group).catch(noop)
+      }, noop)
     }
 
     return core
