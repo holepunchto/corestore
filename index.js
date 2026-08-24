@@ -263,7 +263,7 @@ class Corestore extends ReadyResource {
     this.watchers = null
     this.watchIndex = -1
 
-    this._groupNotifiers = new Map() // group notifications
+    this._groupNotifiers = this.root ? this.root._groupNotifiers : new Map() // group notifications
     this._findingPeers = null // here for legacy
     this._ongcBound = this._ongc.bind(this)
     this._onGroupActiveBound = this._onGroupActive.bind(this)
