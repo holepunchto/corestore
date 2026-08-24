@@ -119,11 +119,7 @@ class CoreTracker {
       core.gc = 0
     }
 
-    if (group) {
-      core.opening.then(() => {
-        if (!core.header.group) core.setGroup(group).catch(noop)
-      }, noop)
-    }
+    if (group) resumeGroup(core, group).catch(noop)
 
     return core
   }
@@ -770,4 +766,9 @@ function noop() {}
 
 function toHex(discoveryKey) {
   return b4a.toString(discoveryKey, 'hex')
+}
+
+async function resumeGroup(core, group) {
+  await core.opening
+  if (!core.header.group) await core.setGroup(group)
 }
