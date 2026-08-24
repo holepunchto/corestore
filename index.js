@@ -105,7 +105,7 @@ class CoreTracker {
     store.watchIndex = -1
   }
 
-  resume(id) {
+  resume(id, group) {
     const core = this.map.get(id)
 
     if (!core) return null
@@ -118,6 +118,8 @@ class CoreTracker {
       if (this._gcing.size === 0) this._stopGC()
       core.gc = 0
     }
+
+    if (group) resumeGroup(core, group).catch(noop)
 
     return core
   }
@@ -764,4 +766,9 @@ function noop() {}
 
 function toHex(discoveryKey) {
   return b4a.toString(discoveryKey, 'hex')
+}
+
+async function resumeGroup(core, group) {
+  await core.opening
+  if (!core.header.group) await core.setGroup(group)
 }
