@@ -105,7 +105,7 @@ class CoreTracker {
     store.watchIndex = -1
   }
 
-  resume(id, group) {
+  resume(id) {
     const core = this.map.get(id)
 
     if (!core) return null
@@ -118,8 +118,6 @@ class CoreTracker {
       if (this._gcing.size === 0) this._stopGC()
       core.gc = 0
     }
-
-    if (group) resumeGroup(core, group).catch(noop)
 
     return core
   }
@@ -582,7 +580,8 @@ class Corestore extends ReadyResource {
       wait: opts.wait !== false,
       timeout: opts.timeout || 0,
       draft: !!opts.draft,
-      writable: opts.writable === undefined && this.readOnly ? false : opts.writable
+      writable: opts.writable === undefined && this.readOnly ? false : opts.writable,
+      group: opts.group || null
     }
 
     // name requires us to rt to storage + ready, so needs preload
@@ -692,7 +691,7 @@ class Corestore extends ReadyResource {
     const auth = this._auth(discoveryKey, opts)
 
     const id = toHex(auth.discoveryKey)
-    const existing = this.cores.resume(id, auth.group)
+    const existing = this.cores.resume(id)
     if (existing && !existing.closing) return existing
 
     const core = Hypercore.createCore(this.storage, {
@@ -766,9 +765,4 @@ function noop() {}
 
 function toHex(discoveryKey) {
   return b4a.toString(discoveryKey, 'hex')
-}
-
-async function resumeGroup(core, group) {
-  await core.opening
-  if (!core.header.group) await core.setGroup(group)
 }
