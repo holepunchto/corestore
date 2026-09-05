@@ -226,6 +226,22 @@ test('notifyGroup - passed handle never attached ends early', async function (t)
   t.ok(includesKey(await toArray(handle.updates()), a.key), 'legit updates stream returns key')
 })
 
+test('notifyGroup - groups are set if a single session requests it', async function (t) {
+  const store = await create(t)
+
+  const coreA = store.get({ name: 'hello' })
+  await coreA.ready()
+
+  const coreB = store.get({ name: 'hello', group: b4a.alloc(32, 1) })
+  await coreB.ready()
+
+  t.ok(coreA.core.header.group)
+  t.ok(coreB.core.header.group)
+
+  await coreA.close()
+  await coreB.close()
+})
+
 function replicate(t, a, b) {
   const s1 = a.replicate(true)
   const s2 = b.replicate(false)
