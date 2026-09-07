@@ -65,7 +65,8 @@ class SessionTracker {
   }
 
   gc(id) {
-    this.map.delete(id)
+    const existing = this.map.get(id)
+    if (existing && existing.length === 0) this.map.delete(id)
   }
 
   list(id) {

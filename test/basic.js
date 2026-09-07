@@ -564,6 +564,31 @@ test('namespace sessions are removed from corestores set on close', async functi
   t.is(store.corestores.size, before, 'corestores set should not grow after namespaces are closed')
 })
 
+test('closing a session with its own sessions array does not gc the tracked sessions', async function (t) {
+  const store = await create(t)
+
+  const core = store.get({ name: 'test' })
+  await core.ready()
+
+  t.is(store.sessions.list(core.id).length, 1, 'sanity check: core is tracked')
+
+  // inherits ongc from the parent but has a private sessions array
+  const child = core.session({ sessions: [] })
+  await child.ready()
+
+  t.is(child.sessions.length, 1, 'child tracks itself in its own array')
+  t.is(store.sessions.list(core.id).length, 1, 'child is not in the tracked array')
+
+  await child.close()
+
+  t.is(store.sessions.size, 1, 'tracker entry still exists after child close')
+  t.is(store.sessions.list(core.id).length, 1, 'parent is still tracked after child close')
+
+  await core.close()
+
+  t.is(store.sessions.size, 0, 'tracker entry is removed when the last tracked session closes')
+})
+
 test('watchers are cleared when store is closed', async function (t) {
   const dir = await t.tmp()
   const store = new Corestore(dir)
