@@ -151,7 +151,7 @@ test('set active: false / passive corestore', async function (t) {
 
   t.is(b.replicator._attached.size, 1, 'peer open core causes it to attach')
 
-  function replicate (a, b, t) {
+  function replicate(a, b, t) {
     const s1 = a.replicate(true)
     const s2 = b.replicate(false)
 
