@@ -124,6 +124,58 @@ test('pass allowLatestBlock get option', async (t) => {
   await store.close()
 })
 
+test('set active: false / passive corestore', async function (t) {
+  const passive = new Corestore(await t.tmp(), { active: false })
+  t.teardown(() => passive.close())
+
+  // Existing core
+  const a = passive.get({ name: 'existing' })
+  t.teardown(() => a.close())
+  await a.ready()
+  await a.append('beep')
+
+  const peer = new Corestore(await t.tmp())
+  t.teardown(() => peer.close())
+
+  replicate(passive, peer, t)
+
+  t.is(a.replicator._attached.size, 0, 'existing core isnt attached')
+
+  const keyPair = crypto.keyPair()
+  const manifest = {
+    signers: [{ publicKey: keyPair.publicKey }]
+  }
+
+  const key = Hypercore.key(manifest)
+
+  // Open core that will come from peer
+  const b = passive.get({ key })
+  t.teardown(() => b.close())
+  await b.ready()
+  t.ok(b.replicator.downloading, 'new core is downloading')
+  t.is(b.replicator._attached.size, 0, 'new core not attached')
+
+  const bFromPeer = peer.get({ keyPair })
+  t.teardown(() => bFromPeer.close())
+  await bFromPeer.ready()
+
+  await new Promise(setImmediate) // let events propagate
+
+  t.is(b.replicator._attached.size, 1, 'peer open core causes it to attach')
+
+  function replicate(a, b, t) {
+    const s1 = a.replicate(true)
+    const s2 = b.replicate(false)
+
+    s1.pipe(s2).pipe(s1)
+
+    t.teardown(() => {
+      s1.destroy()
+      s2.destroy()
+    })
+  }
+})
+
 test('session pre ready', async function (t) {
   const dir = await t.tmp()
   const store = new Corestore(dir)
