@@ -1,11 +1,12 @@
 const test = require('brittle')
 const b4a = require('b4a')
+const { once } = require('events')
 const Rache = require('rache')
 const Hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
 
 const Corestore = require('../')
-const { create, toArray } = require('./helpers')
+const { create, toArray, replicate } = require('./helpers')
 
 test('basic', async function (t) {
   const store = await create(t)
@@ -112,6 +113,34 @@ test('global cache is passed down', async function (t) {
   await store.close()
 })
 
+test('pass allowLatestBlock get option', async (t) => {
+  const sourceStore = await create(t)
+
+  const coreSource = sourceStore.get({ name: 'test' })
+  t.teardown(() => coreSource.close())
+  await coreSource.ready()
+
+  await coreSource.append(Array(10).fill('a'))
+
+  const store = await create(t)
+  const core = store.get({ key: coreSource.key, allowLatestBlock: true })
+  t.teardown(() => core.close())
+  await core.ready()
+
+  t.is(core.length, 0, 'starts length = 0')
+  t.absent(await core.has(coreSource.length - 1), 'starts w/o block')
+
+  const synced = once(core, 'append')
+  replicate(core, coreSource, t)
+  await synced
+
+  const replicated = once(core, 'append')
+  await coreSource.append('b')
+  await replicated
+  t.is(core.length, coreSource.length, 'gets length of source')
+  t.ok(await core.has(coreSource.length - 1), 'starts w/o block')
+})
+
 test('set active: false / passive corestore', async function (t) {
   const passive = new Corestore(await t.tmp(), { active: false })
   t.teardown(() => passive.close())
@@ -150,18 +179,6 @@ test('set active: false / passive corestore', async function (t) {
   await new Promise(setImmediate) // let events propagate
 
   t.is(b.replicator._attached.size, 1, 'peer open core causes it to attach')
-
-  function replicate(a, b, t) {
-    const s1 = a.replicate(true)
-    const s2 = b.replicate(false)
-
-    s1.pipe(s2).pipe(s1)
-
-    t.teardown(() => {
-      s1.destroy()
-      s2.destroy()
-    })
-  }
 })
 
 test('session pre ready', async function (t) {

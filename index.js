@@ -701,6 +701,7 @@ class Corestore extends ReadyResource {
       notDownloadingLinger: opts.notDownloadingLinger,
       allowFork: opts.allowFork !== false,
       allowPush: !!opts.allowPush,
+      alwaysLatestBlock: !!opts.allowLatestBlock,
       inflightRange: opts.inflightRange,
       compat: false, // no compat for now :)
       force: opts.force,
