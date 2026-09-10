@@ -5,7 +5,7 @@ const Hypercore = require('hypercore')
 const crypto = require('hypercore-crypto')
 
 const Corestore = require('../')
-const { create, toArray } = require('./helpers')
+const { create, toArray, replicate } = require('./helpers')
 
 test('basic', async function (t) {
   const store = await create(t)
@@ -162,18 +162,6 @@ test('set active: false / passive corestore', async function (t) {
   await new Promise(setImmediate) // let events propagate
 
   t.is(b.replicator._attached.size, 1, 'peer open core causes it to attach')
-
-  function replicate(a, b, t) {
-    const s1 = a.replicate(true)
-    const s2 = b.replicate(false)
-
-    s1.pipe(s2).pipe(s1)
-
-    t.teardown(() => {
-      s1.destroy()
-      s2.destroy()
-    })
-  }
 })
 
 test('session pre ready', async function (t) {
