@@ -112,6 +112,18 @@ test('global cache is passed down', async function (t) {
   await store.close()
 })
 
+test('pass allowLatestBlock get option', async (t) => {
+  const store = await create(t)
+
+  const core = store.get({ name: 'always-latest', allowLatestBlock: true })
+  t.teardown(() => core.close())
+  await core.ready()
+
+  t.is(core.replicator._alwaysLatestBlock, 1, 'core set _alwaysLatestBlock from allowLatestBlock')
+
+  await store.close()
+})
+
 test('session pre ready', async function (t) {
   const dir = await t.tmp()
   const store = new Corestore(dir)
