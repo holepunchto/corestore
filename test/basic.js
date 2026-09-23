@@ -466,6 +466,38 @@ test('can set default manifest', async function (t) {
   await store.close()
 })
 
+test('get with manifestVersion', async function (t) {
+  const store = await create(t)
+  t.teardown(() => store.close())
+
+  const other = store.manifestVersion === 1 ? 2 : 1
+
+  const core = store.get({ name: 'test', manifestVersion: other })
+  await core.ready()
+
+  const keyPair = await store.createKeyPair('test')
+
+  t.is(core.manifest.version, other)
+  t.alike(core.key, Hypercore.key({ version: other, signers: [{ publicKey: keyPair.publicKey }] }))
+
+  const def = store.get({ name: 'default' })
+  await def.ready()
+
+  t.is(def.manifest.version, store.manifestVersion)
+
+  await core.close()
+
+  // existing alias takes precedence over manifestVersion
+  const reopened = store.get({ name: 'test', manifestVersion: store.manifestVersion })
+  await reopened.ready()
+
+  t.is(reopened.manifest.version, other)
+  t.alike(reopened.key, core.key)
+
+  await reopened.close()
+  await def.close()
+})
+
 test('list stream', async function (t) {
   const store = await create(t)
   const namespace = store.namespace('test')
