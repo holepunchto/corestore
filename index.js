@@ -667,7 +667,7 @@ class Corestore extends ReadyResource {
       result.manifest = opts.manifest
     } else if (result.keyPair && !result.discoveryKey) {
       result.manifest = {
-        version: this.manifestVersion,
+        version: opts.manifestVersion || this.manifestVersion,
         signers: [{ publicKey: result.keyPair.publicKey }]
       }
     }
