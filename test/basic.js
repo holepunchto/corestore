@@ -637,7 +637,7 @@ test('open pushOnly', async function (t) {
   t.ok(on.replicator.pushOnly)
 })
 
-test.solo('enable alwaysLatestBlock', async function (t) {
+test('enable alwaysLatestBlock', async function (t) {
   const dir = await t.tmp()
 
   const store = new Corestore(dir, { alwaysLatestBlock: true })
