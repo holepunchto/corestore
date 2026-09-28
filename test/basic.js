@@ -638,28 +638,66 @@ test('open pushOnly', async function (t) {
 })
 
 test('enable alwaysLatestBlock', async function (t) {
+  const sourceStore = await create(t)
+
+  const coreSource = sourceStore.get({ name: 'test' })
+  t.teardown(() => coreSource.close())
+  await coreSource.ready()
+
+  const coreSource2 = sourceStore.get({ name: 'test2' })
+  t.teardown(() => coreSource.close())
+  await coreSource2.ready()
+
+  await coreSource.append(b4a.from('block0'))
+  await coreSource.append(b4a.from('block1'))
+  await coreSource2.append(b4a.from('block0'))
+  await coreSource2.append(b4a.from('block1'))
+
   const dir = await t.tmp()
 
   const store = new Corestore(dir, { alwaysLatestBlock: true })
   await store.ready()
 
-  const core = store.get({ name: 'core' })
+  const core = store.get(coreSource.key)
   await core.ready()
-  t.is(core.replicator._alwaysLatestBlock, 1)
 
-  const core2 = store.get({ name: 'core2', allowLatestBlock: false })
+  {
+    const synced = once(core, 'append')
+    replicate(core, coreSource, t)
+    await synced
+  }
+  {
+    const synced = once(core, 'append')
+    await coreSource.append(b4a.from('block2'))
+    await synced
+    t.is(core.length, 3, 'sanity check')
+    t.ok(await core.has(2), 'got block')
+    t.not(await core.has(1), 'did not get other block')
+  }
+
+  const core2 = store.get(coreSource2.key, { allowLatestBlock: false })
   await core2.ready()
-  t.is(core2.replicator._alwaysLatestBlock, 0, 'can override')
+
+  {
+    const synced = once(core2, 'append')
+    replicate(core2, coreSource2, t)
+    await synced
+  }
+  {
+    const synced = once(core2, 'append')
+    await coreSource2.append(b4a.from('block2'))
+    await synced
+    t.is(core2.length, 3, 'sanity check')
+    t.ok(await core2.has(2), 'did not got block')
+  }
+
+  const session = store.session()
+  t.is(session.alwaysLatestBlock, true, 'passed to session')
 
   await store.close()
 
   const store2 = new Corestore(dir)
   t.is(store2.alwaysLatestBlock, false, 'default false')
-
-  const core3 = store2.get({ name: 'core3' })
-  await core3.ready()
-  t.is(core3.replicator._alwaysLatestBlock, 0, 'sanity check')
-
   await store2.close()
 })
 

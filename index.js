@@ -258,7 +258,9 @@ class Corestore extends ReadyResource {
     this.manifestVersion = opts.manifestVersion || 1
     this.shouldSuspend = isAndroid ? !!opts.suspend : opts.suspend !== false
     this.active = opts.active !== false
-    this.alwaysLatestBlock = opts.alwaysLatestBlock === true
+    this.alwaysLatestBlock = this.root
+      ? this.root.alwaysLatestBlock
+      : opts.alwaysLatestBlock === true
     this.watchers = null
     this.watchIndex = -1
 
