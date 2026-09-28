@@ -694,7 +694,7 @@ test('enable alwaysLatestBlock', async function (t) {
   const session = store.session()
   t.is(session.alwaysLatestBlock, true, 'passed to session')
 
-  const ns = store.session()
+  const ns = store.namespace('ns')
   t.is(ns.alwaysLatestBlock, true, 'passed to namespace')
 
   await store.close()
