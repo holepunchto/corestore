@@ -637,6 +637,32 @@ test('open pushOnly', async function (t) {
   t.ok(on.replicator.pushOnly)
 })
 
+test.solo('enable alwaysLatestBlock', async function (t) {
+  const dir = await t.tmp()
+
+  const store = new Corestore(dir, { alwaysLatestBlock: true })
+  await store.ready()
+
+  const core = store.get({ name: 'core' })
+  await core.ready()
+  t.is(core.replicator._alwaysLatestBlock, 1)
+
+  const core2 = store.get({ name: 'core2', allowLatestBlock: false })
+  await core2.ready()
+  t.is(core2.replicator._alwaysLatestBlock, 0, 'can override')
+
+  await store.close()
+
+  const store2 = new Corestore(dir)
+  t.is(store2.alwaysLatestBlock, false, 'default false')
+
+  const core3 = store2.get({ name: 'core3' })
+  await core3.ready()
+  t.is(core3.replicator._alwaysLatestBlock, 0, 'sanity check')
+
+  await store2.close()
+})
+
 test('corestores set does not grow when sessions are closed', async function (t) {
   const store = await create(t)
 

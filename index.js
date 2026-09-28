@@ -258,7 +258,7 @@ class Corestore extends ReadyResource {
     this.manifestVersion = opts.manifestVersion || 1
     this.shouldSuspend = isAndroid ? !!opts.suspend : opts.suspend !== false
     this.active = opts.active !== false
-
+    this.alwaysLatestBlock = opts.alwaysLatestBlock === true
     this.watchers = null
     this.watchIndex = -1
 
@@ -701,7 +701,7 @@ class Corestore extends ReadyResource {
       notDownloadingLinger: opts.notDownloadingLinger,
       allowFork: opts.allowFork !== false,
       allowPush: !!opts.allowPush,
-      alwaysLatestBlock: !!opts.allowLatestBlock,
+      alwaysLatestBlock: opts.allowLatestBlock ?? this.alwaysLatestBlock,
       inflightRange: opts.inflightRange,
       compat: false, // no compat for now :)
       force: opts.force,
