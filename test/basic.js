@@ -694,6 +694,9 @@ test('enable alwaysLatestBlock', async function (t) {
   const session = store.session()
   t.is(session.alwaysLatestBlock, true, 'passed to session')
 
+  const ns = store.session()
+  t.is(ns.alwaysLatestBlock, true, 'passed to namespace')
+
   await store.close()
 
   const store2 = new Corestore(dir)
