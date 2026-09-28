@@ -637,6 +637,73 @@ test('open pushOnly', async function (t) {
   t.ok(on.replicator.pushOnly)
 })
 
+test('enable alwaysLatestBlock', async function (t) {
+  const sourceStore = await create(t)
+
+  const coreSource = sourceStore.get({ name: 'test' })
+  t.teardown(() => coreSource.close())
+  await coreSource.ready()
+
+  const coreSource2 = sourceStore.get({ name: 'test2' })
+  t.teardown(() => coreSource.close())
+  await coreSource2.ready()
+
+  await coreSource.append(b4a.from('block0'))
+  await coreSource.append(b4a.from('block1'))
+  await coreSource2.append(b4a.from('block0'))
+  await coreSource2.append(b4a.from('block1'))
+
+  const dir = await t.tmp()
+
+  const store = new Corestore(dir, { alwaysLatestBlock: true })
+  await store.ready()
+
+  const core = store.get(coreSource.key)
+  await core.ready()
+
+  {
+    const synced = once(core, 'append')
+    replicate(core, coreSource, t)
+    await synced
+  }
+  {
+    const synced = once(core, 'append')
+    await coreSource.append(b4a.from('block2'))
+    await synced
+    t.is(core.length, 3, 'sanity check')
+    t.ok(await core.has(2), 'got block')
+    t.not(await core.has(1), 'did not get other block')
+  }
+
+  const core2 = store.get(coreSource2.key, { allowLatestBlock: false })
+  await core2.ready()
+
+  {
+    const synced = once(core2, 'append')
+    replicate(core2, coreSource2, t)
+    await synced
+  }
+  {
+    const synced = once(core2, 'append')
+    await coreSource2.append(b4a.from('block2'))
+    await synced
+    t.is(core2.length, 3, 'sanity check')
+    t.ok(await core2.has(2), 'did not got block')
+  }
+
+  const session = store.session()
+  t.is(session.alwaysLatestBlock, true, 'passed to session')
+
+  const ns = store.namespace('ns')
+  t.is(ns.alwaysLatestBlock, true, 'passed to namespace')
+
+  await store.close()
+
+  const store2 = new Corestore(dir)
+  t.is(store2.alwaysLatestBlock, false, 'default false')
+  await store2.close()
+})
+
 test('corestores set does not grow when sessions are closed', async function (t) {
   const store = await create(t)
 
