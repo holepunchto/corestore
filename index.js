@@ -385,6 +385,47 @@ class Corestore extends ReadyResource {
     return this.storage.getAuth(discoveryKey)
   }
 
+  async purge(keys, { force = false } = {}) {
+    if (this.opened === false) await this.ready()
+
+    const purged = []
+
+    for (const entry of Array.isArray(keys) ? keys : [keys]) {
+      this._maybeClosed()
+
+      const discoveryKey = await this._purgeCore(toDiscoveryKey(entry), force)
+      if (discoveryKey !== null) purged.push(discoveryKey)
+    }
+
+    return purged
+  }
+
+  async _purgeCore(discoveryKey, force) {
+    if (!(await this.storage.hasCore(discoveryKey))) return null
+
+    const session = this.get({ discoveryKey, active: false })
+    await session.ready()
+
+    const core = session.core
+    const storage = core.state.storage
+    const record = storage.core
+
+    await session.close()
+
+    if (core.hasSession()) {
+      if (!force) return null
+      await core.closeAllSessions(null)
+    }
+
+    this.cores.resume(toHex(discoveryKey))
+    await core.close()
+    this.cores._gc(core)
+
+    await storage.store.deleteCore(record)
+
+    return discoveryKey
+  }
+
   _ongc(session) {
     if (session.sessions.length === 0) this.sessions.gc(session.id)
   }
@@ -767,4 +808,10 @@ function noop() {}
 
 function toHex(discoveryKey) {
   return b4a.toString(discoveryKey, 'hex')
+}
+
+function toDiscoveryKey(entry) {
+  if (b4a.isBuffer(entry) || typeof entry === 'string') return crypto.discoveryKey(ID.decode(entry))
+  if (entry.discoveryKey) return ID.decode(entry.discoveryKey)
+  return crypto.discoveryKey(ID.decode(entry.key))
 }
