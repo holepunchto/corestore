@@ -654,7 +654,7 @@ class Corestore extends ReadyResource {
     if (await this.storage.hasCore(discoveryKey)) return discoveryKey
 
     // the core was deleted underneath the alias, drop it so the name mints fresh
-    await this.storage.deleteAlias(alias)
+    await this.storage.deleteAlias(alias, discoveryKey)
     return null
   }
 
