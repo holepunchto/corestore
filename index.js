@@ -407,21 +407,16 @@ class Corestore extends ReadyResource {
     await session.ready()
 
     const core = session.core
-    const storage = core.state.storage
-    const record = storage.core
 
-    await session.close()
-
-    if (core.hasSession()) {
-      if (!force) return null
-      await core.closeAllSessions(null)
+    // our own session is counted too
+    if (!force && core.activeSessions > 1) {
+      await session.close()
+      return null
     }
 
     this.cores.resume(toHex(discoveryKey))
-    await core.close()
+    await session.purge()
     this.cores._gc(core)
-
-    await storage.store.deleteCore(record)
 
     return discoveryKey
   }
