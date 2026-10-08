@@ -794,3 +794,42 @@ test('findingPeers pending callbacks are drained on store close', async function
   done() // dbl check what happens if user calls this also
   t.pass('no crash when awaiting done() after the underlying store closed')
 })
+
+test.solo('closing a session closes its replication channel', async function (t) {
+  const a = await create(t)
+  const b = await create(t)
+
+  const writer = a.session()
+  const source = writer.get({ name: 'source' })
+  await source.ready()
+  await source.append('a')
+
+  const reader = b.session()
+  const clone = reader.get(source.key)
+  await clone.ready()
+
+  const s1 = a.replicate(true)
+  const s2 = b.replicate(false)
+  s1.pipe(s2).pipe(s1)
+
+  t.teardown(() => {
+    s1.destroy()
+    s2.destroy()
+  })
+
+  await clone.get(0)
+
+  const mux1 = Hypercore.getProtocolMuxer(s1)
+  const mux2 = Hypercore.getProtocolMuxer(s2)
+
+  t.is(mux1.isIdle(), false)
+  t.is(mux2.isIdle(), false)
+
+  await reader.close()
+
+  // grace lingering
+  await new Promise((resolve) => setTimeout(resolve, 29000))
+
+  t.is(mux1.isIdle(), true)
+  t.is(mux2.isIdle(), true)
+})
