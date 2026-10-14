@@ -653,9 +653,7 @@ class Corestore extends ReadyResource {
     if (this.cores.get(toHex(discoveryKey)) !== null) return discoveryKey
     if (await this.storage.hasCore(discoveryKey)) return discoveryKey
 
-    // the core was deleted underneath the alias, drop it so the name mints fresh
-    await this.storage.deleteAlias(alias, discoveryKey)
-    return null
+    throw STORAGE_EMPTY('Alias ' + name + ' points at a core that no longer exists', discoveryKey)
   }
 
   _auth(discoveryKey, opts) {
