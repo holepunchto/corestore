@@ -403,13 +403,13 @@ class Corestore extends ReadyResource {
   async _purgeCore(discoveryKey, force) {
     if (!(await this.storage.hasCore(discoveryKey))) return null
 
-    const session = this.get({ discoveryKey, active: false })
+    const session = this.get({ discoveryKey, active: false, weak: true })
     await session.ready()
 
     const core = session.core
 
     // our own session is counted too
-    if (!force && core.activeSessions > 1) {
+    if (!force && core.activeSessions > 0) {
       await session.close()
       return null
     }
@@ -615,6 +615,7 @@ class Corestore extends ReadyResource {
       onwait: opts.onwait || null,
       pushOnly: opts.pushOnly === true,
       wait: opts.wait !== false,
+      weak: !!opts.weak,
       timeout: opts.timeout || 0,
       draft: !!opts.draft,
       writable: opts.writable === undefined && this.readOnly ? false : opts.writable,
