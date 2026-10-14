@@ -98,7 +98,9 @@ test('purge - two concurrent purge() calls on the same key do not falsely skip e
 
       if (!pending) {
         let release
-        const promise = new Promise((resolve) => { release = resolve })
+        const promise = new Promise((resolve) => {
+          release = resolve
+        })
         pending = { promise, release }
         await pending.promise
       } else {
@@ -124,7 +126,11 @@ test('purge - two concurrent purge() calls on the same key do not falsely skip e
   gated = false
 
   t.is(a.length, 1, 'the first concurrent call purges the core')
-  t.is(b.length, 1, 'the second concurrent call purges the core too, instead of seeing the first as a busy session')
+  t.is(
+    b.length,
+    1,
+    'the second concurrent call purges the core too, instead of seeing the first as a busy session'
+  )
   t.is(await store.storage.hasCore(dk), false)
 })
 
