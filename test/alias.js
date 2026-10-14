@@ -37,3 +37,51 @@ test('alias - a dangling alias fails the open instead of resolving to nothing', 
 
   await store.close()
 })
+
+// a dangling row as left behind by storages that deleted cores without their alias
+function injectDanglingAlias(store, name) {
+  const discoveryKey = crypto.discoveryKey(crypto.keyPair().publicKey)
+  const createAliasStream = store.storage.createAliasStream.bind(store.storage)
+  store.storage.createAliasStream = async function* (namespace) {
+    yield* createAliasStream(namespace)
+    yield { alias: { name, namespace: store.ns }, discoveryKey }
+  }
+  return discoveryKey
+}
+
+test('alias - audit reports every alias and flags the dangling ones', async function (t) {
+  const store = await create(t)
+
+  const fine = store.get({ name: 'fine' })
+  await fine.append('ok')
+  await fine.close()
+
+  injectDanglingAlias(store, 'ghost')
+  const deleted = []
+  store.storage.deleteAlias = (alias) => {
+    deleted.push(alias.name)
+    return Promise.resolve(true)
+  }
+
+  const seen = []
+  for await (const entry of store.audit({ dryRun: true })) {
+    if (entry.alias) seen.push([entry.alias.name, entry.dangling, entry.pruned])
+  }
+  t.alike(seen, [
+    ['fine', false, false],
+    ['ghost', true, false]
+  ])
+  t.alike(deleted, [], 'a dry run prunes nothing')
+
+  const pruned = []
+  for await (const entry of store.audit()) {
+    if (entry.alias) pruned.push([entry.alias.name, entry.dangling, entry.pruned])
+  }
+  t.alike(pruned, [
+    ['fine', false, false],
+    ['ghost', true, true]
+  ])
+  t.alike(deleted, ['ghost'], 'the dangling alias is pruned')
+
+  await store.close()
+})
