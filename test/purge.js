@@ -1,6 +1,7 @@
 const test = require('brittle')
 const b4a = require('b4a')
 const crypto = require('hypercore-crypto')
+const CorestoreStorage = require('hypercore-storage')
 
 const Corestore = require('../')
 const { create } = require('./helpers')
@@ -80,6 +81,51 @@ test('purge - a core with open sessions is skipped unless forced', async functio
   t.alike(await store.purge(key, { force: true }), [dk], 'forced')
   t.is(await store.storage.hasCore(dk), false)
   t.is(core.closed, true, 'the open session was closed by the forced purge')
+})
+
+test('purge - two concurrent purge() calls on the same key do not falsely skip each other', async function (t) {
+  const dir = await t.tmp()
+
+  // _purgeCore opens its own internal session on the core to decide whether
+  // it's safe to purge. GatedStorage is to control when that happens to show edgecase timing
+  let pending = null
+  let gated = false
+
+  class GatedStorage extends CorestoreStorage {
+    async hasCore(discoveryKey, opts) {
+      const result = await super.hasCore(discoveryKey, opts)
+      if (!gated) return result
+
+      if (!pending) {
+        let release
+        const promise = new Promise((resolve) => { release = resolve })
+        pending = { promise, release }
+        await pending.promise
+      } else {
+        pending.release()
+        pending = null
+      }
+
+      return result
+    }
+  }
+
+  const store = new Corestore(new GatedStorage(dir))
+  t.teardown(() => store.close())
+
+  const core = store.get({ name: 'race' })
+  await core.append('data')
+  const key = core.key
+  const dk = core.discoveryKey
+  await core.close()
+
+  gated = true
+  const [a, b] = await Promise.all([store.purge(key), store.purge(key)])
+  gated = false
+
+  t.is(a.length, 1, 'the first concurrent call purges the core')
+  t.is(b.length, 1, 'the second concurrent call purges the core too, instead of seeing the first as a busy session')
+  t.is(await store.storage.hasCore(dk), false)
 })
 
 test('purge - sessions on a namespace of the same root are closed too', async function (t) {
