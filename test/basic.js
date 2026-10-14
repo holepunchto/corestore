@@ -27,6 +27,17 @@ test('basic', async function (t) {
   await core2.close()
 })
 
+test('user data is forwarded to the session', async function (t) {
+  const store = await create(t)
+
+  const core = store.get({ name: 'test', userData: { referrer: b4a.from('hello') } })
+  await core.ready()
+
+  t.alike(await core.getUserData('referrer'), b4a.from('hello'))
+
+  await core.close()
+})
+
 test('basic non parallel', async function (t) {
   const store = await create(t)
 
