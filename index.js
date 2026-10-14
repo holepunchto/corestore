@@ -584,7 +584,8 @@ class Corestore extends ReadyResource {
       timeout: opts.timeout || 0,
       draft: !!opts.draft,
       writable: opts.writable === undefined && this.readOnly ? false : opts.writable,
-      group: opts.group || null
+      group: opts.group || null,
+      userData: opts.userData || null
     }
 
     // name requires us to rt to storage + ready, so needs preload
