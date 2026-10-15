@@ -670,9 +670,7 @@ class Corestore extends ReadyResource {
     if (opts.preload) opts = { ...opts, ...(await opts.preload) }
     if (this.opened === false) await this.ready()
 
-    const discoveryKey = opts.name
-      ? await this.storage.getAlias({ name: opts.name, namespace: this.ns })
-      : null
+    const discoveryKey = opts.name ? await this._getAlias(opts.name) : null
     this._maybeClosed()
 
     const core = this._openCore(discoveryKey, opts)
@@ -686,6 +684,16 @@ class Corestore extends ReadyResource {
       encryptionKey: opts.encryptionKey || null, // back compat, should remove
       isBlockKey: !!opts.isBlockKey // back compat, should remove
     }
+  }
+
+  async _getAlias(name) {
+    const alias = { name, namespace: this.ns }
+    const discoveryKey = await this.storage.getAlias(alias)
+    if (discoveryKey === null) return null
+    if (this.cores.get(toHex(discoveryKey)) !== null) return discoveryKey
+    if (await this.storage.hasCore(discoveryKey)) return discoveryKey
+
+    throw STORAGE_EMPTY('Alias ' + name + ' points at a core that no longer exists', discoveryKey)
   }
 
   _auth(discoveryKey, opts) {
