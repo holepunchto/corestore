@@ -551,7 +551,7 @@ class Corestore extends ReadyResource {
     }
   }
 
-  async staticify(core, opts) {
+  async staticify(core, { manifest: extra = null, ...opts } = {}) {
     if (!this.opened) await this.ready()
     if (!core.opened) await core.ready()
 
@@ -575,7 +575,8 @@ class Corestore extends ReadyResource {
       hash: auth.manifest.hash,
       quorum: 0,
       signers: [],
-      prologue
+      prologue,
+      ...extra
     }
 
     const c = {
