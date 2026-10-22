@@ -737,7 +737,14 @@ class Corestore extends ReadyResource {
 
     const id = toHex(auth.discoveryKey)
     const existing = this.cores.resume(id)
-    if (existing && !existing.closing) return existing
+    if (existing && !existing.closing) {
+      // might have been opened by discovery key only
+      if (existing.key === null && auth.key !== null) {
+        existing.key = auth.key
+        existing.id = ID.encode(auth.key)
+      }
+      return existing
+    }
 
     const core = Hypercore.createCore(this.storage, {
       preopen: existing && existing.opened ? existing.closing : null, // always wait for the prev one to close first in any case...
