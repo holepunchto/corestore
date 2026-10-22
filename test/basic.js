@@ -805,3 +805,39 @@ test('findingPeers pending callbacks are drained on store close', async function
   done() // dbl check what happens if user calls this also
   t.pass('no crash when awaiting done() after the underlying store closed')
 })
+
+test('staticify takes manifest fields', async function (t) {
+  const store = await create(t)
+
+  const core = store.get({ name: 'source' })
+  await core.append(['a', 'b', 'c'])
+
+  const userData = b4a.from('mapped from somewhere')
+
+  const plain = await store.staticify(core)
+  const extended = await store.staticify(core, { manifest: { version: 2, userData } })
+
+  t.is(plain.manifest.version, 1, 'defaults are kept without manifest fields')
+  t.is(plain.manifest.userData, null)
+
+  t.is(extended.manifest.version, 2, 'the version is taken from the fields')
+  t.alike(extended.manifest.userData, userData, 'and the user data')
+  t.is(extended.manifest.prologue.length, core.length, 'the prologue still covers the source')
+  t.alike(extended.key, Hypercore.key(extended.manifest), 'the key is the key of that manifest')
+  t.unlike(extended.key, plain.key, 'which differs from the default one')
+
+  t.is(extended.length, core.length)
+  for (let i = 0; i < core.length; i++) {
+    t.alike(await extended.get(i), await core.get(i), 'block ' + i + ' is the source block')
+  }
+  t.absent(extended.writable, 'the copy is static')
+
+  const reopened = store.get({ key: extended.key })
+  await reopened.ready()
+  t.alike(reopened.manifest.userData, userData, 'reopened by key it has the same manifest')
+  await reopened.close()
+
+  await plain.close()
+  await extended.close()
+  await core.close()
+})

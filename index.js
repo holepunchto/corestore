@@ -551,7 +551,7 @@ class Corestore extends ReadyResource {
     }
   }
 
-  async staticify(core, opts) {
+  async staticify(core, opts = {}) {
     if (!this.opened) await this.ready()
     if (!core.opened) await core.ready()
 
@@ -575,7 +575,8 @@ class Corestore extends ReadyResource {
       hash: auth.manifest.hash,
       quorum: 0,
       signers: [],
-      prologue
+      prologue,
+      ...opts.manifest
     }
 
     const c = {
@@ -590,7 +591,10 @@ class Corestore extends ReadyResource {
 
     await this.storage.createCore(c)
 
-    const staticCore = this.get({ ...opts, key: c.key })
+    // key, name collide with manifest
+    const { key, name, ...rest } = opts
+
+    const staticCore = this.get({ ...rest, manifest })
     await staticCore.ready()
     return staticCore
   }
