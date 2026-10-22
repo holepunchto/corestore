@@ -7,6 +7,7 @@ async function runTests() {
 
   test.pause()
 
+  await import('./alias.js')
   await import('./basic.js')
   await import('./groups.js')
   await import('./notify.js')
