@@ -841,3 +841,29 @@ test('staticify takes manifest fields', async function (t) {
   await extended.close()
   await core.close()
 })
+
+test('get by key after core was opened by discovery key exposes the key sync', async function (t) {
+  const dir = await t.tmp()
+
+  let store = new Corestore(dir)
+  const core = store.get({ name: 'test' })
+  await core.append('hello')
+  const key = core.key
+  const discoveryKey = core.discoveryKey
+  await store.close()
+
+  store = new Corestore(dir)
+  t.teardown(() => store.close())
+  await store.ready()
+
+  // simulates a peer announcing the core during replication
+  store._openCore(discoveryKey, { createIfMissing: false })
+
+  const session = store.get({ key })
+  t.alike(session.key, key, 'key is known before the session is ready')
+  t.is(session.id, core.id, 'id is known before the session is ready')
+
+  await session.ready()
+  t.alike(session.key, key, 'key is still correct after ready')
+  t.is(session.length, 1)
+})
