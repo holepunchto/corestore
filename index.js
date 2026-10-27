@@ -497,7 +497,15 @@ class Corestore extends ReadyResource {
     const core = this._openCore(discoveryKey, { createIfMissing: false })
 
     if (!core) return
-    if (!core.opened) await core.ready()
+    if (!core.opened) {
+      try {
+        await core.ready()
+      } catch {
+        // a purge can delete the core after the hasCore check, and a failed core left tracked fails close
+        this.cores._gc(core)
+        return
+      }
+    }
 
     if (!core.replicator.attached(muxer)) {
       core.replicator.attachTo(muxer)
