@@ -254,9 +254,12 @@ function replicate(t, a, b) {
   t.teardown(async () => {
     s1.destroy()
     s2.destroy()
-    await Promise.all([
-      new Promise((resolve) => s1.once('close', resolve)),
-      new Promise((resolve) => s2.once('close', resolve))
-    ])
+    // closing a store destroys its streams, so they might be closed already
+    await Promise.all([onclose(s1), onclose(s2)])
   })
+}
+
+function onclose(stream) {
+  if (stream.destroyed) return Promise.resolve()
+  return new Promise((resolve) => stream.once('close', resolve))
 }

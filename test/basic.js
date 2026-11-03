@@ -867,3 +867,22 @@ test('get by key after core was opened by discovery key exposes the key sync', a
   t.alike(session.key, key, 'key is still correct after ready')
   t.is(session.length, 1)
 })
+
+test('closing the store destroys the replication streams it created', async function (t) {
+  const a = new Corestore(await t.tmp())
+  const b = new Corestore(await t.tmp())
+  t.teardown(() => b.close())
+
+  const s1 = a.replicate(true)
+  const s2 = b.replicate(false)
+  s1.pipe(s2).pipe(s1)
+  t.teardown(() => s2.destroy())
+
+  const closed = once(s1, 'close')
+
+  await a.close()
+  await closed
+
+  t.ok(s1.destroyed, 'internal stream is destroyed')
+  t.is(a.streamTracker.records.length, 0, 'stream is untracked')
+})

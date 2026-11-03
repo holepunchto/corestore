@@ -480,6 +480,8 @@ class Corestore extends ReadyResource {
 
     await Promise.all(closing)
 
+    this.streamTracker.destroy()
+
     await this.cores.close()
     await this.storage.close()
   }
