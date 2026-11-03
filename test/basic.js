@@ -749,19 +749,23 @@ test('closing a session with its own sessions array does not gc the tracked sess
   const core = store.get({ name: 'test' })
   await core.ready()
 
-  t.is(store.sessions.list(core.id).length, 1, 'sanity check: core is tracked')
+  t.is(store.sessions.list(toHex(core.discoveryKey)).length, 1, 'sanity check: core is tracked')
 
   // inherits ongc from the parent but has a private sessions array
   const child = core.session({ sessions: [] })
   await child.ready()
 
   t.is(child.sessions.length, 1, 'child tracks itself in its own array')
-  t.is(store.sessions.list(core.id).length, 1, 'child is not in the tracked array')
+  t.is(store.sessions.list(toHex(core.discoveryKey)).length, 1, 'child is not in the tracked array')
 
   await child.close()
 
   t.is(store.sessions.size, 1, 'tracker entry still exists after child close')
-  t.is(store.sessions.list(core.id).length, 1, 'parent is still tracked after child close')
+  t.is(
+    store.sessions.list(toHex(core.discoveryKey)).length,
+    1,
+    'parent is still tracked after child close'
+  )
 
   await core.close()
 
@@ -867,3 +871,32 @@ test('get by key after core was opened by discovery key exposes the key sync', a
   t.alike(session.key, key, 'key is still correct after ready')
   t.is(session.length, 1)
 })
+
+test('sessions of a core reopened by name are tracked and gc-ed', async function (t) {
+  const dir = await t.tmp()
+
+  let store = new Corestore(dir)
+  const core = store.get({ name: 'test' })
+  await core.append('hello')
+  await store.close()
+
+  store = new Corestore(dir)
+  t.teardown(() => store.close())
+
+  const a = store.get({ name: 'test' })
+  const b = store.get({ name: 'test' })
+  await a.ready()
+  await b.ready()
+
+  t.is(store.sessions.size, 1, 'one tracker entry for the core')
+  t.is(store.sessions.list(toHex(a.discoveryKey)).length, 2, 'both sessions are tracked')
+
+  await a.close()
+  await b.close()
+
+  t.is(store.sessions.size, 0, 'tracker entry is removed when the last session closes')
+})
+
+function toHex(buf) {
+  return b4a.toString(buf, 'hex')
+}
