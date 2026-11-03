@@ -11,11 +11,11 @@ test('core tracker - matches a map under random set, replace and gc', async func
   const tracker = new CoreTracker()
   const expected = new Map()
 
-  // half the keys share their first 4 bytes, so they land in one probe chain
+  // half the keys share their first 8 bytes, so they land in one probe chain
   const keys = []
   for (let i = 0; i < 400; i++) {
     const discoveryKey = crypto.randomBytes(32)
-    if (i % 2 === 0) discoveryKey.fill(7, 0, 4)
+    if (i % 2 === 0) discoveryKey.fill(7, 0, 8)
     keys.push(discoveryKey)
   }
 
