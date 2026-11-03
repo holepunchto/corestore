@@ -743,6 +743,13 @@ class Corestore extends ReadyResource {
         existing.key = auth.key
         existing.id = ID.encode(auth.key)
       }
+      // might have been opened by a passive store only
+      if (this.active && !existing.storeActive) {
+        existing.storeActive = true
+        if (existing.opened && existing.replicator.downloading) {
+          this.streamTracker.attachAll(existing)
+        }
+      }
       return existing
     }
 
@@ -774,8 +781,11 @@ class Corestore extends ReadyResource {
 
     core.ongroupupdate = this._onGroupActiveBound
 
+    // shared by every store that opens the core, so any active one turns it on
+    core.storeActive = this.active
+
     core.replicator.ondownloading = () => {
-      if (this.active) this.streamTracker.attachAll(core)
+      if (core.storeActive) this.streamTracker.attachAll(core)
     }
 
     this.cores.set(id, core)

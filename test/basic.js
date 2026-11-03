@@ -867,3 +867,24 @@ test('get by key after core was opened by discovery key exposes the key sync', a
   t.alike(session.key, key, 'key is still correct after ready')
   t.is(session.length, 1)
 })
+
+test('active store attaches a core first opened by a passive session', async function (t) {
+  const src = new Corestore(await t.tmp(), { active: false })
+  t.teardown(() => src.close())
+
+  const core = src.get({ name: 'core' })
+  await core.append('hello')
+
+  const store = await create(t)
+  replicate(src, store, t)
+
+  const passive = store.session({ active: false })
+  const a = passive.get({ key: core.key })
+  t.teardown(() => a.close())
+  await a.ready()
+
+  const b = store.get({ key: core.key })
+  t.teardown(() => b.close())
+
+  t.alike(await b.get(0, { timeout: 2000 }), b4a.from('hello'))
+})
