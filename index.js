@@ -80,7 +80,7 @@ class SessionTracker {
   }
 }
 
-// open addressing over the discovery key, slot = tag << 24 | (index + 1), 0 is empty
+// open addressing into CoreTracker.cores, slot = tag << 24 | (index + 1), 0 is empty
 const SLOT_INDEX_MASK = 0xffffff
 const SLOT_TAG_SHIFT = 24
 
@@ -88,10 +88,80 @@ const HASH_SEED = crypto.randomBytes(8)
 const HASH_SEED_A = readWord(HASH_SEED, 0)
 const HASH_SEED_B = readWord(HASH_SEED, 4)
 
+class SlotIndex {
+  constructor(cores, byKey) {
+    this.cores = cores
+    this.byKey = byKey // by key or by discovery key, both are uniform 32 byte ids
+    this.slots = new Uint32Array(64)
+  }
+
+  // two static loads instead of core[field], which deopts the hot lookup
+  _id(core) {
+    return this.byKey ? core.key : core.discoveryKey
+  }
+
+  find(id) {
+    const h = hashId(id)
+    const tag = h >>> SLOT_TAG_SHIFT
+    const mask = this.slots.length - 1
+
+    for (let i = h & mask; ; i = (i + 1) & mask) {
+      const slot = this.slots[i]
+      if (slot === 0) return -1
+      if (slot >>> SLOT_TAG_SHIFT !== tag) continue
+      if (b4a.equals(this._id(this.cores[(slot & SLOT_INDEX_MASK) - 1]), id)) return i
+    }
+  }
+
+  get(id) {
+    const i = this.find(id)
+    return i === -1 ? null : this.cores[(this.slots[i] & SLOT_INDEX_MASK) - 1]
+  }
+
+  insert(core) {
+    const h = hashId(this._id(core))
+    const mask = this.slots.length - 1
+    let i = h & mask
+    while (this.slots[i] !== 0) i = (i + 1) & mask
+    this.slots[i] = ((h >>> SLOT_TAG_SHIFT) << SLOT_TAG_SHIFT) | (core.trackerIndex + 1)
+  }
+
+  remove(core) {
+    const slots = this.slots
+    const mask = slots.length - 1
+
+    let hole = this.find(this._id(core))
+    if (hole === -1) return
+
+    // backward shift deletion, keeps probe chains intact without tombstones
+    for (let i = (hole + 1) & mask; slots[i] !== 0; i = (i + 1) & mask) {
+      const other = this.cores[(slots[i] & SLOT_INDEX_MASK) - 1]
+      const home = hashId(this._id(other)) & mask
+      if (((i - home) & mask) < ((i - hole) & mask)) continue
+      slots[hole] = slots[i]
+      hole = i
+    }
+    slots[hole] = 0
+  }
+
+  repoint(core, index) {
+    const i = this.find(this._id(core))
+    if (i !== -1) this.slots[i] = (this.slots[i] & ~SLOT_INDEX_MASK) | (index + 1)
+  }
+
+  rebuild(capacity) {
+    this.slots = new Uint32Array(capacity)
+    for (const core of this.cores) {
+      if (this._id(core) !== null) this.insert(core)
+    }
+  }
+}
+
 class CoreTracker {
   constructor() {
     this.cores = [] // dense, swap removed, core.trackerIndex points back
-    this.slots = new Uint32Array(64)
+    this.byDiscoveryKey = new SlotIndex(this.cores, false)
+    this.byKey = new SlotIndex(this.cores, true) // cores whose key is known
     this.watching = []
 
     this._gcing = new Set()
@@ -116,8 +186,14 @@ class CoreTracker {
   }
 
   resume(discoveryKey) {
-    const core = this._lookup(discoveryKey)
+    return this._resume(this.byDiscoveryKey.get(discoveryKey))
+  }
 
+  resumeByKey(key) {
+    return this._resume(this.byKey.get(key))
+  }
+
+  _resume(core) {
     if (!core) return null
 
     // signal back that we have a closing one stored
@@ -133,82 +209,53 @@ class CoreTracker {
   }
 
   opened(discoveryKey) {
-    const core = this._lookup(discoveryKey)
+    const core = this.byDiscoveryKey.get(discoveryKey)
     return !!(core && core.opened && !core.closing)
   }
 
   get(discoveryKey) {
     // we allow you do call this from the outside, so support hex strings also
     if (typeof discoveryKey === 'string') discoveryKey = b4a.from(discoveryKey, 'hex')
-    const core = this._lookup(discoveryKey)
+    const core = this.byDiscoveryKey.get(discoveryKey)
     if (!core || core.closing) return null
     return core
   }
 
   set(core) {
-    const slot = this._find(core.discoveryKey)
+    const slot = this.byDiscoveryKey.find(core.discoveryKey)
 
     if (slot === -1) {
-      if ((this.cores.length + 1) * 2 > this.slots.length) this._grow()
+      if ((this.cores.length + 1) * 2 > this.byDiscoveryKey.slots.length) this._grow()
       core.trackerIndex = this.cores.push(core) - 1
-      this._insert(core)
+      this.byDiscoveryKey.insert(core)
     } else {
-      const index = (this.slots[slot] & SLOT_INDEX_MASK) - 1
-      this.cores[index].trackerIndex = -1
+      const index = (this.byDiscoveryKey.slots[slot] & SLOT_INDEX_MASK) - 1
+      const prev = this.cores[index]
+      // the replacement might not know its key yet
+      if (prev.key !== null) this.byKey.remove(prev)
+      prev.trackerIndex = -1
       this.cores[index] = core
       core.trackerIndex = index
     }
 
+    this.indexKey(core)
+
     if (this.watching.length > 0) this._emit(core)
   }
 
-  _lookup(discoveryKey) {
-    const slot = this._find(discoveryKey)
-    return slot === -1 ? null : this.cores[(this.slots[slot] & SLOT_INDEX_MASK) - 1]
-  }
-
-  _find(discoveryKey) {
-    const h = hashDiscoveryKey(discoveryKey)
-    const tag = h >>> SLOT_TAG_SHIFT
-    const mask = this.slots.length - 1
-
-    for (let i = h & mask; ; i = (i + 1) & mask) {
-      const slot = this.slots[i]
-      if (slot === 0) return -1
-      if (slot >>> SLOT_TAG_SHIFT !== tag) continue
-      const core = this.cores[(slot & SLOT_INDEX_MASK) - 1]
-      if (b4a.equals(core.discoveryKey, discoveryKey)) return i
-    }
-  }
-
-  _insert(core) {
-    const h = hashDiscoveryKey(core.discoveryKey)
-    const mask = this.slots.length - 1
-    let i = h & mask
-    while (this.slots[i] !== 0) i = (i + 1) & mask
-    this.slots[i] = ((h >>> SLOT_TAG_SHIFT) << SLOT_TAG_SHIFT) | (core.trackerIndex + 1)
+  indexKey(core) {
+    if (core.key !== null && this.byKey.find(core.key) === -1) this.byKey.insert(core)
   }
 
   _remove(core) {
-    const slots = this.slots
-    const mask = slots.length - 1
+    this.byDiscoveryKey.remove(core)
+    if (core.key !== null) this.byKey.remove(core)
 
-    // backward shift deletion, keeps probe chains intact without tombstones
-    let hole = this._find(core.discoveryKey)
-    for (let i = (hole + 1) & mask; slots[i] !== 0; i = (i + 1) & mask) {
-      const other = this.cores[(slots[i] & SLOT_INDEX_MASK) - 1]
-      const home = hashDiscoveryKey(other.discoveryKey) & mask
-      if (((i - home) & mask) < ((i - hole) & mask)) continue
-      slots[hole] = slots[i]
-      hole = i
-    }
-    slots[hole] = 0
-
-    // repoint the moved core's slot before popping, _find reads through the dense array
+    // repoint the moved core's slots before popping, find reads through the dense array
     const last = this.cores[this.cores.length - 1]
     if (last !== core) {
-      const slot = this._find(last.discoveryKey)
-      slots[slot] = (slots[slot] & ~SLOT_INDEX_MASK) | (core.trackerIndex + 1)
+      this.byDiscoveryKey.repoint(last, core.trackerIndex)
+      if (last.key !== null) this.byKey.repoint(last, core.trackerIndex)
       this.cores[core.trackerIndex] = last
       last.trackerIndex = core.trackerIndex
     }
@@ -217,8 +264,9 @@ class CoreTracker {
   }
 
   _grow() {
-    this.slots = new Uint32Array(this.slots.length * 2)
-    for (const core of this.cores) this._insert(core)
+    const capacity = this.byDiscoveryKey.slots.length * 2
+    this.byDiscoveryKey.rebuild(capacity)
+    this.byKey.rebuild(capacity)
   }
 
   _emit(core) {
@@ -270,8 +318,9 @@ class CoreTracker {
       core.trackerIndex = -1
       all.push(core.close())
     }
-    this.cores = []
-    this.slots.fill(0)
+    this.cores.length = 0
+    this.byDiscoveryKey.slots.fill(0)
+    this.byKey.slots.fill(0)
 
     return Promise.all(all)
   }
@@ -807,9 +856,9 @@ class Corestore extends ReadyResource {
 
     if (result.discoveryKey) return result
 
+    // with only a key, _openCore derives the discovery key if the core isn't open
     if (opts.discoveryKey) result.discoveryKey = ID.decode(opts.discoveryKey)
-    else if (result.key) result.discoveryKey = crypto.discoveryKey(result.key)
-    else throw new Error('Could not derive discovery from input')
+    else if (!result.key) throw new Error('Could not derive discovery from input')
 
     return result
   }
@@ -817,13 +866,22 @@ class Corestore extends ReadyResource {
   _openCore(discoveryKey, opts) {
     const auth = this._auth(discoveryKey, opts)
 
-    const existing = this.cores.resume(auth.discoveryKey)
+    let existing = auth.discoveryKey === null ? this.cores.resumeByKey(auth.key) : null
+
+    if (existing !== null) {
+      auth.discoveryKey = existing.discoveryKey
+    } else {
+      if (auth.discoveryKey === null) auth.discoveryKey = crypto.discoveryKey(auth.key)
+      existing = this.cores.resume(auth.discoveryKey)
+    }
+
     if (existing && !existing.closing) {
       // might have been opened by discovery key only
       if (existing.key === null && auth.key !== null) {
         existing.key = auth.key
         existing.id = ID.encode(auth.key)
       }
+      this.cores.indexKey(existing)
       return existing
     }
 
@@ -897,11 +955,11 @@ function createKeyPair(primaryKey, namespace, name) {
 
 function noop() {}
 
-function hashDiscoveryKey(discoveryKey) {
+function hashId(id) {
   // seeded, so remote peers can't grind ids that pile into one probe chain
   const h =
-    Math.imul(readWord(discoveryKey, 0) ^ HASH_SEED_A, 0x9e3779b1) ^
-    Math.imul(readWord(discoveryKey, 4) ^ HASH_SEED_B, 0x85ebca77)
+    Math.imul(readWord(id, 0) ^ HASH_SEED_A, 0x9e3779b1) ^
+    Math.imul(readWord(id, 4) ^ HASH_SEED_B, 0x85ebca77)
   return (h ^ (h >>> 15)) >>> 0
 }
 
