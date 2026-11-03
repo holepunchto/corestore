@@ -84,6 +84,10 @@ class SessionTracker {
 const SLOT_INDEX_MASK = 0xffffff
 const SLOT_TAG_SHIFT = 24
 
+const HASH_SEED = crypto.randomBytes(8)
+const HASH_SEED_A = readWord(HASH_SEED, 0)
+const HASH_SEED_B = readWord(HASH_SEED, 4)
+
 class CoreTracker {
   constructor() {
     this.cores = [] // dense, swap removed, core.trackerIndex points back
@@ -894,14 +898,15 @@ function createKeyPair(primaryKey, namespace, name) {
 function noop() {}
 
 function hashDiscoveryKey(discoveryKey) {
-  // discovery keys are hashes, so the first 4 bytes are uniform
-  return (
-    (discoveryKey[0] |
-      (discoveryKey[1] << 8) |
-      (discoveryKey[2] << 16) |
-      (discoveryKey[3] << 24)) >>>
-    0
-  )
+  // seeded, so remote peers can't grind ids that pile into one probe chain
+  const h =
+    Math.imul(readWord(discoveryKey, 0) ^ HASH_SEED_A, 0x9e3779b1) ^
+    Math.imul(readWord(discoveryKey, 4) ^ HASH_SEED_B, 0x85ebca77)
+  return (h ^ (h >>> 15)) >>> 0
+}
+
+function readWord(buf, offset) {
+  return buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16) | (buf[offset + 3] << 24)
 }
 
 function toDiscoveryKey(entry) {
