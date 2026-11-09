@@ -424,7 +424,7 @@ class Corestore extends ReadyResource {
   }
 
   _ongc(session) {
-    if (session.sessions.length === 0) this.sessions.gc(session.id)
+    if (session.sessions.length === 0) this.sessions.gc(toHex(session.discoveryKey))
   }
 
   async _getOrSetSeed() {
@@ -646,7 +646,7 @@ class Corestore extends ReadyResource {
     const core = this._openCore(null, opts)
 
     conf.core = core
-    conf.sessions = this.sessions.get(core.id)
+    conf.sessions = this.sessions.get(toHex(core.discoveryKey))
     conf.ongc = this._ongcBound
 
     return this._makeSession(conf)
@@ -683,7 +683,7 @@ class Corestore extends ReadyResource {
 
     return {
       core,
-      sessions: this.sessions.get(core.id),
+      sessions: this.sessions.get(toHex(core.discoveryKey)),
       ongc: this._ongcBound,
       manifest: opts.manifest || null,
       encryption: opts.encryption || null,
