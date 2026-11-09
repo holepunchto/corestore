@@ -686,7 +686,7 @@ test('enable alwaysLatestBlock', async function (t) {
     t.not(await core.has(1), 'did not get other block')
   }
 
-  const core2 = store.get(coreSource2.key, { allowLatestBlock: false })
+  const core2 = store.get({ key: coreSource2.key, allowLatestBlock: false })
   await core2.ready()
 
   {
@@ -699,7 +699,7 @@ test('enable alwaysLatestBlock', async function (t) {
     await coreSource2.append(b4a.from('block2'))
     await synced
     t.is(core2.length, 3, 'sanity check')
-    t.ok(await core2.has(2), 'did not got block')
+    t.absent(await core2.has(2), 'did not got block')
   }
 
   const session = store.session()
