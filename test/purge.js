@@ -173,3 +173,39 @@ test('purge - a purged name is minted fresh on the next open', async function (t
   t.absent(b4a.equals(core.key, oldKey), 'the key changed with the manifest version')
   await core.close()
 })
+
+test('purge - a peer opening a core purged after the storage check does not fail close', async function (t) {
+  const a = new Corestore(await t.tmp())
+  const b = await create(t)
+
+  const core = a.get({ name: 'gone' })
+  await core.append('data')
+  const key = core.key
+  await core.close()
+  await a.purge(key)
+
+  // the purge lands between _attachMaybe's hasCore check and the core's open
+  const hasCore = a.storage.hasCore.bind(a.storage)
+  let checked = false
+  a.storage.hasCore = function (discoveryKey, opts) {
+    if (!b4a.equals(discoveryKey, crypto.discoveryKey(key))) return hasCore(discoveryKey, opts)
+    a.storage.hasCore = hasCore
+    checked = true
+    return true
+  }
+
+  const s1 = a.replicate(true)
+  const s2 = b.replicate(false)
+  s1.pipe(s2).pipe(s1)
+
+  const remote = b.get({ key })
+  await remote.ready()
+  while (!checked) await new Promise((resolve) => setTimeout(resolve, 10))
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  s1.destroy()
+  s2.destroy()
+  await remote.close()
+
+  await t.execution(a.close(), 'the store still closes')
+})
