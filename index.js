@@ -553,9 +553,13 @@ class Corestore extends ReadyResource {
       !this.cores.opened(toHex(discoveryKey)) &&
       !(await this.storage.hasCore(discoveryKey, { ifMigrated: true }))
     ) {
-      // passive stores only attach on request, so remember it in case we get it later
-      if (!this.active) this.missing.add(muxer, discoveryKey)
-      return
+      if (this.active) return
+      // passive stores only attach on request, so remember it in case we get it later,
+      // unless it was opened while we looked it up
+      if (this.cores.get(discoveryKey) === null) {
+        this.missing.add(muxer, discoveryKey)
+        return
+      }
     }
     if (this.closing) return
 

@@ -31,6 +31,31 @@ test('passive - replicates a core to a peer that asked for it before it had it',
   t.is(passive.missing.byId.size, 0, 'forgot the ask once attached')
 })
 
+test('passive - replicates a core opened while it looked it up', async function (t) {
+  const writer = await create(t)
+  const core = writer.get({ name: 'core' })
+  await core.append(['a', 'b'])
+
+  const passive = await create(t, { active: false })
+  const lookup = await holdLookup(passive, core.discoveryKey)
+
+  const reader = await create(t)
+  const clone = reader.get({ key: core.key })
+  await clone.ready()
+
+  replicate(reader, passive, t)
+  t.is(await lookup.found, false, 'sanity check: did not have it')
+
+  const copy = passive.get({ key: core.key })
+  await copy.ready()
+  lookup.release()
+
+  replicate(writer, passive, t)
+  t.alike(await copy.get(1), b4a.from('b'), 'sanity check: got it from the writer')
+
+  await t.execution(clone.get(1, { timeout: 5000 }), 'the peer got it')
+})
+
 test('passive - replicates a core only to the peers that asked for it', async function (t) {
   const writer = await create(t)
   const core = writer.get({ name: 'core' })
