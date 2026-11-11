@@ -47,6 +47,68 @@ class StreamTracker {
   }
 }
 
+// cores a stream asked for before we had them, at most max per stream, oldest ask dropped first
+class MissingTracker {
+  constructor(max) {
+    this.max = max
+    this.byStream = new Map() // muxer -> ids it asked for, oldest first, until its stream closes
+    this.byId = new Map() // id (hex discovery key) -> muxers that asked for it
+  }
+
+  has(discoveryKey) {
+    return this.byId.size > 0 && this.byId.has(b4a.toString(discoveryKey, 'hex'))
+  }
+
+  add(muxer, discoveryKey) {
+    const id = b4a.toString(discoveryKey, 'hex')
+    let ids = this.byStream.get(muxer)
+
+    if (ids === undefined) {
+      if (this.max === 0 || muxer.stream.destroying) return
+      ids = new Set()
+      this.byStream.set(muxer, ids)
+      muxer.stream.once('close', () => this.delete(muxer))
+    } else if (ids.has(id)) {
+      ids.delete(id) // asked again, so now the newest
+    } else if (ids.size >= this.max) {
+      const oldest = ids.values().next().value
+      ids.delete(oldest)
+      this._remove(oldest, muxer)
+    }
+
+    ids.add(id)
+
+    const muxers = this.byId.get(id)
+    if (muxers === undefined) this.byId.set(id, new Set([muxer]))
+    else muxers.add(muxer)
+  }
+
+  take(discoveryKey) {
+    const id = b4a.toString(discoveryKey, 'hex')
+    const muxers = this.byId.get(id)
+    if (muxers === undefined) return null
+    this.byId.delete(id)
+
+    for (const muxer of muxers) this.byStream.get(muxer).delete(id)
+
+    return muxers
+  }
+
+  delete(muxer) {
+    const ids = this.byStream.get(muxer)
+    if (ids === undefined) return
+    this.byStream.delete(muxer)
+
+    for (const id of ids) this._remove(id, muxer)
+  }
+
+  _remove(id, muxer) {
+    const muxers = this.byId.get(id)
+    muxers.delete(muxer)
+    if (muxers.size === 0) this.byId.delete(id)
+  }
+}
+
 class SessionTracker {
   constructor() {
     this.map = new Map()
@@ -248,6 +310,7 @@ class Corestore extends ReadyResource {
           treeCache: opts.treeCache
         })
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
+    this.missing = this.root ? this.root.missing : new MissingTracker(64)
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.sessions = new SessionTracker()
     this.corestores = this.root ? this.root.corestores : new Set()
@@ -490,6 +553,8 @@ class Corestore extends ReadyResource {
       !this.cores.opened(toHex(discoveryKey)) &&
       !(await this.storage.hasCore(discoveryKey, { ifMigrated: true }))
     ) {
+      // passive stores only attach on request, so remember it in case we get it later
+      if (!this.active) this.missing.add(muxer, discoveryKey)
       return
     }
     if (this.closing) return
@@ -504,6 +569,17 @@ class Corestore extends ReadyResource {
     }
 
     core.checkIfIdle()
+  }
+
+  async _attachMissing(core) {
+    await core.ready()
+
+    const muxers = this.missing.take(core.discoveryKey)
+    if (muxers === null) return
+
+    for (const muxer of muxers) {
+      if (!core.replicator.attached(muxer)) core.replicator.attachTo(muxer)
+    }
   }
 
   _shouldReplicate(core, muxer) {
@@ -767,6 +843,8 @@ class Corestore extends ReadyResource {
       globalCache: opts.globalCache || this.globalCache || null,
       alias: opts.name ? { name: opts.name, namespace: this.ns } : null
     })
+
+    if (this.missing.has(core.discoveryKey)) this._attachMissing(core).catch(noop)
 
     core.onidle = () => {
       this.cores.gc(core)

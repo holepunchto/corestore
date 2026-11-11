@@ -10,6 +10,7 @@ async function runTests() {
   await import('./basic.js')
   await import('./groups.js')
   await import('./notify.js')
+  await import('./passive.js')
   await import('./purge.js')
 
   test.resume()

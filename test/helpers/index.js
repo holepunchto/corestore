@@ -9,9 +9,9 @@ async function toArray(ite) {
   return all
 }
 
-async function create(t) {
+async function create(t, opts) {
   const dir = await t.tmp()
-  const store = new Corestore(dir)
+  const store = new Corestore(dir, opts)
   t.teardown(() => store.close())
   return store
 }
@@ -30,6 +30,8 @@ function replicate(a, b, t) {
     s1.destroy()
     s2.destroy()
   })
+
+  return [s1, s2]
 }
 
 module.exports = {
