@@ -56,6 +56,65 @@ test('passive - replicates a core opened while it looked it up', async function 
   await t.execution(clone.get(1, { timeout: 5000 }), 'the peer got it')
 })
 
+test('passive - replicates a core still opening when it looked it up', async function (t) {
+  const writer = await create(t)
+  const core = writer.get({ name: 'core' })
+  await core.append(['a', 'b'])
+
+  const passive = await create(t, { active: false })
+  const lookup = await holdLookup(passive, core.discoveryKey)
+  const open = holdOpen(passive, core.discoveryKey)
+
+  const reader = await create(t)
+  const clone = reader.get({ key: core.key })
+  await clone.ready()
+
+  replicate(reader, passive, t)
+  t.is(await lookup.found, false, 'sanity check: did not have it')
+
+  const copy = passive.get({ key: core.key })
+  await open.started
+  lookup.release()
+  await new Promise(setImmediate)
+  open.release()
+  await copy.ready()
+
+  replicate(writer, passive, t)
+  t.alike(await copy.get(1), b4a.from('b'), 'sanity check: got it from the writer')
+
+  await t.execution(clone.get(1, { timeout: 5000 }), 'the peer got it')
+})
+
+test('passive - replicates a core to a peer that asked while an open of it had failed', async function (t) {
+  const writer = await create(t)
+  const core = writer.get({ name: 'core' })
+  await core.append(['a', 'b'])
+
+  const passive = await create(t, { active: false })
+
+  // the failed core stays until gc closes it
+  const probe = passive.get({ key: core.key, createIfMissing: false })
+  await t.exception(probe.ready(), /STORAGE_EMPTY/, 'sanity check: not stored')
+
+  const reader = await create(t)
+  const clone = reader.get({ key: core.key })
+  await clone.ready()
+
+  const [s1, s2] = replicate(reader, passive, t)
+  t.is(await answered(s1, core.discoveryKey), false, 'sanity check: did not have it')
+  t.absent(s2.destroying, 'the stream survived the ask')
+
+  await gced(passive, core.discoveryKey)
+
+  const copy = passive.get({ key: core.key })
+  await copy.ready()
+
+  replicate(writer, passive, t)
+  t.alike(await copy.get(1), b4a.from('b'), 'sanity check: got it from the writer')
+
+  await t.execution(clone.get(1, { timeout: 5000 }), 'the peer got it')
+})
+
 test('passive - replicates a core only to the peers that asked for it', async function (t) {
   const writer = await create(t)
   const core = writer.get({ name: 'core' })
@@ -204,4 +263,30 @@ async function holdLookup(store, discoveryKey) {
   })
 
   return lookup
+}
+
+// holds the store's open of the core until released
+function holdOpen(store, discoveryKey) {
+  const resumeCore = store.storage.resumeCore.bind(store.storage)
+  const open = { started: null, release: null }
+  const released = new Promise((resolve) => (open.release = resolve))
+
+  open.started = new Promise((resolve) => {
+    store.storage.resumeCore = async function (key) {
+      if (!b4a.equals(key, discoveryKey)) return resumeCore(key)
+      store.storage.resumeCore = resumeCore
+      resolve()
+      await released
+      return resumeCore(key)
+    }
+  })
+
+  return open
+}
+
+// resolves once gc closed the core, it takes 4 strikes 2 s apart
+async function gced(store, discoveryKey) {
+  for (let i = 0; i < 100 && store.cores.get(discoveryKey) !== null; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
 }

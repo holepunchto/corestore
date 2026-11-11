@@ -557,9 +557,11 @@ class Corestore extends ReadyResource {
     ) {
       if (this.active) return
       // passive stores only attach on request, so remember it in case we get it later,
-      // unless it was opened while we looked it up
-      if (this.cores.get(discoveryKey) === null) {
+      // unless it opened while we looked it up. one still opening might fail, so wait for it
+      const existing = this.cores.get(discoveryKey)
+      if (existing === null || !existing.opened) {
         this.missing.add(muxer, discoveryKey)
+        if (existing !== null) this._attachMissing(existing).catch(noop)
         return
       }
     }
