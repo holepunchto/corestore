@@ -50,7 +50,7 @@ class StreamTracker {
 // cores a stream asked for before we had them, at most max per stream, oldest ask dropped first
 class MissingTracker {
   constructor(max) {
-    this.max = max
+    this.max = max > 0 ? max : 0 // 0 is off
     this.byStream = new Map() // muxer -> ids it asked for, oldest first, until its stream closes
     this.byId = new Map() // id (hex discovery key) -> muxers that asked for it
   }

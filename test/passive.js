@@ -173,6 +173,16 @@ test('passive - remembers nothing if maxMissingPerStream is 0', async function (
   t.is(passive.missing.byStream.size, 0, 'remembered nothing')
 })
 
+test('passive - maxMissingPerStream that is not a positive number turns it off', async function (t) {
+  for (const maxMissingPerStream of [false, NaN]) {
+    const passive = await create(t, { active: false, maxMissingPerStream })
+
+    const [s1] = replicate(await create(t), passive, t)
+    t.is(await ask(s1, crypto.randomBytes(32)), false, 'sanity check: did not have it')
+    t.is(passive.missing.byStream.size, 0, maxMissingPerStream + ' remembered nothing')
+  }
+})
+
 test('passive - forgets what a stream asked for when it closes', async function (t) {
   const passive = await create(t, { active: false })
 

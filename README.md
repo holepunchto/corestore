@@ -48,7 +48,7 @@ Options:
   writable: true,
   treeCache: { maxSize: 8192 }, // Options to use when creating hypercore's default storage
   active: true, // Whether to attach downloading cores to existing or future replication streams
-  maxMissingPerStream: 64 // If not active, per stream, how many cores the remote asked for before we had them to attach once we open them. 0 turns it off
+  maxMissingPerStream: 64 // If not active, per stream, how many cores the remote asked for before we had them to attach once we open them. 0 turns it off. Sessions share the root store's
 }
 ```
 
