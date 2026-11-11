@@ -79,6 +79,41 @@ test('passive - replicates a core only to the peers that asked for it', async fu
   t.absent(copy.replicator.attached(s3.noiseStream.userData), 'not to the other peer')
 })
 
+test('passive - remembers at most maxMissingPerStream cores per stream', async function (t) {
+  const passive = await create(t, { active: false, maxMissingPerStream: 2 })
+
+  const [s1, s2] = replicate(await create(t), passive, t)
+  const keys = [crypto.randomBytes(32), crypto.randomBytes(32), crypto.randomBytes(32)]
+  const [a, b, c] = keys.map((key) => crypto.discoveryKey(key))
+
+  t.is(await ask(s1, a), false, 'sanity check: did not have it')
+  await ask(s1, b)
+  await ask(s1, a) // asked again, so now the newest
+  await ask(s1, c)
+
+  const cores = keys.map((key) => passive.get({ key }))
+  await Promise.all(cores.map((core) => core.ready()))
+
+  const muxer = s2.noiseStream.userData
+  t.ok(cores[0].replicator.attached(muxer), 'kept the one asked for again')
+  t.absent(cores[1].replicator.attached(muxer), 'dropped the oldest')
+  t.ok(cores[2].replicator.attached(muxer), 'kept the newest')
+})
+
+test('passive - remembers nothing if maxMissingPerStream is 0', async function (t) {
+  const passive = await create(t, { active: false, maxMissingPerStream: 0 })
+
+  const [s1, s2] = replicate(await create(t), passive, t)
+  const key = crypto.randomBytes(32)
+  t.is(await ask(s1, crypto.discoveryKey(key)), false, 'sanity check: did not have it')
+
+  const core = passive.get({ key })
+  await core.ready()
+
+  t.absent(core.replicator.attached(s2.noiseStream.userData), 'not attached')
+  t.is(passive.missing.byStream.size, 0, 'remembered nothing')
+})
+
 test('passive - forgets what a stream asked for when it closes', async function (t) {
   const passive = await create(t, { active: false })
 

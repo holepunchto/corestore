@@ -310,7 +310,9 @@ class Corestore extends ReadyResource {
           treeCache: opts.treeCache
         })
     this.streamTracker = this.root ? this.root.streamTracker : new StreamTracker()
-    this.missing = this.root ? this.root.missing : new MissingTracker(64)
+    this.missing = this.root
+      ? this.root.missing
+      : new MissingTracker(opts.maxMissingPerStream ?? 64)
     this.cores = this.root ? this.root.cores : new CoreTracker()
     this.sessions = new SessionTracker()
     this.corestores = this.root ? this.root.corestores : new Set()
