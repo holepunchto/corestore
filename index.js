@@ -155,6 +155,12 @@ class CoreTracker {
 
   _gcCycle() {
     for (const core of this._gcing) {
+      // in use again, eg a peer paired with it, onidle adds it back
+      if (core.hasSession() || !core.replicator.idle()) {
+        this._gcing.delete(core)
+        core.gc = 0
+        continue
+      }
       if (++core.gc < 4) continue
       const gc = this._gc.bind(this, core)
       core.close().then(gc, gc)

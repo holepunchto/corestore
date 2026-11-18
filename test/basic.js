@@ -867,3 +867,40 @@ test('get by key after core was opened by discovery key exposes the key sync', a
   t.alike(session.key, key, 'key is still correct after ready')
   t.is(session.length, 1)
 })
+
+test('core that pairs while waiting for gc is not closed', async function (t) {
+  const a = await create(t)
+  const b = await create(t)
+
+  const core = a.get({ name: 'core' })
+  await core.append('a')
+
+  replicate(a, b, t)
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  await core.close()
+
+  const clone = b.get({ key: core.key })
+  await clone.get(0)
+
+  await new Promise((resolve) => setTimeout(resolve, 8000))
+  t.is(clone.peers.length, 1)
+})
+
+test('core that gets a session while waiting for gc stays in the store', async function (t) {
+  const store = await create(t)
+
+  const core = store.get({ name: 'core' })
+  await core.append('a')
+
+  const weak = store.get({ key: core.key, weak: true })
+  await weak.ready()
+  await core.close()
+
+  const session = weak.session({ weak: false })
+  await session.ready()
+
+  await new Promise((resolve) => setTimeout(resolve, 8000))
+  const again = store.get({ key: core.key })
+  await again.ready()
+  t.is(again.core, session.core)
+})
