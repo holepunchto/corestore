@@ -360,7 +360,13 @@ test('audit', async function (t) {
   }
 
   let n = 0
-  for await (const { audit } of store.audit()) {
+  let aliases = 0
+  for await (const { audit, alias, dangling } of store.audit()) {
+    if (alias) {
+      aliases++
+      if (dangling) t.fail('dangling alias')
+      continue
+    }
     n++
     if (audit.droppedBits || audit.droppedBlocks || audit.droppedTreeNodes || audit.corrupt) {
       t.fail('bad core')
@@ -368,6 +374,7 @@ test('audit', async function (t) {
   }
 
   t.is(n, 4)
+  t.is(aliases, 2, 'one alias per named core')
 
   await a.close()
   await b.close()
