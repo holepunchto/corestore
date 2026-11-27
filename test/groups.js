@@ -156,7 +156,7 @@ test('group-active - fired via passive', async function (t) {
   })
   replicate(t, store, store2)
 
-  t.absent(store2.cores.map.has(a.key.toString('hex')), 'reopened store2 doesnt have core loaded')
+  t.is(store2.cores.get(a.discoveryKey), null, 'reopened store2 doesnt have core loaded')
   await a.append('hello')
 })
 
